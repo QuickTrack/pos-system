@@ -1,32 +1,20 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import type { Metadata } from 'next';
+import './globals.css';
 
 export const metadata: Metadata = {
-  title: "Next.js Template",
-  description: "A minimal Next.js starter template",
+  title: 'NairobiPOS - Cloud POS System for Kenyan Businesses',
+  description: 'Modern cloud-based Point of Sale system designed for small shops, mini-marts, supermarkets, kiosks, and wholesale businesses in Nairobi, Kenya.',
+  keywords: 'POS, Point of Sale, Kenya, Nairobi, Retail, Wholesale, M-Pesa',
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className="min-h-screen bg-gray-50">
         {children}
       </body>
     </html>
