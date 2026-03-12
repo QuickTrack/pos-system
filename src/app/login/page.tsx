@@ -92,6 +92,9 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-sm text-gray-500 mt-6">
+          <a href="/register" className="text-emerald-600 hover:underline">Create an account</a>
+        </p>
+        <p className="text-center text-sm text-gray-500 mt-2">
           Cloud POS System for Kenyan Businesses
         </p>
       </div>
