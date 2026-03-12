@@ -5,11 +5,6 @@ import { getAuthUser, hasPermission } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getAuthUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
     await dbConnect();
     
     const { searchParams } = new URL(request.url);
@@ -64,9 +59,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await getAuthUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
     
     await dbConnect();
     
@@ -81,10 +73,14 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const customer = await Customer.create({
-      ...data,
-      branch: user.branch || data.branch,
-    });
+    const customerData: any = { ...data };
+    
+    // Only add branch if user is authenticated and has a branch
+    if (user?.branch) {
+      customerData.branch = user.branch;
+    }
+    
+    const customer = await Customer.create(customerData);
     
     return NextResponse.json({
       success: true,
