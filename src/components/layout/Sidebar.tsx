@@ -13,7 +13,8 @@ import {
   BarChart3,
   Store,
   X,
-  LogOut
+  LogOut,
+  ShoppingBag
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/lib/store';
@@ -52,7 +53,7 @@ const menuItems = [
   { 
     label: 'Purchases', 
     href: '/purchases', 
-    icon: Truck,
+    icon: ShoppingBag,
     permission: 'manage_purchases',
   },
   { 
