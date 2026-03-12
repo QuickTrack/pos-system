@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/mongodb';
 import Product from '@/models/Product';
 import Category from '@/models/Category';
-import { getAuthUser, hasPermission } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
@@ -73,15 +72,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getAuthUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
-    if (!hasPermission(user.role as any, 'manage_products')) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-    
     await dbConnect();
     
     const data = await request.json();
