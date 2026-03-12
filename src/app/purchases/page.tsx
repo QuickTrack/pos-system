@@ -11,11 +11,27 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 import { Plus, Search, RefreshCw, Eye, Truck, Package, CheckCircle, Clock, XCircle } from 'lucide-react';
 
 interface PurchaseItem {
+  productId: string;
   productName: string;
   quantity: number;
   unitCost: number;
   total: number;
   receivedQuantity: number;
+}
+
+interface Supplier {
+  _id: string;
+  name: string;
+  phone?: string;
+  email?: string;
+}
+
+interface Product {
+  _id: string;
+  name: string;
+  sku: string;
+  costPrice: number;
+  stockQuantity: number;
 }
 
 interface Purchase {
@@ -44,6 +60,9 @@ export default function PurchasesPage() {
   const [paymentStatus, setPaymentStatus] = useState('');
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [selectedSupplierProducts, setSelectedSupplierProducts] = useState<Product[]>([]);
   const [formData, setFormData] = useState({
     supplierId: '',
     supplierName: '',
@@ -57,6 +76,98 @@ export default function PurchasesPage() {
   useEffect(() => {
     fetchPurchases();
   }, [status, paymentStatus]);
+
+  const fetchSuppliers = async () => {
+    try {
+      const response = await fetch('/api/suppliers');
+      const data = await response.json();
+      if (data.success) setSuppliers(data.suppliers);
+    } catch (error) {
+      console.error('Failed to fetch suppliers:', error);
+    }
+  };
+
+  const fetchProducts = async () => {
+    try {
+      const response = await fetch('/api/products?limit=100');
+      const data = await response.json();
+      if (data.success) setProducts(data.products);
+    } catch (error) {
+      console.error('Failed to fetch products:', error);
+    }
+  };
+
+  const handleSupplierChange = (supplierId: string) => {
+    const supplier = suppliers.find(s => s._id === supplierId);
+    setFormData({ 
+      ...formData, 
+      supplierId,
+      supplierName: supplier?.name || '',
+      items: []
+    });
+    // Filter products by supplier
+    const supplierProducts = products.filter(p => (p as any).supplier?._id === supplierId || (p as any).supplier === supplierId);
+    setSelectedSupplierProducts(supplierProducts);
+  };
+
+  const addItem = (product: Product) => {
+    const existingItem = formData.items.find((item: any) => item.productId === product._id);
+    if (existingItem) {
+      setFormData({
+        ...formData,
+        items: formData.items.map((item: any) => 
+          item.productId === product._id 
+            ? { ...item, quantity: item.quantity + 1, total: (item.quantity + 1) * item.unitCost }
+            : item
+        )
+      });
+    } else {
+      setFormData({
+        ...formData,
+        items: [...formData.items, {
+          productId: product._id,
+          productName: product.name,
+          quantity: 1,
+          unitCost: product.costPrice || 0,
+          total: product.costPrice || 0,
+          receivedQuantity: 0,
+        }]
+      });
+    }
+  };
+
+  const updateItemQuantity = (productId: string, quantity: number) => {
+    setFormData({
+      ...formData,
+      items: formData.items.map((item: any) => 
+        item.productId === productId 
+          ? { ...item, quantity, total: quantity * item.unitCost }
+          : item
+      )
+    });
+  };
+
+  const updateItemCost = (productId: string, unitCost: number) => {
+    setFormData({
+      ...formData,
+      items: formData.items.map((item: any) => 
+        item.productId === productId 
+          ? { ...item, unitCost, total: item.quantity * unitCost }
+          : item
+      )
+    });
+  };
+
+  const removeItem = (productId: string) => {
+    setFormData({
+      ...formData,
+      items: formData.items.filter((item: any) => item.productId !== productId)
+    });
+  };
+
+  const calculateTotal = () => {
+    return formData.items.reduce((sum: number, item: any) => sum + item.total, 0);
+  };
 
   const fetchPurchases = async () => {
     try {
@@ -219,7 +330,21 @@ export default function PurchasesPage() {
             <RefreshCw className="w-4 h-4" />
             Refresh
           </Button>
-          <Button onClick={() => setShowCreateModal(true)} className="gap-2">
+          <Button onClick={() => {
+            setFormData({
+              supplierId: '',
+              supplierName: '',
+              items: [],
+              notes: '',
+              paymentMethod: 'cash',
+              amountPaid: 0,
+              expectedDeliveryDate: '',
+            });
+            setSelectedSupplierProducts([]);
+            fetchSuppliers();
+            fetchProducts();
+            setShowCreateModal(true);
+          }} className="gap-2">
             <Plus className="w-4 h-4" />
             New Order
           </Button>
@@ -372,7 +497,7 @@ export default function PurchasesPage() {
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         title="Create Purchase Order"
-        size="lg"
+        size="xl"
       >
         <form onSubmit={async (e) => {
           e.preventDefault();
@@ -390,13 +515,107 @@ export default function PurchasesPage() {
             console.error('Failed to create purchase:', error);
           }
         }} className="space-y-4">
-          <Input
-            label="Supplier Name"
-            value={formData.supplierName}
-            onChange={(e) => setFormData({ ...formData, supplierName: e.target.value })}
-            required
-            placeholder="Enter supplier name"
-          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
+            <select
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              value={formData.supplierId}
+              onChange={(e) => handleSupplierChange(e.target.value)}
+              required
+            >
+              <option value="">Select a supplier</option>
+              {suppliers.map(supplier => (
+                <option key={supplier._id} value={supplier._id}>
+                  {supplier.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {formData.supplierId && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Add Products</label>
+              <div className="flex gap-2">
+                <select
+                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  onChange={(e) => {
+                    const product = products.find(p => p._id === e.target.value);
+                    if (product) {
+                      addItem(product);
+                      e.target.value = '';
+                    }
+                  }}
+                >
+                  <option value="">Select a product to add</option>
+                  {products.map(product => (
+                    <option key={product._id} value={product._id}>
+                      {product.name} (SKU: {product.sku}) - {formatCurrency(product.costPrice || 0)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
+          {formData.items.length > 0 && (
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left px-4 py-2">Product</th>
+                    <th className="text-right px-4 py-2">Qty</th>
+                    <th className="text-right px-4 py-2">Unit Cost</th>
+                    <th className="text-right px-4 py-2">Total</th>
+                    <th className="px-4 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {formData.items.map((item: any, idx: number) => (
+                    <tr key={idx} className="border-t border-gray-100">
+                      <td className="px-4 py-2">{item.productName}</td>
+                      <td className="px-4 py-2">
+                        <input
+                          type="number"
+                          min="1"
+                          className="w-20 px-2 py-1 border border-gray-200 rounded text-right"
+                          value={item.quantity}
+                          onChange={(e) => updateItemQuantity(item.productId, parseInt(e.target.value) || 1)}
+                        />
+                      </td>
+                      <td className="px-4 py-2">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          className="w-24 px-2 py-1 border border-gray-200 rounded text-right"
+                          value={item.unitCost}
+                          onChange={(e) => updateItemCost(item.productId, parseFloat(e.target.value) || 0)}
+                        />
+                      </td>
+                      <td className="px-4 py-2 text-right font-medium">{formatCurrency(item.total)}</td>
+                      <td className="px-4 py-2">
+                        <button
+                          type="button"
+                          onClick={() => removeItem(item.productId)}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          ×
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-gray-50">
+                  <tr>
+                    <td colSpan={3} className="px-4 py-2 text-right font-medium">Total:</td>
+                    <td className="px-4 py-2 text-right font-bold">{formatCurrency(calculateTotal())}</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+
           <Input
             label="Notes"
             value={formData.notes}
