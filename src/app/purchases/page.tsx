@@ -366,6 +366,77 @@ export default function PurchasesPage() {
           </div>
         </div>
       )}
+
+      {/* Create Purchase Modal */}
+      <Modal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="Create Purchase Order"
+        size="lg"
+      >
+        <form onSubmit={async (e) => {
+          e.preventDefault();
+          try {
+            const response = await fetch('/api/purchases', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(formData),
+            });
+            if (response.ok) {
+              setShowCreateModal(false);
+              fetchPurchases();
+            }
+          } catch (error) {
+            console.error('Failed to create purchase:', error);
+          }
+        }} className="space-y-4">
+          <Input
+            label="Supplier Name"
+            value={formData.supplierName}
+            onChange={(e) => setFormData({ ...formData, supplierName: e.target.value })}
+            required
+            placeholder="Enter supplier name"
+          />
+          <Input
+            label="Notes"
+            value={formData.notes}
+            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+            placeholder="Optional notes"
+          />
+          <Input
+            label="Expected Delivery Date"
+            type="date"
+            value={formData.expectedDeliveryDate}
+            onChange={(e) => setFormData({ ...formData, expectedDeliveryDate: e.target.value })}
+          />
+          <Select
+            label="Payment Method"
+            value={formData.paymentMethod}
+            onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
+            options={[
+              { value: 'cash', label: 'Cash' },
+              { value: 'mpesa', label: 'M-Pesa' },
+              { value: 'card', label: 'Card' },
+              { value: 'credit', label: 'Credit' },
+            ]}
+          />
+          <Input
+            label="Amount Paid"
+            type="number"
+            value={formData.amountPaid}
+            onChange={(e) => setFormData({ ...formData, amountPaid: parseFloat(e.target.value) || 0 })}
+            placeholder="0"
+          />
+          <div className="flex justify-end gap-3 pt-4">
+            <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)}>
+              Cancel
+            </Button>
+            <Button type="submit">
+              Create Order
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

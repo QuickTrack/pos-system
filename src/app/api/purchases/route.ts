@@ -1,15 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/mongodb';
 import Purchase from '@/models/Purchase';
-import { getAuthUser } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getAuthUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
     await dbConnect();
     
     const { searchParams } = new URL(request.url);
@@ -32,10 +26,6 @@ export async function GET(request: NextRequest) {
         $gte: new Date(startDate),
         $lte: new Date(endDate),
       };
-    }
-    
-    if (user.role !== 'admin' && user.branch) {
-      query.branch = user.branch;
     }
     
     const skip = (page - 1) * limit;
@@ -71,11 +61,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getAuthUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
     await dbConnect();
     
     const data = await request.json();
@@ -106,7 +91,7 @@ export async function POST(request: NextRequest) {
       orderNumber,
       supplier: data.supplierId,
       supplierName: data.supplierName,
-      branch: user.branch || data.branchId,
+      branch: data.branchId,
       items,
       subtotal,
       discount: data.discount || 0,
