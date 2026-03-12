@@ -175,7 +175,6 @@ const SaleSchema = new Schema<ISale>(
 SaleSchema.index({ saleDate: -1 });
 SaleSchema.index({ branch: 1, saleDate: -1 });
 SaleSchema.index({ customer: 1, saleDate: -1 });
-SaleSchema.index({ invoiceNumber: 1 });
 
 const Sale: Model<ISale> = mongoose.models.Sale || mongoose.model<ISale>('Sale', SaleSchema);
 
