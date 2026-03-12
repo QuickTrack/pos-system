@@ -6,6 +6,9 @@ export interface ICustomer extends Document {
   phone: string;
   address?: string;
   
+  // Customer Category
+  customerCategory: 'individual' | 'company';
+  
   // Credit & Loyalty
   creditBalance: number;
   loyaltyPoints: number;
@@ -44,6 +47,13 @@ const CustomerSchema = new Schema<ICustomer>(
     email: { type: String, lowercase: true },
     phone: { type: String, required: true },
     address: { type: String },
+    
+    // Customer Category
+    customerCategory: { 
+      type: String, 
+      enum: ['individual', 'company'], 
+      default: 'individual' 
+    },
     
     // Credit & Loyalty
     creditBalance: { type: Number, default: 0 },

@@ -36,10 +36,12 @@ export default function CustomersPage() {
     phone: '',
     email: '',
     address: '',
+    customerCategory: 'individual',
     customerType: 'retail',
     businessName: '',
     kraPin: '',
     creditLimit: 0,
+    creditBalance: 0,
   });
 
   useEffect(() => {
@@ -92,10 +94,12 @@ export default function CustomersPage() {
       phone: customer.phone,
       email: customer.email || '',
       address: customer.address || '',
+      customerCategory: (customer as any).customerCategory || 'individual',
       customerType: customer.customerType,
       businessName: '',
       kraPin: '',
       creditLimit: 0,
+      creditBalance: 0,
     });
     setShowCustomerModal(true);
   };
@@ -116,10 +120,12 @@ export default function CustomersPage() {
       phone: '',
       email: '',
       address: '',
+      customerCategory: 'individual',
       customerType: 'retail',
       businessName: '',
       kraPin: '',
       creditLimit: 0,
+      creditBalance: 0,
     });
   };
 
@@ -281,14 +287,61 @@ export default function CustomersPage() {
               required
             />
           </div>
-          
+
           <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="block text-sm font-medium text-gray-700">
+                Customer Category
+              </label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="customerCategory"
+                    value="individual"
+                    checked={formData.customerCategory === 'individual'}
+                    onChange={(e) => setFormData({ ...formData, customerCategory: 'individual' })}
+                    className="w-4 h-4 text-emerald-600"
+                  />
+                  <span className="text-sm">Individual</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="customerCategory"
+                    value="company"
+                    checked={formData.customerCategory === 'company'}
+                    onChange={(e) => setFormData({ ...formData, customerCategory: 'company' })}
+                    className="w-4 h-4 text-emerald-600"
+                  />
+                  <span className="text-sm">Company</span>
+                </label>
+              </div>
+            </div>
             <Input
               label="Email"
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Address"
+              value={formData.address}
+              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+            />
+            <Input
+              label="Initial Account Balance"
+              type="number"
+              value={formData.creditBalance}
+              onChange={(e) => setFormData({ ...formData, creditBalance: parseFloat(e.target.value) || 0 })}
+              placeholder="0"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <Select
               label="Customer Type"
               value={formData.customerType}
@@ -299,15 +352,16 @@ export default function CustomersPage() {
                 { value: 'distributor', label: 'Distributor' },
               ]}
             />
+            <Input
+              label="Credit Limit"
+              type="number"
+              value={formData.creditLimit}
+              onChange={(e) => setFormData({ ...formData, creditLimit: parseFloat(e.target.value) || 0 })}
+              placeholder="0"
+            />
           </div>
 
-          <Input
-            label="Address"
-            value={formData.address}
-            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-          />
-
-          {(formData.customerType === 'wholesale' || formData.customerType === 'distributor') && (
+          {(formData.customerCategory === 'company' || formData.customerType === 'wholesale' || formData.customerType === 'distributor') && (
             <div className="grid grid-cols-2 gap-4">
               <Input
                 label="Business Name"
