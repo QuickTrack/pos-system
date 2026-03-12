@@ -52,6 +52,8 @@ export default function POSPage() {
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [categories, setCategories] = useState<string[]>([]);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showHeldSalesModal, setShowHeldSalesModal] = useState(false);
@@ -87,20 +89,35 @@ export default function POSPage() {
   }, []);
 
   useEffect(() => {
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      setFilteredProducts(
-        products.filter(
+    if (searchQuery || selectedCategory !== 'all') {
+      let filtered = products;
+      
+      // Filter by category
+      if (selectedCategory !== 'all') {
+        filtered = filtered.filter(p => p.category?.name === selectedCategory);
+      }
+      
+      // Filter by search
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        filtered = filtered.filter(
           (p) =>
             p.name.toLowerCase().includes(query) ||
             p.sku.toLowerCase().includes(query) ||
             p.barcode?.toLowerCase().includes(query)
-        )
-      );
+        );
+      }
+      setFilteredProducts(filtered.slice(0, 20));
     } else {
       setFilteredProducts(products.slice(0, 20));
     }
-  }, [searchQuery, products]);
+  }, [searchQuery, products, selectedCategory]);
+
+  // Extract unique categories from products
+  useEffect(() => {
+    const uniqueCats = [...new Set(products.map(p => p.category?.name).filter(Boolean))];
+    setCategories(uniqueCats as string[]);
+  }, [products]);
 
   const DEMO_PRODUCTS = [
     { _id: '1', name: 'Samsung Galaxy A14', sku: 'ELEC001', barcode: '1234567890123', retailPrice: 18999, wholesalePrice: 17000, stockQuantity: 50, category: { name: 'Electronics' } },
@@ -241,6 +258,7 @@ export default function POSPage() {
         clearCart();
         setSelectedCustomer(null);
         setShowPaymentModal(false);
+        setAmountPaid('');
       }
     } catch (error) {
       console.error('Payment failed:', error);
@@ -378,7 +396,7 @@ export default function POSPage() {
         {/* Products Section */}
         <div className="flex-1 p-4 overflow-hidden flex flex-col">
           {/* Search Bar */}
-          <div className="flex gap-3 mb-4">
+          <div className="flex gap-3 mb-3">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
@@ -402,6 +420,35 @@ export default function POSPage() {
               Held ({heldSales.length})
             </Button>
           </div>
+
+          {/* Category Filter - Small Font */}
+          {categories.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-3 overflow-x-auto pb-2">
+              <button
+                onClick={() => setSelectedCategory('all')}
+                className={`px-2 py-1 text-[10px] rounded-md border transition-colors whitespace-nowrap ${
+                  selectedCategory === 'all'
+                    ? 'bg-emerald-600 text-white border-emerald-600'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-emerald-400'
+                }`}
+              >
+                All
+              </button>
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-2 py-1 text-[10px] rounded-md border transition-colors whitespace-nowrap ${
+                    selectedCategory === cat
+                      ? 'bg-emerald-600 text-white border-emerald-600'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-emerald-400'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Customer Selector */}
           <div className="mb-4">
@@ -616,15 +663,15 @@ export default function POSPage() {
         title="Payment"
         size="sm"
       >
-        <div className="space-y-4">
-          <div className="bg-gray-50 rounded-lg p-4 text-center">
-            <p className="text-sm text-gray-500">Total Amount</p>
-            <p className="text-3xl font-bold text-gray-900">{formatCurrency(total)}</p>
+        <div className="space-y-3">
+          <div className="bg-gray-50 rounded-lg p-3 text-center">
+            <p className="text-xs text-gray-500">Total Amount</p>
+            <p className="text-2xl font-bold text-gray-900">{formatCurrency(total)}</p>
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700"> Payment Method</label>
-            <div className="grid grid-cols-2 gap-2">
+            <label className="text-xs font-medium text-gray-700"> Payment Method</label>
+            <div className="grid grid-cols-4 gap-1">
               {[
                 { value: 'cash', label: 'Cash', icon: Banknote },
                 { value: 'mpesa', label: 'M-Pesa', icon: Smartphone },
@@ -634,27 +681,47 @@ export default function POSPage() {
                 <button
                   key={method.value}
                   onClick={() => setPaymentMethod(method.value)}
-                  className={`p-3 rounded-lg border-2 flex flex-col items-center gap-1 transition-colors ${
+                  className={`p-2 rounded-lg border-2 flex flex-col items-center gap-0.5 transition-colors ${
                     paymentMethod === method.value
                       ? 'border-emerald-500 bg-emerald-50'
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
-                  <method.icon className="w-5 h-5" />
-                  <span className="text-sm font-medium">{method.label}</span>
+                  <method.icon className="w-4 h-4" />
+                  <span className="text-xs font-medium">{method.label}</span>
                 </button>
               ))}
             </div>
           </div>
 
           {paymentMethod === 'cash' && (
-            <Input
-              label="Amount Paid"
-              type="number"
-              value={amountPaid}
-              onChange={(e) => setAmountPaid(e.target.value)}
-              placeholder="Enter amount"
-            />
+            <div className="space-y-2">
+              <Input
+                label="Amount Tendered"
+                type="number"
+                value={amountPaid}
+                onChange={(e) => setAmountPaid(e.target.value)}
+                placeholder="Enter amount tendered"
+              />
+              
+              {/* Quick Amount Buttons */}
+              <div className="flex flex-wrap gap-1">
+                {[total, 1000, 2000, 5000, 10000].map((amt) => (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => setAmountPaid(amt.toString())}
+                    className={`px-2 py-1 text-[10px] rounded border transition-colors ${
+                      parseFloat(amountPaid) === amt
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-emerald-400'
+                    }`}
+                  >
+                    {amt >= total ? 'Exact' : formatCurrency(amt)}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
 
           {paymentMethod === 'mpesa' && (
@@ -664,11 +731,27 @@ export default function POSPage() {
             />
           )}
 
-          {parseFloat(amountPaid) > total && (
-            <div className="bg-emerald-50 rounded-lg p-3 text-center">
-              <p className="text-sm text-emerald-600">Change: {formatCurrency(parseFloat(amountPaid) - total)}</p>
+          {/* Change Display */}
+          <div className="bg-gray-50 rounded-lg p-2">
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-xs text-gray-600">Total:</span>
+              <span className="text-sm font-semibold">{formatCurrency(total)}</span>
             </div>
-          )}
+            {paymentMethod === 'cash' && amountPaid && (
+              <>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-xs text-gray-600">Tendered:</span>
+                  <span className="text-sm font-semibold">{formatCurrency(parseFloat(amountPaid) || 0)}</span>
+                </div>
+                <div className="flex justify-between items-center pt-1 border-t border-gray-200">
+                  <span className="text-xs font-medium text-gray-900">Change:</span>
+                  <span className={`text-base font-bold ${parseFloat(amountPaid) >= total ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {formatCurrency(Math.max(0, parseFloat(amountPaid) - total))}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
 
           {paymentMethod === 'account' && !customer && (
             <div className="bg-red-50 rounded-lg p-3 text-center">

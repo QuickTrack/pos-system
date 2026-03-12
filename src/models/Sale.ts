@@ -111,7 +111,7 @@ const SaleSchema = new Schema<ISale>(
     customerPhone: { type: String },
     
     // Branch
-    branch: { type: Schema.Types.ObjectId, ref: 'Branch', required: true },
+    branch: { type: Schema.Types.ObjectId, ref: 'Branch' },
     
     // Cashier
     cashier: { type: Schema.Types.ObjectId, ref: 'User', required: true },

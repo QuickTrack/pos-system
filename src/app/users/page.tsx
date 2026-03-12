@@ -67,6 +67,7 @@ export default function UsersPage() {
     isActive: true,
     permissions: PERMISSIONS.reduce((acc, p) => ({ ...acc, [p.key]: false }), {}),
   });
+  const [error, setError] = useState('');
 
   useEffect(() => {
     fetchUsers();
@@ -92,6 +93,7 @@ export default function UsersPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     try {
       const url = editingUser ? `/api/users/${editingUser._id}` : '/api/users';
       const method = editingUser ? 'PUT' : 'POST';
@@ -119,14 +121,28 @@ export default function UsersPage() {
         body: JSON.stringify(payload),
       });
 
-      if (response.ok) {
-        setShowModal(false);
-        setEditingUser(null);
-        resetForm();
-        fetchUsers();
+      const data = await response.json();
+
+      if (response.status === 401) {
+        setError('Session expired. Please log in again.');
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 2000);
+        return;
       }
+
+      if (!response.ok) {
+        setError(data.error || 'Failed to save user');
+        return;
+      }
+
+      setShowModal(false);
+      setEditingUser(null);
+      resetForm();
+      fetchUsers();
     } catch (error) {
       console.error('Failed to save user:', error);
+      setError('An unexpected error occurred');
     }
   };
 
@@ -278,6 +294,13 @@ export default function UsersPage() {
       <Header title="User Management" subtitle="Manage Staff Accounts & Permissions" />
       
       <div className="p-6 space-y-6">
+        {/* Error Alert */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
+            {error}
+          </div>
+        )}
+        
         {/* Filters */}
         <div className="flex flex-wrap gap-4 items-end">
           <div className="relative flex-1 min-w-[200px]">
@@ -358,6 +381,11 @@ export default function UsersPage() {
         size="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <Input
               label="Full Name"

@@ -125,8 +125,8 @@ export function Sidebar() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto py-4 px-3">
-          <ul className="space-y-1">
+        <nav className="flex-1 overflow-y-auto py-3 px-2" style={{ maxHeight: 'calc(100vh - 180px)' }}>
+          <ul className="space-y-0.5">
             {menuItems.map((item) => {
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
               return (
@@ -139,8 +139,8 @@ export function Sidebar() {
                     )}
                     onClick={() => setSidebarOpen(false)}
                   >
-                    <item.icon className="w-5 h-5" />
-                    <span>{item.label}</span>
+                    <item.icon className="w-4 h-4" />
+                    <span className="text-sm">{item.label}</span>
                   </Link>
                 </li>
               );
