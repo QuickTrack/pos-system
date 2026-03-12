@@ -31,6 +31,7 @@ export default function CustomersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [error, setError] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -66,6 +67,7 @@ export default function CustomersPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     try {
       const url = editingCustomer ? `/api/customers/${editingCustomer._id}` : '/api/customers';
       const method = editingCustomer ? 'PUT' : 'POST';
@@ -76,14 +78,19 @@ export default function CustomersPage() {
         body: JSON.stringify(formData),
       });
 
+      const data = await response.json();
+
       if (response.ok) {
         setShowCustomerModal(false);
         setEditingCustomer(null);
         resetForm();
         fetchCustomers();
+      } else {
+        setError(data.error || 'Failed to save customer');
       }
     } catch (error) {
       console.error('Failed to save customer:', error);
+      setError('An unexpected error occurred');
     }
   };
 
@@ -216,6 +223,7 @@ export default function CustomersPage() {
             onClick={() => {
               resetForm();
               setEditingCustomer(null);
+              setError('');
               setShowCustomerModal(true);
             }}
             className="gap-2"
@@ -273,6 +281,11 @@ export default function CustomersPage() {
         size="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <Input
               label="Customer Name"
@@ -392,6 +405,7 @@ export default function CustomersPage() {
                 type="button"
                 variant="outline"
                 onClick={async () => {
+                  setError('');
                   try {
                     const response = await fetch('/api/customers', {
                       method: 'POST',
@@ -399,12 +413,17 @@ export default function CustomersPage() {
                       body: JSON.stringify(formData),
                     });
 
+                    const data = await response.json();
+
                     if (response.ok) {
                       resetForm();
                       fetchCustomers();
+                    } else {
+                      setError(data.error || 'Failed to save customer');
                     }
                   } catch (error) {
                     console.error('Failed to save customer:', error);
+                    setError('An unexpected error occurred');
                   }
                 }}
               >
