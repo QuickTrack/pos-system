@@ -387,6 +387,30 @@ export default function CustomersPage() {
             >
               Cancel
             </Button>
+            {!editingCustomer && (
+              <Button 
+                type="button"
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    const response = await fetch('/api/customers', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(formData),
+                    });
+
+                    if (response.ok) {
+                      resetForm();
+                      fetchCustomers();
+                    }
+                  } catch (error) {
+                    console.error('Failed to save customer:', error);
+                  }
+                }}
+              >
+                Add Next
+              </Button>
+            )}
             <Button type="submit">
               {editingCustomer ? 'Update Customer' : 'Add Customer'}
             </Button>
