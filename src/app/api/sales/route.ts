@@ -179,14 +179,21 @@ export async function POST(request: NextRequest) {
     
     // Update customer stats if customer is provided
     if (data.customerId) {
-      await Customer.findByIdAndUpdate(data.customerId, {
+      const updateData: any = {
         $inc: {
           totalPurchases: 1,
           totalSpent: total,
-          loyaltyPoints: Math.floor(total / 100), // 1 point per 100 KES
+          loyaltyPoints: Math.floor(total / 100),
         },
         lastPurchaseDate: new Date(),
-      });
+      };
+      
+      // Add to credit balance if account payment
+      if (data.paymentMethod === 'account') {
+        updateData.$inc.creditBalance = total;
+      }
+      
+      await Customer.findByIdAndUpdate(data.customerId, updateData);
     }
     
     return NextResponse.json({

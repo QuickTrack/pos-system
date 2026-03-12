@@ -18,6 +18,7 @@ import {
   CreditCard,
   Banknote,
   Smartphone,
+  Wallet,
   X,
   Printer,
   Save,
@@ -202,6 +203,9 @@ export default function POSPage() {
     try {
       const { total } = calculateTotals();
       
+      const isAccountPayment = paymentMethod === 'account';
+      const paidAmount = isAccountPayment ? 0 : (parseFloat(amountPaid) || total);
+      
       const response = await fetch('/api/sales', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -222,9 +226,10 @@ export default function POSPage() {
           customerName: customer?.name,
           customerPhone: customer?.phone,
           paymentMethod,
-          amountPaid: parseFloat(amountPaid) || total,
-          change: (parseFloat(amountPaid) || total) - total,
+          amountPaid: paidAmount,
+          change: paidAmount - total,
           mpesaPhone: paymentMethod === 'mpesa' ? customer?.phone : undefined,
+          notes: isAccountPayment ? 'Charge to account' : undefined,
         }),
       });
       
@@ -618,12 +623,13 @@ export default function POSPage() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Payment Method</label>
-            <div className="grid grid-cols-3 gap-2">
+            <label className="text-sm font-medium text-gray-700"> Payment Method</label>
+            <div className="grid grid-cols-2 gap-2">
               {[
                 { value: 'cash', label: 'Cash', icon: Banknote },
                 { value: 'mpesa', label: 'M-Pesa', icon: Smartphone },
                 { value: 'card', label: 'Card', icon: CreditCard },
+                { value: 'account', label: 'Account', icon: Wallet },
               ].map((method) => (
                 <button
                   key={method.value}
@@ -664,12 +670,29 @@ export default function POSPage() {
             </div>
           )}
 
+          {paymentMethod === 'account' && !customer && (
+            <div className="bg-red-50 rounded-lg p-3 text-center">
+              <p className="text-sm text-red-600">Please select a customer to charge to their account</p>
+            </div>
+          )}
+
+          {paymentMethod === 'account' && customer && (
+            <div className="bg-amber-50 rounded-lg p-3 text-center">
+              <p className="text-sm text-amber-700">
+                {formatCurrency(total)} will be added to {customer.name}'s account
+              </p>
+            </div>
+          )}
+
           <Button
             className="w-full"
             size="lg"
             onClick={handlePayment}
             isLoading={processing}
-            disabled={paymentMethod === 'cash' && (!amountPaid || parseFloat(amountPaid) < total)}
+            disabled={
+              (paymentMethod === 'cash' && (!amountPaid || parseFloat(amountPaid) < total)) ||
+              (paymentMethod === 'account' && !customer)
+            }
           >
             Complete Sale
           </Button>
