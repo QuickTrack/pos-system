@@ -91,16 +91,36 @@ export default function POSPage() {
     }
   }, [searchQuery, products]);
 
+  const DEMO_PRODUCTS = [
+    { _id: '1', name: 'Samsung Galaxy A14', sku: 'ELEC001', barcode: '1234567890123', retailPrice: 18999, wholesalePrice: 17000, stockQuantity: 50, category: { name: 'Electronics' } },
+    { _id: '2', name: 'Sony WH-1000XM5 Headphones', sku: 'ELEC002', barcode: '1234567890124', retailPrice: 32999, wholesalePrice: 30000, stockQuantity: 25, category: { name: 'Electronics' } },
+    { _id: '3', name: 'HP Laptop 15s', sku: 'ELEC003', barcode: '1234567890125', retailPrice: 74999, wholesalePrice: 70000, stockQuantity: 15, category: { name: 'Electronics' } },
+    { _id: '4', name: 'Nescafe Coffee 500g', sku: 'FOOD001', barcode: '2234567890123', retailPrice: 1299, wholesalePrice: 1150, stockQuantity: 200, category: { name: 'Food & Beverages' } },
+    { _id: '5', name: 'Milo Pack 1kg', sku: 'FOOD002', barcode: '2234567890124', retailPrice: 899, wholesalePrice: 800, stockQuantity: 150, category: { name: 'Food & Beverages' } },
+    { _id: '6', name: 'Coca-Cola 500ml (24 pack)', sku: 'FOOD003', barcode: '2234567890125', retailPrice: 2400, wholesalePrice: 2200, stockQuantity: 100, category: { name: 'Food & Beverages' } },
+    { _id: '7', name: 'Detergent Powder 1kg', sku: 'HOUSE001', barcode: '3234567890123', retailPrice: 450, wholesalePrice: 400, stockQuantity: 300, category: { name: 'Household' } },
+    { _id: '8', name: 'Cooking Oil 5L', sku: 'FOOD004', barcode: '2234567890126', retailPrice: 1800, wholesalePrice: 1650, stockQuantity: 80, category: { name: 'Food & Beverages' } },
+    { _id: '9', name: 'Sugar 1kg', sku: 'FOOD005', barcode: '2234567890127', retailPrice: 250, wholesalePrice: 220, stockQuantity: 500, category: { name: 'Food & Beverages' } },
+    { _id: '10', name: 'Rice 2kg', sku: 'FOOD006', barcode: '2234567890128', retailPrice: 600, wholesalePrice: 550, stockQuantity: 200, category: { name: 'Food & Beverages' } },
+    { _id: '11', name: 'USB Cable', sku: 'MOBILE001', barcode: '4234567890123', retailPrice: 500, wholesalePrice: 450, stockQuantity: 150, category: { name: 'Mobile Accessories' } },
+    { _id: '12', name: 'Phone Charger', sku: 'MOBILE002', barcode: '4234567890124', retailPrice: 1200, wholesalePrice: 1000, stockQuantity: 75, category: { name: 'Mobile Accessories' } },
+  ];
+
   const fetchProducts = async () => {
     try {
       const response = await fetch('/api/products?limit=100');
       const data = await response.json();
-      if (data.success) {
+      if (data.success && data.products?.length > 0) {
         setProducts(data.products);
         setFilteredProducts(data.products.slice(0, 20));
+      } else {
+        setProducts(DEMO_PRODUCTS);
+        setFilteredProducts(DEMO_PRODUCTS.slice(0, 20));
       }
     } catch (error) {
       console.error('Failed to fetch products:', error);
+      setProducts(DEMO_PRODUCTS);
+      setFilteredProducts(DEMO_PRODUCTS.slice(0, 20));
     } finally {
       setLoading(false);
     }
