@@ -7,6 +7,7 @@ import {
   ShoppingCart, 
   Package, 
   Users, 
+  UserCog,
   Truck, 
   FileText, 
   Settings, 
@@ -73,6 +74,12 @@ const menuItems = [
     href: '/branches', 
     icon: Store,
     permission: 'manage_branches',
+  },
+  { 
+    label: 'Users', 
+    href: '/users', 
+    icon: UserCog,
+    permission: 'manage_users',
   },
   { 
     label: 'Settings', 
