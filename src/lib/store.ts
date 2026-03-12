@@ -213,3 +213,62 @@ export const useNotificationStore = create<NotificationState>()((set) => ({
     }));
   },
 }));
+
+// Held Sales Store for Hold/Recall functionality
+export interface HeldSale {
+  id: string;
+  items: CartItem[];
+  customer?: {
+    id: string;
+    name: string;
+    phone: string;
+  };
+  createdAt: number;
+  note?: string;
+}
+
+interface HeldSalesState {
+  heldSales: HeldSale[];
+  holdSale: (items: CartItem[], customer?: HeldSale['customer'], note?: string) => void;
+  recallSale: (id: string) => HeldSale | null;
+  removeHeldSale: (id: string) => void;
+  clearAllHeldSales: () => void;
+}
+
+export const useHeldSalesStore = create<HeldSalesState>()(
+  persist(
+    (set, get) => ({
+      heldSales: [],
+
+      holdSale: (items, customer, note) => {
+        const id = `HOLD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        const newHeldSale: HeldSale = {
+          id,
+          items: [...items],
+          customer,
+          createdAt: Date.now(),
+          note,
+        };
+        set((state) => ({
+          heldSales: [newHeldSale, ...state.heldSales],
+        }));
+      },
+
+      recallSale: (id) => {
+        const heldSale = get().heldSales.find((s) => s.id === id);
+        return heldSale || null;
+      },
+
+      removeHeldSale: (id) => {
+        set((state) => ({
+          heldSales: state.heldSales.filter((s) => s.id !== id),
+        }));
+      },
+
+      clearAllHeldSales: () => set({ heldSales: [] }),
+    }),
+    {
+      name: 'pos-held-sales',
+    }
+  )
+);

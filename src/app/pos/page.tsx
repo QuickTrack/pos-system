@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Header } from '@/components/layout/Header';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
-import { useCartStore, CartItem } from '@/lib/store';
-import { formatCurrency } from '@/lib/utils';
+import { useCartStore, useHeldSalesStore, CartItem, HeldSale } from '@/lib/store';
+import { formatCurrency, formatDateTime } from '@/lib/utils';
 import { 
   Search, 
   Plus, 
@@ -21,7 +21,10 @@ import {
   X,
   Printer,
   Save,
-  ScanBarcode
+  ScanBarcode,
+  Clock,
+  ClipboardList,
+  RotateCcw
 } from 'lucide-react';
 
 interface Product {
@@ -50,6 +53,9 @@ export default function POSPage() {
   const [loading, setLoading] = useState(true);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showHeldSalesModal, setShowHeldSalesModal] = useState(false);
+  const [showHoldModal, setShowHoldModal] = useState(false);
+  const [holdNote, setHoldNote] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerSearch, setCustomerSearch] = useState('');
@@ -58,6 +64,8 @@ export default function POSPage() {
   const [processing, setProcessing] = useState(false);
   const [saleComplete, setSaleComplete] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
+  const [printMode, setPrintMode] = useState(false);
+  const receiptRef = useRef<HTMLDivElement>(null);
   
   const { 
     items, 
@@ -70,6 +78,8 @@ export default function POSPage() {
     getSubtotal,
     getTotalDiscount,
   } = useCartStore();
+
+  const { heldSales, holdSale, recallSale, removeHeldSale } = useHeldSalesStore();
 
   useEffect(() => {
     fetchProducts();
@@ -153,7 +163,6 @@ export default function POSPage() {
     }
   }, [products]);
 
-  // Handle barcode scanner input
   useEffect(() => {
     let barcodeBuffer = '';
     let timeout: NodeJS.Timeout;
@@ -180,7 +189,7 @@ export default function POSPage() {
   const calculateTotals = () => {
     const subtotal = getSubtotal();
     const discount = getTotalDiscount();
-    const taxRate = 16; // VAT in Kenya
+    const taxRate = 16;
     const taxableAmount = subtotal - discount;
     const tax = (taxableAmount * taxRate) / 100;
     const total = taxableAmount + tax;
@@ -252,12 +261,45 @@ export default function POSPage() {
     setCustomerSearch('');
   };
 
+  const handleHoldSale = () => {
+    holdSale(items, customer, holdNote);
+    clearCart();
+    setCustomer(undefined);
+    setSelectedCustomer(null);
+    setShowHoldModal(false);
+    setHoldNote('');
+  };
+
+  const handleRecallSale = (heldSale: HeldSale) => {
+    clearCart();
+    heldSale.items.forEach(item => addItem(item));
+    if (heldSale.customer) {
+      setCustomer(heldSale.customer);
+    }
+    setShowHeldSalesModal(false);
+  };
+
+  const handlePrintReceipt = () => {
+    setPrintMode(true);
+    setTimeout(() => {
+      window.print();
+      setPrintMode(false);
+      setSaleComplete(false);
+    }, 100);
+  };
+
+  const handleNewSale = () => {
+    setSaleComplete(false);
+    setLastSale(null);
+    fetchProducts();
+  };
+
   const { subtotal, discount, tax, total } = calculateTotals();
 
   if (saleComplete && lastSale) {
     return (
       <div>
-        <Header title="POS - New Sale" subtitle="Point of Sale System" />
+        <Header title="POS - Sale Complete" subtitle="Point of Sale System" />
         <div className="p-6">
           <Card className="max-w-md mx-auto text-center py-8">
             <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -282,18 +324,40 @@ export default function POSPage() {
               <Button 
                 variant="outline" 
                 className="flex-1"
-                onClick={() => setSaleComplete(false)}
+                onClick={handlePrintReceipt}
               >
                 <Printer className="w-4 h-4" />
                 Print Receipt
               </Button>
               <Button 
                 className="flex-1"
-                onClick={() => setSaleComplete(false)}
+                onClick={handleNewSale}
               >
                 New Sale
               </Button>
             </div>
+
+            {printMode && (
+              <div ref={receiptRef} className="hidden print:block p-4 text-xs">
+                <div className="text-center border-b pb-2 mb-2">
+                  <h3 className="font-bold">NairobiPOS</h3>
+                  <p>Invoice #{lastSale.invoiceNumber}</p>
+                  <p>{formatDateTime(lastSale.saleDate)}</p>
+                </div>
+                <div className="border-b pb-2 mb-2">
+                  {lastSale.items?.map((item: any, idx: number) => (
+                    <div key={idx} className="flex justify-between">
+                      <span>{item.quantity}x {item.productName}</span>
+                      <span>{formatCurrency(item.total)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-between font-bold">
+                  <span>Total</span>
+                  <span>{formatCurrency(lastSale.total)}</span>
+                </div>
+              </div>
+            )}
           </Card>
         </div>
       </div>
@@ -322,6 +386,14 @@ export default function POSPage() {
             <Button variant="outline" className="gap-2">
               <ScanBarcode className="w-4 h-4" />
               Scan
+            </Button>
+            <Button 
+              variant="outline" 
+              className="gap-2"
+              onClick={() => setShowHeldSalesModal(true)}
+            >
+              <ClipboardList className="w-4 h-4" />
+              Held ({heldSales.length})
             </Button>
           </div>
 
@@ -474,16 +546,26 @@ export default function POSPage() {
                 <span className="text-emerald-600">{formatCurrency(total)}</span>
               </div>
               
-              <Button 
-                className="w-full mt-4"
-                size="lg"
-                onClick={() => {
-                  setAmountPaid(total.toString());
-                  setShowPaymentModal(true);
-                }}
-              >
-                Checkout
-              </Button>
+              <div className="flex gap-2 mt-4">
+                <Button 
+                  variant="outline"
+                  className="flex-1 gap-1"
+                  onClick={() => setShowHoldModal(true)}
+                >
+                  <Clock className="w-4 h-4" />
+                  Hold
+                </Button>
+                <Button 
+                  className="flex-1"
+                  size="lg"
+                  onClick={() => {
+                    setAmountPaid(total.toString());
+                    setShowPaymentModal(true);
+                  }}
+                >
+                  Checkout
+                </Button>
+              </div>
             </div>
           )}
         </div>
@@ -590,6 +672,100 @@ export default function POSPage() {
           >
             Complete Sale
           </Button>
+        </div>
+      </Modal>
+
+      {/* Hold Sale Modal */}
+      <Modal
+        isOpen={showHoldModal}
+        onClose={() => setShowHoldModal(false)}
+        title="Hold Sale"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            This sale will be saved and can be recalled later.
+          </p>
+          <Input
+            label="Note (optional)"
+            value={holdNote}
+            onChange={(e) => setHoldNote(e.target.value)}
+            placeholder="e.g., Customer will pay later"
+          />
+          <div className="flex gap-3">
+            <Button 
+              variant="outline" 
+              className="flex-1"
+              onClick={() => setShowHoldModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              className="flex-1"
+              onClick={handleHoldSale}
+            >
+              <Clock className="w-4 h-4" />
+              Hold Sale
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Held Sales Modal */}
+      <Modal
+        isOpen={showHeldSalesModal}
+        onClose={() => setShowHeldSalesModal(false)}
+        title="Held Sales"
+        size="lg"
+      >
+        <div className="space-y-3">
+          {heldSales.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <ClipboardList className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+              <p>No held sales</p>
+              <p className="text-sm">Hold a sale to recall it later</p>
+            </div>
+          ) : (
+            heldSales.map((sale) => (
+              <div 
+                key={sale.id}
+                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
+              >
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{sale.id}</span>
+                    {sale.note && (
+                      <span className="text-xs text-gray-500">- {sale.note}</span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-500">
+                    {sale.items.length} items • {formatCurrency(sale.items.reduce((sum, i) => sum + i.total, 0))}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {new Date(sale.createdAt).toLocaleString()}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleRecallSale(sale)}
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    Recall
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => removeHeldSale(sale.id)}
+                    className="text-red-500"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </Modal>
     </div>
