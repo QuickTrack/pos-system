@@ -235,6 +235,7 @@ export default function POSPage() {
         setSaleComplete(true);
         clearCart();
         setSelectedCustomer(null);
+        setShowPaymentModal(false);
       }
     } catch (error) {
       console.error('Payment failed:', error);
