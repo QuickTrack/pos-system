@@ -33,7 +33,11 @@ export default function LoginPage() {
       }
 
       router.push('/dashboard');
-      router.refresh();
+      
+      // Wait a moment for cookie to be set
+      setTimeout(() => {
+        router.refresh();
+      }, 100);
     } catch {
       setError('An error occurred. Please try again.');
     } finally {

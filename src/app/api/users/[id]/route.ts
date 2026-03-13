@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/mongodb';
 import User from '@/models/User';
 import ActivityLog from '@/models/ActivityLog';
-import { getAuthUser } from '@/lib/auth';
+import { getAuthUser } from '@/lib/auth-server';
 import bcrypt from 'bcryptjs';
 
 const DEFAULT_PERMISSIONS: Record<string, any> = {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Header } from '@/components/layout/Header';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -8,7 +8,7 @@ import { Input, Select } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { DataTable } from '@/components/ui/DataTable';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { Plus, Search, RefreshCw, Eye, Truck, Package, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { Plus, Search, RefreshCw, Eye, Truck, Package, CheckCircle, Clock, XCircle, X } from 'lucide-react';
 
 interface PurchaseItem {
   productId: string;
@@ -63,6 +63,12 @@ export default function PurchasesPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedSupplierProducts, setSelectedSupplierProducts] = useState<Product[]>([]);
+  const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [showProductDropdown, setShowProductDropdown] = useState(false);
+  const productSearchRef = useRef<HTMLInputElement>(null);
+  const [orderNumber, setOrderNumber] = useState('');
+  const [orderNumberSuffix, setOrderNumberSuffix] = useState('');
   const [formData, setFormData] = useState({
     supplierId: '',
     supplierName: '',
@@ -76,6 +82,38 @@ export default function PurchasesPage() {
   useEffect(() => {
     fetchPurchases();
   }, [status, paymentStatus]);
+
+  useEffect(() => {
+    // Filter products based on search query
+    if (productSearchQuery) {
+      const filtered = selectedSupplierProducts.filter(product => 
+        product.name.toLowerCase().includes(productSearchQuery.toLowerCase()) ||
+        product.sku.toLowerCase().includes(productSearchQuery.toLowerCase())
+      );
+      setFilteredProducts(filtered);
+      setShowProductDropdown(true);
+    } else {
+      setFilteredProducts(selectedSupplierProducts);
+      setShowProductDropdown(false);
+    }
+  }, [productSearchQuery, selectedSupplierProducts]);
+
+  // Initialize filteredProducts when supplier changes
+  useEffect(() => {
+    if (selectedSupplierProducts.length > 0) {
+      setFilteredProducts(selectedSupplierProducts);
+    }
+  }, [selectedSupplierProducts]);
+
+  // Focus search input when modal opens
+  useEffect(() => {
+    if (showCreateModal) {
+      const timer = setTimeout(() => {
+        productSearchRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [showCreateModal]);
 
   const fetchSuppliers = async () => {
     try {
@@ -343,6 +381,18 @@ export default function PurchasesPage() {
             setSelectedSupplierProducts([]);
             fetchSuppliers();
             fetchProducts();
+            // Generate new order number based on last purchase
+            const lastOrder = purchases[0];
+            let newSuffix = '0001';
+            if (lastOrder?.orderNumber) {
+              const parts = lastOrder.orderNumber.split('-');
+              if (parts.length >= 2) {
+                const num = parseInt(parts[parts.length - 1]) || 0;
+                newSuffix = String(num + 1).padStart(4, '0');
+              }
+            }
+            setOrderNumberSuffix(newSuffix);
+            setOrderNumber(`PO-${newSuffix}`);
             setShowCreateModal(true);
           }} className="gap-2">
             <Plus className="w-4 h-4" />
@@ -435,9 +485,28 @@ export default function PurchasesPage() {
                       {selectedPurchase.items?.map((item, idx) => (
                         <tr key={idx} className="border-t border-gray-100">
                           <td className="px-4 py-2">{item.productName}</td>
-                          <td className="px-4 py-2 text-right">{item.quantity}</td>
-                          <td className="px-4 py-2 text-right">{formatCurrency(item.unitCost)}</td>
-                          <td className="px-4 py-2 text-right">{formatCurrency(item.total)}</td>
+                          <td className="px-4 py-2 text-right">
+                            <input
+                              type="number"
+                              min="0"
+                              className="w-16 px-2 py-1 border border-gray-200 rounded text-right"
+                              defaultValue={item.quantity}
+                              id={`qty-${idx}`}
+                            />
+                          </td>
+                          <td className="px-4 py-2 text-right">
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              className="w-20 px-2 py-1 border border-gray-200 rounded text-right"
+                              defaultValue={item.unitCost}
+                              id={`cost-${idx}`}
+                            />
+                          </td>
+                          <td className="px-4 py-2 text-right font-medium">
+                            {formatCurrency(item.quantity * item.unitCost)}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -478,10 +547,63 @@ export default function PurchasesPage() {
             </div>
 
             <div className="p-6 border-t border-gray-200 flex gap-3">
-              <Button variant="outline" className="flex-1">
+              <Button 
+                variant="outline" 
+                className="flex-1"
+                onClick={async () => {
+                  // Get updated values from input fields
+                  const updatedItems = selectedPurchase.items.map((item: any, idx: number) => {
+                    const qtyInput = document.getElementById(`qty-${idx}`) as HTMLInputElement;
+                    const costInput = document.getElementById(`cost-${idx}`) as HTMLInputElement;
+                    const quantity = parseInt(qtyInput?.value || item.quantity);
+                    const unitCost = parseFloat(costInput?.value || item.unitCost);
+                    return {
+                      ...item,
+                      quantity,
+                      unitCost,
+                      total: quantity * unitCost,
+                    };
+                  });
+                  
+                  try {
+                    const response = await fetch(`/api/purchases/${selectedPurchase._id}/receive`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ items: updatedItems }),
+                    });
+                    if (response.ok) {
+                      fetchPurchases();
+                      setSelectedPurchase(null);
+                    }
+                  } catch (error) {
+                    console.error('Failed to receive order:', error);
+                  }
+                }}
+              >
                 Receive Order
               </Button>
-              <Button variant="outline" className="flex-1">
+              <Button 
+                variant="outline" 
+                className="flex-1"
+                onClick={async () => {
+                  const amount = prompt('Enter payment amount:');
+                  if (amount && parseFloat(amount) > 0) {
+                    try {
+                      const response = await fetch(`/api/purchases/${selectedPurchase._id}/payment`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ amount: parseFloat(amount) }),
+                      });
+                      if (response.ok) {
+                        fetchPurchases();
+                        setSelectedPurchase(null);
+                      }
+                    } catch (error) {
+                      console.error('Failed to record payment:', error);
+                    }
+                  }
+                }}
+              >
                 Record Payment
               </Button>
               <Button onClick={() => setSelectedPurchase(null)} className="flex-1">
@@ -493,169 +615,244 @@ export default function PurchasesPage() {
       )}
 
       {/* Create Purchase Modal */}
-      <Modal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        title="Create Purchase Order"
-        size="xl"
-      >
-        <form onSubmit={async (e) => {
-          e.preventDefault();
-          try {
-            const response = await fetch('/api/purchases', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(formData),
-            });
-            if (response.ok) {
-              setShowCreateModal(false);
-              fetchPurchases();
-            }
-          } catch (error) {
-            console.error('Failed to create purchase:', error);
-          }
-        }} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
-            <select
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              value={formData.supplierId}
-              onChange={(e) => handleSupplierChange(e.target.value)}
-              required
-            >
-              <option value="">Select a supplier</option>
-              {suppliers.map(supplier => (
-                <option key={supplier._id} value={supplier._id}>
-                  {supplier.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {formData.supplierId && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Add Products</label>
-              <div className="flex gap-2">
-                <select
-                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  onChange={(e) => {
-                    const product = products.find(p => p._id === e.target.value);
-                    if (product) {
-                      addItem(product);
-                      e.target.value = '';
-                    }
-                  }}
-                >
-                  <option value="">Select a product to add</option>
-                  {products.map(product => (
-                    <option key={product._id} value={product._id}>
-                      {product.name} (SKU: {product.sku}) - {formatCurrency(product.costPrice || 0)}
-                    </option>
-                  ))}
-                </select>
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 bg-gray-900">
+          <div className="h-full flex flex-col max-w-7xl mx-auto bg-white">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b bg-white flex-shrink-0 gap-4">
+              <div className="flex items-center gap-6 flex-1">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Create Purchase Order</h2>
+                  <p className="text-sm text-gray-500">Add new supplier order</p>
+                </div>
+                <div className="max-w-40">
+                  <div className="flex items-center">
+                    <span className="px-3 py-2 bg-gray-100 text-gray-600 border border-r-0 border-gray-200 rounded-l-lg text-sm">PO-</span>
+                    <input
+                      type="text"
+                      className="flex-1 px-3 py-2 border border-gray-200 rounded-r-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      value={orderNumberSuffix}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/[^0-9]/g, '');
+                        setOrderNumberSuffix(val);
+                        setOrderNumber(`PO-${val}`);
+                      }}
+                      placeholder="0001"
+                    />
+                  </div>
+                </div>
+                <div className="flex-1 max-w-sm">
+                  <select
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    value={formData.supplierId}
+                    onChange={(e) => handleSupplierChange(e.target.value)}
+                    required
+                  >
+                    <option value="">Select a supplier</option>
+                    {suppliers.map(supplier => (
+                      <option key={supplier._id} value={supplier._id}>
+                        {supplier.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
+              >
+                <X className="w-6 h-6" />
+              </button>
             </div>
-          )}
 
-          {formData.items.length > 0 && (
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="text-left px-4 py-2">Product</th>
-                    <th className="text-right px-4 py-2">Qty</th>
-                    <th className="text-right px-4 py-2">Unit Cost</th>
-                    <th className="text-right px-4 py-2">Total</th>
-                    <th className="px-4 py-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {formData.items.map((item: any, idx: number) => (
-                    <tr key={idx} className="border-t border-gray-100">
-                      <td className="px-4 py-2">{item.productName}</td>
-                      <td className="px-4 py-2">
-                        <input
-                          type="number"
-                          min="1"
-                          className="w-20 px-2 py-1 border border-gray-200 rounded text-right"
-                          value={item.quantity}
-                          onChange={(e) => updateItemQuantity(item.productId, parseInt(e.target.value) || 1)}
-                        />
-                      </td>
-                      <td className="px-4 py-2">
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          className="w-24 px-2 py-1 border border-gray-200 rounded text-right"
-                          value={item.unitCost}
-                          onChange={(e) => updateItemCost(item.productId, parseFloat(e.target.value) || 0)}
-                        />
-                      </td>
-                      <td className="px-4 py-2 text-right font-medium">{formatCurrency(item.total)}</td>
-                      <td className="px-4 py-2">
+            {/* Form Content - Scrollable */}
+            <div className="flex-1 overflow-auto p-6">
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                // Close modal immediately on button click
+                setShowCreateModal(false);
+                try {
+                  const response = await fetch('/api/purchases', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...formData, orderNumber }),
+                  });
+                  if (response.ok) {
+                    fetchPurchases();
+                  }
+                } catch (error) {
+                  console.error('Failed to create purchase:', error);
+                }
+              }} className="space-y-6">
+                {/* Product Search Section */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h3 className="font-medium text-gray-900 mb-4">Add Products</h3>
+                  <div className="mb-4">
+                    <div className="flex-1 relative max-w-md">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        ref={productSearchRef}
+                        type="text"
+                        placeholder="Search products by name or SKU..."
+                        className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        value={productSearchQuery}
+                        onChange={(e) => setProductSearchQuery(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  
+                  {filteredProducts.length > 0 && (
+                    <div className="border border-gray-200 rounded-lg max-h-64 overflow-auto">
+                      {filteredProducts.map((product) => (
                         <button
+                          key={product._id}
                           type="button"
-                          onClick={() => removeItem(item.productId)}
-                          className="text-red-500 hover:text-red-700"
+                          onClick={() => addItem(product)}
+                          className="w-full px-4 py-2 text-left hover:bg-emerald-50 border-b border-gray-100 last:border-b-0 flex items-center justify-between"
                         >
-                          ×
+                          <div>
+                            <span className="font-medium text-gray-900">{product.name}</span>
+                            <span className="text-xs text-gray-500 ml-2">SKU: {product.sku}</span>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <span className="text-emerald-600 font-medium">{formatCurrency(product.costPrice || 0)}</span>
+                            <span className={`text-xs ${product.stockQuantity < 10 ? 'text-red-500' : 'text-gray-400'}`}>
+                              Stock: {product.stockQuantity}
+                            </span>
+                          </div>
                         </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot className="bg-gray-50">
-                  <tr>
-                    <td colSpan={3} className="px-4 py-2 text-right font-medium">Total:</td>
-                    <td className="px-4 py-2 text-right font-bold">{formatCurrency(calculateTotal())}</td>
-                    <td></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )}
+                      ))}
+                    </div>
+                  )}
+                </div>
 
-          <Input
-            label="Notes"
-            value={formData.notes}
-            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-            placeholder="Optional notes"
-          />
-          <Input
-            label="Expected Delivery Date"
-            type="date"
-            value={formData.expectedDeliveryDate}
-            onChange={(e) => setFormData({ ...formData, expectedDeliveryDate: e.target.value })}
-          />
-          <Select
-            label="Payment Method"
-            value={formData.paymentMethod}
-            onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
-            options={[
-              { value: 'cash', label: 'Cash' },
-              { value: 'mpesa', label: 'M-Pesa' },
-              { value: 'card', label: 'Card' },
-              { value: 'credit', label: 'Credit' },
-            ]}
-          />
-          <Input
-            label="Amount Paid"
-            type="number"
-            value={formData.amountPaid}
-            onChange={(e) => setFormData({ ...formData, amountPaid: parseFloat(e.target.value) || 0 })}
-            placeholder="0"
-          />
-          <div className="flex justify-end gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)}>
-              Cancel
-            </Button>
-            <Button type="submit">
-              Create Order
-            </Button>
+                {/* Order Items Section */}
+                {formData.items.length > 0 && (
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="font-medium text-gray-900 mb-4">Order Items</h3>
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-100">
+                          <tr>
+                            <th className="text-left px-4 py-2 font-medium">Product</th>
+                            <th className="text-right px-4 py-2 font-medium">Qty</th>
+                            <th className="text-right px-4 py-2 font-medium">Unit Cost</th>
+                            <th className="text-right px-4 py-2 font-medium">Total</th>
+                            <th className="px-4 py-2"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {formData.items.map((item: any, idx: number) => (
+                            <tr key={idx} className="border-t border-gray-200">
+                              <td className="px-4 py-2">{item.productName}</td>
+                              <td className="px-4 py-2">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  className="w-20 px-2 py-1 border border-gray-200 rounded text-right"
+                                  value={item.quantity}
+                                  onChange={(e) => updateItemQuantity(item.productId, parseInt(e.target.value) || 1)}
+                                />
+                              </td>
+                              <td className="px-4 py-2">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  className="w-24 px-2 py-1 border border-gray-200 rounded text-right"
+                                  value={item.unitCost}
+                                  onChange={(e) => updateItemCost(item.productId, parseFloat(e.target.value) || 0)}
+                                />
+                              </td>
+                              <td className="px-4 py-2 text-right font-medium">{formatCurrency(item.total)}</td>
+                              <td className="px-4 py-2">
+                                <button
+                                  type="button"
+                                  onClick={() => removeItem(item.productId)}
+                                  className="text-red-500 hover:text-red-700"
+                                >
+                                  ×
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-gray-100">
+                          <tr>
+                            <td colSpan={3} className="px-4 py-2 text-right font-medium">Total:</td>
+                            <td className="px-4 py-2 text-right font-bold">{formatCurrency(calculateTotal())}</td>
+                            <td></td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Additional Details Section */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h3 className="font-medium text-gray-900 mb-4">Payment & Delivery</h3>
+                  <div className="grid grid-cols-2 gap-4 max-w-2xl">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                      <textarea
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        rows={2}
+                        value={formData.notes}
+                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                        placeholder="Optional notes"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Expected Delivery Date</label>
+                      <input
+                        type="date"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        value={formData.expectedDeliveryDate}
+                        onChange={(e) => setFormData({ ...formData, expectedDeliveryDate: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
+                      <select
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        value={formData.paymentMethod}
+                        onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
+                      >
+                        <option value="cash">Cash</option>
+                        <option value="mpesa">M-Pesa</option>
+                        <option value="card">Card</option>
+                        <option value="credit">Credit</option>
+                      </select>
+                    </div>
+                    {formData.paymentMethod !== 'credit' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid</label>
+                        <input
+                          type="number"
+                          className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          value={formData.amountPaid}
+                          onChange={(e) => setFormData({ ...formData, amountPaid: parseFloat(e.target.value) || 0 })}
+                          placeholder="0"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t">
+                  <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit">
+                    Create Order
+                  </Button>
+                </div>
+              </form>
+            </div>
           </div>
-        </form>
-      </Modal>
+        </div>
+      )}
     </div>
   );
 }

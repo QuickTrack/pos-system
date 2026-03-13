@@ -6,6 +6,7 @@ export { default as Customer } from './Customer';
 export { default as Supplier } from './Supplier';
 export { default as Sale } from './Sale';
 export { default as Purchase } from './Purchase';
+export { default as SupplierPayment } from './SupplierPayment';
 export { default as Settings } from './Settings';
 export { default as ActivityLog } from './ActivityLog';
 
@@ -18,5 +19,6 @@ export type { ICustomer } from './Customer';
 export type { ISupplier } from './Supplier';
 export type { ISale, ISaleItem } from './Sale';
 export type { IPurchase, IPurchaseItem } from './Purchase';
+export type { ISupplierPayment } from './SupplierPayment';
 export type { ISettings } from './Settings';
 export type { IActivityLog } from './ActivityLog';

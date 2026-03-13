@@ -28,6 +28,9 @@ import {
   Pie,
   Cell
 } from 'recharts';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
 
@@ -65,9 +68,285 @@ export default function ReportsPage() {
     }
   };
 
-  const handleExport = (format: 'pdf' | 'excel' | 'csv') => {
-    // Export logic would go here
-    console.log(`Exporting as ${format}`);
+  const handleExport = async (format: 'pdf' | 'excel' | 'csv') => {
+    // Fetch complete data for export
+    try {
+      const response = await fetch(`/api/reports?type=${reportType}&period=${period}&limit=1000`);
+      const result = await response.json();
+      
+      if (!result.success) {
+        alert('Failed to fetch data for export');
+        return;
+      }
+      
+      const data = result.data;
+      const fileName = `${reportType}_report_${period}_${new Date().toISOString().split('T')[0]}`;
+      
+      if (format === 'excel' || format === 'csv') {
+        // Prepare data for Excel
+        let worksheetData: any[] = [];
+        
+        if (reportType === 'sales') {
+          worksheetData = [
+            ['Sales Report'],
+            [`Period: ${period}`],
+            [''],
+            ['Summary'],
+            ['Total Sales', data.totalSales || 0],
+            ['Total Revenue', data.totalRevenue || 0],
+            ['Total Profit', data.totalProfit || 0],
+            ['Total Tax', data.totalTax || 0],
+            [''],
+            ['Sales by Day'],
+            ['Date', 'Sales', 'Revenue', 'Profit'],
+            ...(data.salesByDay?.map((row: any) => [row.date, row.sales, row.revenue, row.profit]) || []),
+            [''],
+            ['Top Products'],
+            ['Product', 'Quantity', 'Revenue', 'Profit'],
+            ...(data.topProducts?.map((p: any) => [p.name, p.quantity, p.revenue, p.profit]) || []),
+          ];
+        } else if (reportType === 'products') {
+          worksheetData = [
+            ['Product Performance Report'],
+            [`Period: ${period}`],
+            [''],
+            ['Top Products'],
+            ['Product', 'Quantity Sold', 'Revenue', 'Profit'],
+            ...(data.topProducts?.map((p: any) => [p.name, p.quantity, p.revenue, p.profit]) || []),
+          ];
+        } else if (reportType === 'customers') {
+          worksheetData = [
+            ['Customer Report'],
+            [`Period: ${period}`],
+            [''],
+            ['Top Customers'],
+            ['Customer', 'Total Purchases', 'Revenue'],
+            ...(data.topCustomers?.map((c: any) => [c.name, c.purchases, c.revenue]) || []),
+          ];
+        } else if (reportType === 'inventory') {
+          worksheetData = [
+            ['Inventory Report'],
+            [`Period: ${period}`],
+            [''],
+            ['Summary'],
+            ['Total Products', data.totalProducts || 0],
+            ['Low Stock Items', data.lowStockItems || 0],
+            ['Out of Stock', data.outOfStock || 0],
+            [''],
+            ['Inventory Items'],
+            ['Product', 'Stock', 'Value', 'Status'],
+            ...(data.inventoryItems?.map((item: any) => [item.name, item.stock, item.value, item.status]) || []),
+          ];
+        } else if (reportType === 'profit') {
+          worksheetData = [
+            ['Profit & Loss Report'],
+            [`Period: ${period}`],
+            [''],
+            ['Summary'],
+            ['Total Revenue', data.totalRevenue || 0],
+            ['Total Cost', data.totalCost || 0],
+            ['Gross Profit', data.grossProfit || 0],
+            ['Net Profit', data.netProfit || 0],
+            [''],
+            ['Profit by Day'],
+            ['Date', 'Revenue', 'Cost', 'Profit'],
+            ...(data.profitByDay?.map((row: any) => [row.date, row.revenue, row.cost, row.profit]) || []),
+          ];
+        }
+        
+        // Create workbook and worksheet
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+        
+        // Set column widths
+        ws['!cols'] = worksheetData[0].map(() => ({ wch: 20 }));
+        
+        XLSX.utils.book_append_sheet(wb, ws, 'Report');
+        
+        // Download file
+        XLSX.writeFile(wb, `${fileName}.${format === 'csv' ? 'csv' : 'xlsx'}`);
+        
+      } else if (format === 'pdf') {
+        // Create PDF
+        const doc = new jsPDF();
+        
+        // Add title
+        const title = reportType.charAt(0).toUpperCase() + reportType.slice(1) + ' Report';
+        doc.setFontSize(20);
+        doc.text(title, 14, 22);
+        
+        doc.setFontSize(11);
+        doc.text(`Period: ${period}`, 14, 32);
+        doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 40);
+        
+        let yPos = 50;
+        
+        if (reportType === 'sales') {
+          // Summary table
+          doc.setFontSize(14);
+          doc.text('Summary', 14, yPos);
+          yPos += 10;
+          
+          (doc as any).autoTable({
+            startY: yPos,
+            head: [['Metric', 'Value']],
+            body: [
+              ['Total Sales', data.totalSales?.toString() || '0'],
+              ['Total Revenue', formatCurrency(data.totalRevenue || 0)],
+              ['Total Profit', formatCurrency(data.totalProfit || 0)],
+              ['Total Tax', formatCurrency(data.totalTax || 0)],
+            ],
+            theme: 'striped',
+          });
+          
+          yPos = (doc as any).lastAutoTable.finalY + 15;
+          
+          // Sales by day
+          if (data.salesByDay?.length > 0) {
+            doc.setFontSize(14);
+            doc.text('Sales by Day', 14, yPos);
+            yPos += 10;
+            
+            (doc as any).autoTable({
+              startY: yPos,
+              head: [['Date', 'Sales', 'Revenue', 'Profit']],
+              body: data.salesByDay.map((row: any) => [
+                row.date,
+                row.sales?.toString() || '0',
+                formatCurrency(row.revenue || 0),
+                formatCurrency(row.profit || 0),
+              ]),
+              theme: 'striped',
+            });
+            
+            yPos = (doc as any).lastAutoTable.finalY + 15;
+          }
+          
+          // Top products
+          if (data.topProducts?.length > 0) {
+            doc.setFontSize(14);
+            doc.text('Top Products', 14, yPos);
+            yPos += 10;
+            
+            (doc as any).autoTable({
+              startY: yPos,
+              head: [['Product', 'Qty', 'Revenue', 'Profit']],
+              body: data.topProducts.slice(0, 10).map((p: any) => [
+                p.name,
+                p.quantity?.toString() || '0',
+                formatCurrency(p.revenue || 0),
+                formatCurrency(p.profit || 0),
+              ]),
+              theme: 'striped',
+            });
+          }
+        } else if (reportType === 'products') {
+          if (data.topProducts?.length > 0) {
+            (doc as any).autoTable({
+              startY: yPos,
+              head: [['Product', 'Quantity Sold', 'Revenue', 'Profit']],
+              body: data.topProducts.map((p: any) => [
+                p.name,
+                p.quantity?.toString() || '0',
+                formatCurrency(p.revenue || 0),
+                formatCurrency(p.profit || 0),
+              ]),
+              theme: 'striped',
+            });
+          }
+        } else if (reportType === 'customers') {
+          if (data.topCustomers?.length > 0) {
+            (doc as any).autoTable({
+              startY: yPos,
+              head: [['Customer', 'Purchases', 'Revenue']],
+              body: data.topCustomers.map((c: any) => [
+                c.name,
+                c.purchases?.toString() || '0',
+                formatCurrency(c.revenue || 0),
+              ]),
+              theme: 'striped',
+            });
+          }
+        } else if (reportType === 'inventory') {
+          doc.setFontSize(14);
+          doc.text('Summary', 14, yPos);
+          yPos += 10;
+          
+          (doc as any).autoTable({
+            startY: yPos,
+            head: [['Metric', 'Value']],
+            body: [
+              ['Total Products', data.totalProducts?.toString() || '0'],
+              ['Low Stock Items', data.lowStockItems?.toString() || '0'],
+              ['Out of Stock', data.outOfStock?.toString() || '0'],
+            ],
+            theme: 'striped',
+          });
+          
+          yPos = (doc as any).lastAutoTable.finalY + 15;
+          
+          if (data.inventoryItems?.length > 0) {
+            doc.setFontSize(14);
+            doc.text('Inventory Items', 14, yPos);
+            yPos += 10;
+            
+            (doc as any).autoTable({
+              startY: yPos,
+              head: [['Product', 'Stock', 'Value', 'Status']],
+              body: data.inventoryItems.map((item: any) => [
+                item.name,
+                item.stock?.toString() || '0',
+                formatCurrency(item.value || 0),
+                item.status || 'N/A',
+              ]),
+              theme: 'striped',
+            });
+          }
+        } else if (reportType === 'profit') {
+          doc.setFontSize(14);
+          doc.text('Summary', 14, yPos);
+          yPos += 10;
+          
+          (doc as any).autoTable({
+            startY: yPos,
+            head: [['Metric', 'Value']],
+            body: [
+              ['Total Revenue', formatCurrency(data.totalRevenue || 0)],
+              ['Total Cost', formatCurrency(data.totalCost || 0)],
+              ['Gross Profit', formatCurrency(data.grossProfit || 0)],
+              ['Net Profit', formatCurrency(data.netProfit || 0)],
+            ],
+            theme: 'striped',
+          });
+          
+          yPos = (doc as any).lastAutoTable.finalY + 15;
+          
+          if (data.profitByDay?.length > 0) {
+            doc.setFontSize(14);
+            doc.text('Profit by Day', 14, yPos);
+            yPos += 10;
+            
+            (doc as any).autoTable({
+              startY: yPos,
+              head: [['Date', 'Revenue', 'Cost', 'Profit']],
+              body: data.profitByDay.map((row: any) => [
+                row.date,
+                formatCurrency(row.revenue || 0),
+                formatCurrency(row.cost || 0),
+                formatCurrency(row.profit || 0),
+              ]),
+              theme: 'striped',
+            });
+          }
+        }
+        
+        // Save PDF
+        doc.save(`${fileName}.pdf`);
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('Failed to export report. Please try again.');
+    }
   };
 
   const reportTypes = [

@@ -3,7 +3,8 @@ import dbConnect from '@/lib/db/mongodb';
 import Sale from '@/models/Sale';
 import Product from '@/models/Product';
 import Customer from '@/models/Customer';
-import { getAuthUser, hasPermission } from '@/lib/auth';
+import { getAuthUser } from '@/lib/auth-server';
+import { hasPermission } from '@/lib/auth';
 import { generateInvoiceNumber } from '@/lib/utils';
 
 export async function GET(request: NextRequest) {

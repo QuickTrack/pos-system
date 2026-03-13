@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/mongodb';
 import ActivityLog from '@/models/ActivityLog';
-import { getAuthUser } from '@/lib/auth';
+import { getAuthUser } from '@/lib/auth-server';
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
     const action = searchParams.get('action');
-    const module = searchParams.get('module');
+    const moduleParam = searchParams.get('module');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const page = parseInt(searchParams.get('page') || '1');
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     
     if (userId) query.user = userId;
     if (action) query.action = action;
-    if (module) query.module = module;
+    if (moduleParam) query.module = moduleParam;
     
     if (startDate || endDate) {
       query.createdAt = {};

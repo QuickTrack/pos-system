@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/mongodb';
 import Purchase from '@/models/Purchase';
+// Import all models to register them with Mongoose
+import '@/models';
 
 export async function GET(request: NextRequest) {
   try {
@@ -65,12 +67,13 @@ export async function POST(request: NextRequest) {
     
     const data = await request.json();
     
-    const orderNumber = `PO-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    // Use provided orderNumber or generate one
+    const orderNumber = data.orderNumber || `PO-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     
     const items = data.items.map((item: any) => ({
       product: item.productId,
       productName: item.productName,
-      sku: item.sku,
+      sku: item.sku || '',
       quantity: item.quantity,
       unitCost: item.unitCost,
       total: item.quantity * item.unitCost,
@@ -87,11 +90,10 @@ export async function POST(request: NextRequest) {
     const total = taxableAmount + tax;
     const balance = total - (data.amountPaid || 0);
     
-    const purchase = await Purchase.create({
+    const purchaseData: any = {
       orderNumber,
       supplier: data.supplierId,
       supplierName: data.supplierName,
-      branch: data.branchId,
       items,
       subtotal,
       discount: data.discount || 0,
@@ -106,7 +108,14 @@ export async function POST(request: NextRequest) {
       orderDate: new Date(),
       expectedDeliveryDate: data.expectedDeliveryDate,
       notes: data.notes,
-    });
+    };
+    
+    // Only add branch if provided
+    if (data.branchId) {
+      purchaseData.branch = data.branchId;
+    }
+    
+    const purchase = await Purchase.create(purchaseData);
     
     return NextResponse.json({
       success: true,

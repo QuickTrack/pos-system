@@ -29,14 +29,38 @@ interface Category {
   name: string;
 }
 
+interface UnitOfMeasure {
+  _id: string;
+  name: string;
+  abbreviation: string;
+}
+
+const DEFAULT_UNITS = [
+  { _id: 'piece', name: 'Piece', abbreviation: 'pc' },
+  { _id: 'kg', name: 'Kilogram', abbreviation: 'kg' },
+  { _id: 'g', name: 'Gram', abbreviation: 'g' },
+  { _id: 'liter', name: 'Liter', abbreviation: 'L' },
+  { _id: 'ml', name: 'Milliliter', abbreviation: 'mL' },
+  { _id: 'box', name: 'Box', abbreviation: 'box' },
+  { _id: 'pack', name: 'Pack', abbreviation: 'pack' },
+  { _id: 'meter', name: 'Meter', abbreviation: 'm' },
+  { _id: 'cm', name: 'Centimeter', abbreviation: 'cm' },
+  { _id: 'roll', name: 'Roll', abbreviation: 'roll' },
+  { _id: 'pair', name: 'Pair', abbreviation: 'pair' },
+  { _id: 'dozen', name: 'Dozen', abbreviation: 'doz' },
+];
+
 export default function InventoryPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [units, setUnits] = useState<UnitOfMeasure[]>(DEFAULT_UNITS);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showProductModal, setShowProductModal] = useState(false);
+  const [showUnitModal, setShowUnitModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [showLowStock, setShowLowStock] = useState(false);
+  const [newUnit, setNewUnit] = useState({ name: '', abbreviation: '' });
   const [formData, setFormData] = useState({
     name: '',
     sku: '',
@@ -99,6 +123,29 @@ export default function InventoryPage() {
     } catch (error) {
       console.error('Failed to save product:', error);
     }
+  };
+
+  const handleAddUnit = () => {
+    if (newUnit.name && newUnit.abbreviation) {
+      const unitId = newUnit.name.toLowerCase().replace(/\s+/g, '-');
+      const unit: UnitOfMeasure = {
+        _id: unitId,
+        name: newUnit.name,
+        abbreviation: newUnit.abbreviation,
+      };
+      setUnits([...units, unit]);
+      setNewUnit({ name: '', abbreviation: '' });
+      setShowUnitModal(false);
+    }
+  };
+
+  const handleDeleteUnit = (unitId: string) => {
+    const defaultUnitIds = DEFAULT_UNITS.map(u => u._id);
+    if (defaultUnitIds.includes(unitId)) {
+      alert('Cannot delete default units');
+      return;
+    }
+    setUnits(units.filter(u => u._id !== unitId));
   };
 
   const handleEdit = (product: Product) => {
@@ -344,20 +391,30 @@ export default function InventoryPage() {
               value={formData.lowStockThreshold}
               onChange={(e) => setFormData({ ...formData, lowStockThreshold: parseInt(e.target.value) })}
             />
-            <Select
-              label="Unit"
-              value={formData.unit}
-              onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-              options={[
-                { value: 'piece', label: 'Piece' },
-                { value: 'kg', label: 'Kilogram' },
-                { value: 'g', label: 'Gram' },
-                { value: 'liter', label: 'Liter' },
-                { value: 'ml', label: 'Milliliter' },
-                { value: 'box', label: 'Box' },
-                { value: 'pack', label: 'Pack' },
-              ]}
-            />
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <Select
+                  label="Unit"
+                  value={formData.unit}
+                  onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                  options={[
+                    { value: '', label: 'Select Unit' },
+                    ...units.map((u) => ({ value: u._id, label: `${u.name} (${u.abbreviation})` })),
+                  ]}
+                />
+              </div>
+              <div className="pt-7">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowUnitModal(true)}
+                  title="Add New Unit"
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
@@ -376,6 +433,74 @@ export default function InventoryPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Unit of Measure Modal */}
+      <Modal
+        isOpen={showUnitModal}
+        onClose={() => {
+          setShowUnitModal(false);
+          setNewUnit({ name: '', abbreviation: '' });
+        }}
+        title="Add Unit of Measure"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <Input
+            label="Unit Name"
+            value={newUnit.name}
+            onChange={(e) => setNewUnit({ ...newUnit, name: e.target.value })}
+            placeholder="e.g., Bottle, Sack, Bundle"
+            required
+          />
+          <Input
+            label="Abbreviation"
+            value={newUnit.abbreviation}
+            onChange={(e) => setNewUnit({ ...newUnit, abbreviation: e.target.value })}
+            placeholder="e.g., bt, sk, bd"
+            required
+          />
+          
+          {/* Existing Units List */}
+          <div className="mt-4">
+            <p className="text-sm font-medium text-gray-700 mb-2">Available Units:</p>
+            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+              {units.map((unit) => (
+                <span
+                  key={unit._id}
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 rounded text-sm"
+                >
+                  {unit.name} ({unit.abbreviation})
+                  {!DEFAULT_UNITS.find(d => d._id === unit._id) && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteUnit(unit._id)}
+                      className="ml-1 text-red-500 hover:text-red-700"
+                    >
+                      ×
+                    </button>
+                  )}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowUnitModal(false);
+                setNewUnit({ name: '', abbreviation: '' });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleAddUnit}>
+              Add Unit
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

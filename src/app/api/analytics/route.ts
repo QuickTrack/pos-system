@@ -4,7 +4,7 @@ import Sale from '@/models/Sale';
 import Product from '@/models/Product';
 import Customer from '@/models/Customer';
 import Purchase from '@/models/Purchase';
-import { getAuthUser } from '@/lib/auth';
+import { getAuthUser } from '@/lib/auth-server';
 
 export async function GET(request: NextRequest) {
   try {

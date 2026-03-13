@@ -37,6 +37,13 @@ interface Product {
   wholesalePrice: number;
   stockQuantity: number;
   category: { name: string };
+  units?: { name: string; price: number; conversionQty: number }[];
+}
+
+interface UnitOption {
+  name: string;
+  price: number;
+  conversionQty: number;
 }
 
 interface Customer {
@@ -68,7 +75,12 @@ export default function POSPage() {
   const [saleComplete, setSaleComplete] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
   const [printMode, setPrintMode] = useState(false);
+  const [openUnitSelector, setOpenUnitSelector] = useState<string | null>(null);
+  const [businessName, setBusinessName] = useState('POS');
+  const [cartHeight, setCartHeight] = useState(250);
+  const [isDragging, setIsDragging] = useState(false);
   const receiptRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   
   const { 
     items, 
@@ -86,6 +98,20 @@ export default function POSPage() {
 
   useEffect(() => {
     fetchProducts();
+    fetchCategories();
+    fetchSettings();
+    // Clear cart and customer on page load for a fresh sale
+    clearCart();
+    setCustomer(undefined);
+    setSelectedCustomer(null);
+  }, []);
+
+  // Focus search input on page load
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 100);
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -120,18 +146,18 @@ export default function POSPage() {
   }, [products]);
 
   const DEMO_PRODUCTS = [
-    { _id: '1', name: 'Samsung Galaxy A14', sku: 'ELEC001', barcode: '1234567890123', retailPrice: 18999, wholesalePrice: 17000, stockQuantity: 50, category: { name: 'Electronics' } },
-    { _id: '2', name: 'Sony WH-1000XM5 Headphones', sku: 'ELEC002', barcode: '1234567890124', retailPrice: 32999, wholesalePrice: 30000, stockQuantity: 25, category: { name: 'Electronics' } },
-    { _id: '3', name: 'HP Laptop 15s', sku: 'ELEC003', barcode: '1234567890125', retailPrice: 74999, wholesalePrice: 70000, stockQuantity: 15, category: { name: 'Electronics' } },
-    { _id: '4', name: 'Nescafe Coffee 500g', sku: 'FOOD001', barcode: '2234567890123', retailPrice: 1299, wholesalePrice: 1150, stockQuantity: 200, category: { name: 'Food & Beverages' } },
-    { _id: '5', name: 'Milo Pack 1kg', sku: 'FOOD002', barcode: '2234567890124', retailPrice: 899, wholesalePrice: 800, stockQuantity: 150, category: { name: 'Food & Beverages' } },
-    { _id: '6', name: 'Coca-Cola 500ml (24 pack)', sku: 'FOOD003', barcode: '2234567890125', retailPrice: 2400, wholesalePrice: 2200, stockQuantity: 100, category: { name: 'Food & Beverages' } },
-    { _id: '7', name: 'Detergent Powder 1kg', sku: 'HOUSE001', barcode: '3234567890123', retailPrice: 450, wholesalePrice: 400, stockQuantity: 300, category: { name: 'Household' } },
-    { _id: '8', name: 'Cooking Oil 5L', sku: 'FOOD004', barcode: '2234567890126', retailPrice: 1800, wholesalePrice: 1650, stockQuantity: 80, category: { name: 'Food & Beverages' } },
-    { _id: '9', name: 'Sugar 1kg', sku: 'FOOD005', barcode: '2234567890127', retailPrice: 250, wholesalePrice: 220, stockQuantity: 500, category: { name: 'Food & Beverages' } },
-    { _id: '10', name: 'Rice 2kg', sku: 'FOOD006', barcode: '2234567890128', retailPrice: 600, wholesalePrice: 550, stockQuantity: 200, category: { name: 'Food & Beverages' } },
-    { _id: '11', name: 'USB Cable', sku: 'MOBILE001', barcode: '4234567890123', retailPrice: 500, wholesalePrice: 450, stockQuantity: 150, category: { name: 'Mobile Accessories' } },
-    { _id: '12', name: 'Phone Charger', sku: 'MOBILE002', barcode: '4234567890124', retailPrice: 1200, wholesalePrice: 1000, stockQuantity: 75, category: { name: 'Mobile Accessories' } },
+    { _id: '1', name: 'Samsung Galaxy A14', sku: 'ELEC001', barcode: '1234567890123', retailPrice: 18999, wholesalePrice: 17000, stockQuantity: 50, category: { name: 'Electronics' }, units: [{ name: 'Pcs', price: 18999, conversionQty: 1 }] },
+    { _id: '2', name: 'Sony WH-1000XM5 Headphones', sku: 'ELEC002', barcode: '1234567890124', retailPrice: 32999, wholesalePrice: 30000, stockQuantity: 25, category: { name: 'Electronics' }, units: [{ name: 'Pcs', price: 32999, conversionQty: 1 }] },
+    { _id: '3', name: 'HP Laptop 15s', sku: 'ELEC003', barcode: '1234567890125', retailPrice: 74999, wholesalePrice: 70000, stockQuantity: 15, category: { name: 'Electronics' }, units: [{ name: 'Pcs', price: 74999, conversionQty: 1 }] },
+    { _id: '4', name: 'Nescafe Coffee 500g', sku: 'FOOD001', barcode: '2234567890123', retailPrice: 1299, wholesalePrice: 1150, stockQuantity: 200, category: { name: 'Food & Beverages' }, units: [{ name: 'Pcs', price: 1299, conversionQty: 1 }, { name: 'Box (6)', price: 7500, conversionQty: 6 }] },
+    { _id: '5', name: 'Milo Pack 1kg', sku: 'FOOD002', barcode: '2234567890124', retailPrice: 899, wholesalePrice: 800, stockQuantity: 150, category: { name: 'Food & Beverages' }, units: [{ name: 'Pcs', price: 899, conversionQty: 1 }, { name: 'Box (24)', price: 20000, conversionQty: 24 }] },
+    { _id: '6', name: 'Coca-Cola 500ml (24 pack)', sku: 'FOOD003', barcode: '2234567890125', retailPrice: 2400, wholesalePrice: 2200, stockQuantity: 100, category: { name: 'Food & Beverages' }, units: [{ name: 'Pack (24)', price: 2400, conversionQty: 24 }, { name: 'Pcs', price: 120, conversionQty: 1 }] },
+    { _id: '7', name: 'Detergent Powder 1kg', sku: 'HOUSE001', barcode: '3234567890123', retailPrice: 450, wholesalePrice: 400, stockQuantity: 300, category: { name: 'Household' }, units: [{ name: 'Pcs', price: 450, conversionQty: 1 }, { name: 'Pack (5)', price: 2000, conversionQty: 5 }] },
+    { _id: '8', name: 'Cooking Oil 5L', sku: 'FOOD004', barcode: '2234567890126', retailPrice: 1800, wholesalePrice: 1650, stockQuantity: 80, category: { name: 'Food & Beverages' }, units: [{ name: '5L', price: 1800, conversionQty: 5 }, { name: '1L', price: 400, conversionQty: 1 }] },
+    { _id: '9', name: 'Sugar 1kg', sku: 'FOOD005', barcode: '2234567890127', retailPrice: 250, wholesalePrice: 220, stockQuantity: 500, category: { name: 'Food & Beverages' }, units: [{ name: '1kg', price: 250, conversionQty: 1 }, { name: '500g', price: 140, conversionQty: 0.5 }, { name: '2kg', price: 480, conversionQty: 2 }] },
+    { _id: '10', name: 'Rice 2kg', sku: 'FOOD006', barcode: '2234567890128', retailPrice: 600, wholesalePrice: 550, stockQuantity: 200, category: { name: 'Food & Beverages' }, units: [{ name: '2kg', price: 600, conversionQty: 2 }, { name: '1kg', price: 320, conversionQty: 1 }, { name: '5kg', price: 1400, conversionQty: 5 }] },
+    { _id: '11', name: 'USB Cable', sku: 'MOBILE001', barcode: '4234567890123', retailPrice: 500, wholesalePrice: 450, stockQuantity: 150, category: { name: 'Mobile Accessories' }, units: [{ name: 'Pcs', price: 500, conversionQty: 1 }, { name: 'Pack (5)', price: 2200, conversionQty: 5 }] },
+    { _id: '12', name: 'Phone Charger', sku: 'MOBILE002', barcode: '4234567890124', retailPrice: 1200, wholesalePrice: 1000, stockQuantity: 75, category: { name: 'Mobile Accessories' }, units: [{ name: 'Pcs', price: 1200, conversionQty: 1 }] },
   ];
 
   const fetchProducts = async () => {
@@ -154,6 +180,18 @@ export default function POSPage() {
     }
   };
 
+  const fetchSettings = async () => {
+    try {
+      const response = await fetch('/api/settings');
+      const data = await response.json();
+      if (data.settings?.businessName) {
+        setBusinessName(data.settings.businessName);
+      }
+    } catch (error) {
+      console.error('Failed to fetch settings:', error);
+    }
+  };
+
   const handleAddToCart = (product: Product) => {
     const existingItem = items.find((item) => item.productId === product._id);
     
@@ -172,6 +210,32 @@ export default function POSPage() {
       };
       addItem(cartItem);
     }
+    setSearchQuery('');
+    searchInputRef.current?.focus();
+  };
+
+  const handleUnitChange = (productId: string, unit: UnitOption) => {
+    const item = items.find(i => i.productId === productId);
+    if (item) {
+      updateQuantity(productId, item.quantity);
+      // Update the item with new unit price
+      removeItem(productId);
+      const product = products.find(p => p._id === productId);
+      if (product) {
+        const cartItem: CartItem = {
+          productId: product._id,
+          productName: product.name,
+          sku: product.sku,
+          barcode: product.barcode,
+          quantity: item.quantity,
+          unitPrice: unit.price,
+          discount: item.discount,
+          total: unit.price * item.quantity,
+        };
+        addItem(cartItem);
+      }
+    }
+    setOpenUnitSelector(null);
   };
 
   const handleBarcodeScan = useCallback((barcode: string) => {
@@ -267,6 +331,110 @@ export default function POSPage() {
     }
   };
 
+  // Handle M-Pesa Till Number Payment
+  const handleMpesaTillPayment = async () => {
+    setProcessing(true);
+    try {
+      const { total } = calculateTotals();
+      
+      const response = await fetch('/api/sales', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: items.map((item) => ({
+            productId: item.productId,
+            productName: item.productName,
+            sku: item.sku,
+            barcode: item.barcode,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            costPrice: item.costPrice || 0,
+            discount: item.discount,
+            discountType: item.discountType,
+            variant: item.variant,
+          })),
+          customerId: customer?.id,
+          customerName: customer?.name,
+          customerPhone: customer?.phone,
+          paymentMethod: 'mpesa',
+          mpesaPaymentType: 'till',
+          amountPaid: total,
+          change: 0,
+          notes: 'Payment via M-Pesa Till Number',
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setLastSale(data.sale);
+        setSaleComplete(true);
+        clearCart();
+        setSelectedCustomer(null);
+        setShowPaymentModal(false);
+        setAmountPaid('');
+        alert('Payment recorded successfully! Please confirm payment from customer.');
+      }
+    } catch (error) {
+      console.error('M-Pesa Till payment failed:', error);
+      alert('Payment failed. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // Handle M-Pesa Owner Wallet Payment
+  const handleMpesaWalletPayment = async () => {
+    setProcessing(true);
+    try {
+      const { total } = calculateTotals();
+      
+      const response = await fetch('/api/sales', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: items.map((item) => ({
+            productId: item.productId,
+            productName: item.productName,
+            sku: item.sku,
+            barcode: item.barcode,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            costPrice: item.costPrice || 0,
+            discount: item.discount,
+            discountType: item.discountType,
+            variant: item.variant,
+          })),
+          customerId: customer?.id,
+          customerName: customer?.name,
+          customerPhone: customer?.phone,
+          paymentMethod: 'mpesa',
+          mpesaPaymentType: 'wallet',
+          amountPaid: total,
+          change: 0,
+          notes: 'Payment via M-Pesa Owner Wallet',
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setLastSale(data.sale);
+        setSaleComplete(true);
+        clearCart();
+        setSelectedCustomer(null);
+        setShowPaymentModal(false);
+        setAmountPaid('');
+        alert('Payment recorded successfully! Please confirm payment from customer.');
+      }
+    } catch (error) {
+      console.error('M-Pesa Wallet payment failed:', error);
+      alert('Payment failed. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   const handleSearchCustomer = async (query: string) => {
     setCustomerSearch(query);
     if (query.length >= 2) {
@@ -317,6 +485,32 @@ export default function POSPage() {
     setLastSale(null);
     fetchProducts();
   };
+
+  const handleMouseDown = () => {
+    setIsDragging(true);
+  };
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (isDragging) {
+      const newHeight = window.innerHeight - e.clientY - 64;
+      setCartHeight(Math.max(150, Math.min(500, newHeight)));
+    }
+  }, [isDragging]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, handleMouseMove, handleMouseUp]);
 
   const { subtotal, discount, tax, total } = calculateTotals();
 
@@ -390,16 +584,17 @@ export default function POSPage() {
 
   return (
     <div>
-      <Header title="POS - New Sale" subtitle="Point of Sale System" />
+      <Header title={`${businessName} - New Sale`} subtitle="Point of Sale System" />
       
-      <div className="flex h-[calc(100vh-64px)]">
+      <div className="flex flex-col h-[calc(100vh-64px)]">
         {/* Products Section */}
-        <div className="flex-1 p-4 overflow-hidden flex flex-col">
+        <div className="flex-1 p-4 flex flex-col overflow-hidden">
           {/* Search Bar */}
           <div className="flex gap-3 mb-3">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
+                ref={searchInputRef}
                 type="text"
                 placeholder="Search products by name, SKU, or barcode..."
                 className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -407,6 +602,17 @@ export default function POSPage() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
+            <button 
+              onClick={() => setShowCustomerModal(true)}
+              className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-200 rounded-lg hover:border-emerald-400 transition-colors bg-white"
+            >
+              <User className="w-4 h-4 text-gray-400" />
+              {customer ? (
+                <span className="text-gray-900">{customer.name}</span>
+              ) : (
+                <span className="text-gray-400">Customer</span>
+              )}
+            </button>
             <Button variant="outline" className="gap-2">
               <ScanBarcode className="w-4 h-4" />
               Scan
@@ -421,12 +627,12 @@ export default function POSPage() {
             </Button>
           </div>
 
-          {/* Category Filter - Small Font */}
+          {/* Category Filter })
           {categories.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-3 overflow-x-auto pb-2">
+            <div className="flex flex-wrap gap-2 mb-3 overflow-x-auto pb-2">
               <button
                 onClick={() => setSelectedCategory('all')}
-                className={`px-2 py-1 text-[10px] rounded-md border transition-colors whitespace-nowrap ${
+                className={`px-3 py-1.5 text-xs rounded-md border transition-colors whitespace-nowrap ${
                   selectedCategory === 'all'
                     ? 'bg-emerald-600 text-white border-emerald-600'
                     : 'bg-white text-gray-600 border-gray-200 hover:border-emerald-400'
@@ -438,7 +644,7 @@ export default function POSPage() {
                 <button
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
-                  className={`px-2 py-1 text-[10px] rounded-md border transition-colors whitespace-nowrap ${
+                  className={`px-3 py-1.5 text-xs rounded-md border transition-colors whitespace-nowrap ${
                     selectedCategory === cat
                       ? 'bg-emerald-600 text-white border-emerald-600'
                       : 'bg-white text-gray-600 border-gray-200 hover:border-emerald-400'
@@ -450,23 +656,8 @@ export default function POSPage() {
             </div>
           )}
 
-          {/* Customer Selector */}
-          <div className="mb-4">
-            <Button 
-              variant="outline" 
-              className="w-full justify-start gap-2"
-              onClick={() => setShowCustomerModal(true)}
-            >
-              <User className="w-4 h-4" />
-              {customer ? customer.name : 'Select Customer (Optional)'}
-              {customer && (
-                <span className="ml-auto badge badge-info">{customer.phone}</span>
-              )}
-            </Button>
-          </div>
-
-          {/* Products Grid */}
-          <div className="flex-1 overflow-y-auto">
+          {/* Products Grid - Single Row */}
+          <div className="h-full overflow-x-auto overflow-y-hidden" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="spinner" />
@@ -476,25 +667,25 @@ export default function POSPage() {
                 <p>No products found</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+              <div className="flex gap-2">
                 {filteredProducts.map((product) => (
                   <button
                     key={product._id}
                     onClick={() => handleAddToCart(product)}
-                    className="bg-white p-3 rounded-lg border border-gray-200 hover:border-emerald-500 hover:shadow-md transition-all text-left"
+                    className="flex-shrink-0 bg-white p-2 rounded border border-gray-200 hover:border-emerald-500 hover:shadow-sm transition-all text-left" style={{ width: '140px' }}
                   >
-                    <div className="font-medium text-gray-900 truncate">
+                    <div className="font-medium text-gray-900 text-xs truncate">
                       {product.name}
                     </div>
-                    <div className="text-xs text-gray-500 mb-2">
+                    <div className="text-xs text-gray-500 mb-1 truncate">
                       {product.category?.name}
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-emerald-600 font-bold">
+                      <span className="text-emerald-600 font-bold text-xs">
                         {formatCurrency(product.retailPrice)}
                       </span>
                       <span className={`text-xs ${product.stockQuantity < 10 ? 'text-red-500' : 'text-gray-400'}`}>
-                        {product.stockQuantity} left
+                        {product.stockQuantity}
                       </span>
                     </div>
                   </button>
@@ -504,105 +695,155 @@ export default function POSPage() {
           </div>
         </div>
 
-        {/* Cart Section */}
-        <div className="w-96 bg-white border-l border-gray-200 flex flex-col">
-          <div className="p-4 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-                <ShoppingCart className="w-5 h-5" />
-                Cart ({items.length})
-              </h2>
-              {items.length > 0 && (
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={clearCart}
-                  className="text-red-500 hover:text-red-600"
-                >
-                  Clear All
-                </Button>
-              )}
-            </div>
-          </div>
+        {/* Cart Section - Resizable */}
+        <div 
+          className="bg-white border-t border-gray-200 flex flex-col overflow-auto"
+          style={{ height: cartHeight }}
+        >
+          {/* Resize Handle */}
+          <div 
+            className="h-1 bg-gray-200 hover:bg-emerald-400 cursor-row-resize flex-shrink-0"
+            onMouseDown={handleMouseDown}
+          />
 
-          {/* Cart Items */}
-          <div className="flex-1 overflow-y-auto p-4">
+          {/* Cart Items - Table Format */}
+          <div className="flex-1 overflow-auto p-3">
             {items.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                <ShoppingCart className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                <p>Cart is empty</p>
-                <p className="text-sm">Add products to get started</p>
+              <div className="flex items-center justify-center h-full text-gray-500">
+                <ShoppingCart className="w-12 h-12 mr-3 text-gray-300" />
+                <div>
+                  <p>Cart is empty</p>
+                  <p className="text-sm">Add products to get started</p>
+                </div>
               </div>
             ) : (
-              <div className="space-y-3">
-                {items.map((item) => (
-                  <div key={item.productId} className="pos-cart-item">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 truncate">
-                        {item.productName}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {formatCurrency(item.unitPrice)} each
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center border border-gray-200 rounded-lg">
-                        <button
-                          onClick={() => updateQuantity(item.productId, Math.max(1, item.quantity - 1))}
-                          className="p-1 hover:bg-gray-100"
-                        >
-                          <Minus className="w-4 h-4" />
-                        </button>
-                        <span className="w-8 text-center text-sm font-medium">
-                          {item.quantity}
-                        </span>
-                        <button
-                          onClick={() => updateQuantity(item.productId, item.quantity + 1)}
-                          className="p-1 hover:bg-gray-100"
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <span className="font-medium text-gray-900 min-w-[80px] text-right">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 sticky top-0">
+                  <tr>
+                    <th className="text-left py-2 px-2 font-medium text-gray-500">Product</th>
+                    <th className="text-center py-2 px-2 font-medium text-gray-500">Unit</th>
+                    <th className="text-right py-2 px-2 font-medium text-gray-500">Price</th>
+                    <th className="text-center py-2 px-2 font-medium text-gray-500">Qty</th>
+                    <th className="text-right py-2 px-2 font-medium text-gray-500">Total</th>
+                    <th className="text-center py-2 px-2 font-medium text-gray-500"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...items].reverse().map((item) => {
+                    const product = products.find(p => p._id === item.productId);
+                    const hasUnits = product?.units && product.units.length > 0;
+                    const defaultUnit = hasUnits ? product!.units![0] : { name: 'Pcs', price: item.unitPrice, conversionQty: 1 };
+                    return (
+                    <tr key={item.productId} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-2 px-2">
+                        <div className="font-medium text-gray-900 text-xs">{item.productName}</div>
+                        <div className="text-xs text-gray-500">{item.sku}</div>
+                      </td>
+                      <td className="py-2 px-2">
+                        {hasUnits ? (
+                          <div className="relative">
+                            <button
+                              onClick={() => setOpenUnitSelector(openUnitSelector === item.productId ? null : item.productId)}
+                              className="text-xs px-2 py-1 border border-gray-200 rounded hover:bg-gray-50"
+                            >
+                              {defaultUnit.name}
+                            </button>
+                            {openUnitSelector === item.productId && (
+                              <div className="absolute z-10 top-full left-0 mt-1 bg-white border border-gray-200 rounded shadow-lg min-w-[100px]">
+                                {product!.units!.map((unit, idx) => (
+                                  <button
+                                    key={idx}
+                                    onClick={() => handleUnitChange(item.productId, unit)}
+                                    className="block w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50"
+                                  >
+                                    {unit.name} - {formatCurrency(unit.price)}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-500">Pcs</span>
+                        )}
+                      </td>
+                      <td className="text-right py-2 px-2 text-gray-600 text-xs">
+                        {formatCurrency(item.unitPrice)}
+                      </td>
+                      <td className="py-2 px-2">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => updateQuantity(item.productId, Math.max(1, item.quantity - 1))}
+                            className="p-1 hover:bg-gray-100 rounded border"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <span className="w-8 text-center font-medium text-xs">
+                            {item.quantity}
+                          </span>
+                          <button
+                            onClick={() => updateQuantity(item.productId, item.quantity + 1)}
+                            className="p-1 hover:bg-gray-100 rounded border"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </td>
+                      <td className="text-right py-2 px-2 font-medium text-gray-900 text-xs">
                         {formatCurrency(item.total)}
-                      </span>
-                      <button
-                        onClick={() => removeItem(item.productId)}
-                        className="p-1 text-red-500 hover:bg-red-50 rounded"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                      </td>
+                      <td className="text-center py-2 px-2">
+                        <button
+                          onClick={() => removeItem(item.productId)}
+                          className="p-1 text-red-500 hover:bg-red-50 rounded"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </td>
+                    </tr>);
+                  })}
+                </tbody>
+              </table>
             )}
           </div>
 
           {/* Totals */}
           {items.length > 0 && (
-            <div className="border-t border-gray-200 p-4 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Subtotal</span>
-                <span className="font-medium">{formatCurrency(subtotal)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Discount</span>
-                <span className="font-medium text-red-500">-{formatCurrency(discount)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">VAT (16%)</span>
-                <span className="font-medium">{formatCurrency(tax)}</span>
-              </div>
-              <div className="flex justify-between text-lg font-bold pt-2 border-t">
-                <span>Total</span>
-                <span className="text-emerald-600">{formatCurrency(total)}</span>
+            <div className="border-t border-gray-200 p-3 flex items-center justify-between">
+              <div className="flex items-center gap-6">
+                <div className="text-sm">
+                  <span className="text-gray-500">Subtotal: </span>
+                  <span className="font-medium">{formatCurrency(subtotal)}</span>
+                </div>
+                <div className="text-sm">
+                  <span className="text-gray-500">Discount: </span>
+                  <span className="font-medium text-red-500">-{formatCurrency(discount)}</span>
+                </div>
+                <div className="text-sm">
+                  <span className="text-gray-500">VAT (16%): </span>
+                  <span className="font-medium">{formatCurrency(tax)}</span>
+                </div>
+                <div className="text-lg font-bold">
+                  Total: <span className="text-emerald-600">{formatCurrency(total)}</span>
+                </div>
               </div>
               
-              <div className="flex gap-2 mt-4">
+              <div className="flex gap-2">
+                <div className="flex items-center gap-2 mr-2">
+                  <ShoppingCart className="w-4 h-4 text-gray-500" />
+                  <span className="font-medium text-gray-900">{items.length}</span>
+                  {items.length > 0 && (
+                    <button 
+                      onClick={clearCart}
+                      className="text-red-500 hover:text-red-600 text-sm ml-1"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
                 <Button 
                   variant="outline"
-                  className="flex-1 gap-1"
+                  className="gap-1"
+                  size="sm"
                   onClick={() => setShowHoldModal(true)}
                 >
                   <Clock className="w-4 h-4" />
@@ -610,7 +851,7 @@ export default function POSPage() {
                 </Button>
                 <Button 
                   className="flex-1"
-                  size="lg"
+                  size="sm"
                   onClick={() => {
                     setAmountPaid(total.toString());
                     setShowPaymentModal(true);
@@ -662,6 +903,7 @@ export default function POSPage() {
         onClose={() => setShowPaymentModal(false)}
         title="Payment"
         size="sm"
+        closeOnOverlayClick={false}
       >
         <div className="space-y-3">
           <div className="bg-gray-50 rounded-lg p-3 text-center">
@@ -725,10 +967,35 @@ export default function POSPage() {
           )}
 
           {paymentMethod === 'mpesa' && (
-            <Input
-              label="Phone Number (STK Push)"
-              placeholder="254712345678"
-            />
+            <div className="space-y-2">
+              <Input
+                label="Phone Number (STK Push)"
+                placeholder="254712345678"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleMpesaTillPayment()}
+                  disabled={processing || total <= 0}
+                  className="flex items-center justify-center gap-2 px-3 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+                >
+                  <Smartphone className="w-4 h-4" />
+                  Pay via Till
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleMpesaWalletPayment()}
+                  disabled={processing || total <= 0}
+                  className="flex items-center justify-center gap-2 px-3 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+                >
+                  <Wallet className="w-4 h-4" />
+                  Pay to Wallet
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 text-center">
+                Select payment option above
+              </p>
+            </div>
           )}
 
           {/* Change Display */}
@@ -762,7 +1029,7 @@ export default function POSPage() {
           {paymentMethod === 'account' && customer && (
             <div className="bg-amber-50 rounded-lg p-3 text-center">
               <p className="text-sm text-amber-700">
-                {formatCurrency(total)} will be added to {customer.name}'s account
+                {formatCurrency(total)} will be added to {customer.name}&apos;s account
               </p>
             </div>
           )}

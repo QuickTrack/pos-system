@@ -60,7 +60,7 @@ const PurchaseItemSchema = new Schema<IPurchaseItem>(
   {
     product: { type: Schema.Types.ObjectId, ref: 'Product', required: true },
     productName: { type: String, required: true },
-    sku: { type: String, required: true },
+    sku: { type: String, required: false },
     quantity: { type: Number, required: true },
     unitCost: { type: Number, required: true },
     total: { type: Number, required: true },
@@ -79,7 +79,7 @@ const PurchaseSchema = new Schema<IPurchase>(
     supplierName: { type: String, required: true },
     
     // Branch
-    branch: { type: Schema.Types.ObjectId, ref: 'Branch', required: true },
+    branch: { type: Schema.Types.ObjectId, ref: 'Branch', required: false },
     
     // Items
     items: [PurchaseItemSchema],

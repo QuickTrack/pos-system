@@ -15,10 +15,14 @@ import {
   Store,
   X,
   LogOut,
-  ShoppingBag
+  ShoppingBag,
+  DollarSign,
+  CreditCard
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/lib/store';
+import { useAuth } from '@/lib/auth-context';
+import { hasPermission, PERMISSIONS, Role } from '@/lib/auth';
 
 const menuItems = [
   { 
@@ -58,6 +62,18 @@ const menuItems = [
     permission: 'manage_purchases',
   },
   { 
+    label: 'Supplier Payments', 
+    href: '/supplier-payments', 
+    icon: DollarSign,
+    permission: 'manage_purchases',
+  },
+  { 
+    label: 'Customer Payments', 
+    href: '/customer-payments', 
+    icon: CreditCard,
+    permission: 'manage_sales',
+  },
+  { 
     label: 'Reports', 
     href: '/reports', 
     icon: FileText,
@@ -92,6 +108,27 @@ const menuItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const { sidebarOpen, setSidebarOpen } = useUIStore();
+  const { user, logout } = useAuth();
+
+  // Filter menu items based on user role and permissions
+  const filteredMenuItems = menuItems.filter((item) => {
+    if (!user?.role) return false;
+    return hasPermission(user.role as Role, item.permission);
+  });
+
+  const handleLogout = async () => {
+    await logout();
+  };
+
+  // Get user initials
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
 
   return (
     <>
@@ -127,7 +164,7 @@ export function Sidebar() {
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-3 px-2" style={{ maxHeight: 'calc(100vh - 180px)' }}>
           <ul className="space-y-0.5">
-            {menuItems.map((item) => {
+            {filteredMenuItems.map((item) => {
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
               return (
                 <li key={item.href}>
@@ -152,13 +189,17 @@ export function Sidebar() {
         <div className="border-t border-gray-200 p-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
-              <span className="text-emerald-600 font-medium">AD</span>
+              <span className="text-emerald-600 font-medium">{user ? getInitials(user.name) : 'AD'}</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">Admin User</p>
-              <p className="text-xs text-gray-500 truncate">admin@shop.com</p>
+              <p className="text-sm font-medium text-gray-900 truncate">{user?.name || 'User'}</p>
+              <p className="text-xs text-gray-500 truncate">{user?.role || 'Role'}</p>
             </div>
-            <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-500">
+            <button 
+              onClick={handleLogout}
+              className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
+              title="Logout"
+            >
               <LogOut className="w-4 h-4" />
             </button>
           </div>

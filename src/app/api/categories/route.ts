@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/mongodb';
 import Category from '@/models/Category';
-import { getAuthUser, hasPermission } from '@/lib/auth';
+import { getAuthUser } from '@/lib/auth-server';
+import { hasPermission } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {

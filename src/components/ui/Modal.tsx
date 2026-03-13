@@ -9,10 +9,11 @@ interface ModalProps {
   onClose: () => void;
   title?: string;
   children: ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
+  closeOnOverlayClick?: boolean;
 }
 
-export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalProps) {
+export function Modal({ isOpen, onClose, title, children, size = 'md', closeOnOverlayClick = true }: ModalProps) {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -31,17 +32,23 @@ export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalPr
     md: 'max-w-lg',
     lg: 'max-w-2xl',
     xl: 'max-w-4xl',
+    full: 'modal-content-full',
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div 
+      className={size === 'full' ? 'fixed inset-0 z-50' : 'modal-overlay'} 
+      onClick={closeOnOverlayClick ? onClose : undefined}
+      style={size === 'full' ? { backgroundColor: 'rgba(0,0,0,0.5)' } : undefined}
+    >
       <div 
         className={cn("modal-content animate-slide-up", sizeClasses[size])}
         onClick={(e) => e.stopPropagation()}
+        style={size === 'full' ? { height: '100vh', overflow: 'auto' } : undefined}
       >
         {/* Header */}
         {title && (
-          <div className="flex items-center justify-between p-4 border-b">
+          <div className="flex items-center justify-between p-4 border-b flex-shrink-0">
             <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
             <button 
               onClick={onClose}
@@ -53,7 +60,7 @@ export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalPr
         )}
         
         {/* Content */}
-        <div className="p-4">
+        <div className={size === 'full' ? 'p-4 h-[calc(100vh-65px)]' : 'p-4'}>
           {children}
         </div>
       </div>
