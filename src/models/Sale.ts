@@ -16,6 +16,11 @@ export interface ISaleItem {
     name: string;
     value: string;
   };
+  // Unit information for multi-unit products
+  unitName?: string;
+  unitAbbreviation?: string;
+  conversionToBase?: number;
+  baseQuantity?: number;
 }
 
 export interface ISale extends Document {
@@ -97,6 +102,11 @@ const SaleItemSchema = new Schema<ISaleItem>(
       name: String,
       value: String,
     },
+    // Unit information for multi-unit products
+    unitName: { type: String },
+    unitAbbreviation: { type: String },
+    conversionToBase: { type: Number, default: 1 },
+    baseQuantity: { type: Number },
   },
   { _id: false }
 );

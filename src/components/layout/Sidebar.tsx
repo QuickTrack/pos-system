@@ -13,6 +13,8 @@ import {
   Settings, 
   BarChart3,
   Store,
+  Layout,
+  FileStack,
   X,
   LogOut,
   ShoppingBag,
@@ -72,6 +74,18 @@ const menuItems = [
     href: '/customer-payments', 
     icon: CreditCard,
     permission: 'manage_sales',
+  },
+  { 
+    label: 'Credit Invoices', 
+    href: '/backoffice-invoices', 
+    icon: FileText,
+    permission: 'manage_sales',
+  },
+  { 
+    label: 'Templates', 
+    href: '/document-templates', 
+    icon: FileStack,
+    permission: 'manage_settings',
   },
   { 
     label: 'Reports', 

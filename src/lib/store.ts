@@ -15,6 +15,10 @@ export interface CartItem {
     name: string;
     value: string;
   };
+  // Unit information for multi-unit products
+  unitName?: string;
+  unitAbbreviation?: string;
+  conversionToBase?: number;
   total: number;
 }
 
@@ -54,7 +58,8 @@ export const useCartStore = create<CartState>()(
         const items = get().items;
         const existingIndex = items.findIndex(
           (i) => i.productId === item.productId && 
-          JSON.stringify(i.variant) === JSON.stringify(item.variant)
+          JSON.stringify(i.variant) === JSON.stringify(item.variant) &&
+          i.unitName === item.unitName
         );
 
         if (existingIndex >= 0) {

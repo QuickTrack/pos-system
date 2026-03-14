@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const parent = searchParams.get('parent');
     const active = searchParams.get('active');
+    const hierarchical = searchParams.get('hierarchical');
     
     const query: any = {};
     
@@ -26,7 +27,28 @@ export async function GET(request: NextRequest) {
     
     const categories = await Category.find(query)
       .populate('parentCategory', 'name')
-      .sort({ name: 1 });
+      .sort({ level: 1, sortOrder: 1, name: 1 });
+    
+    // If hierarchical is requested, build tree structure
+    if (hierarchical === 'true') {
+      const buildTree = (cats: any[], parentId: any = null): any[] => {
+        return cats
+          .filter(c => {
+            if (parentId === null) return !c.parentCategory;
+            return c.parentCategory && c.parentCategory._id?.toString() === parentId?.toString();
+          })
+          .map(c => ({
+            ...c.toObject(),
+            children: buildTree(cats, c._id)
+          }));
+      };
+      
+      const tree = buildTree(categories);
+      return NextResponse.json({
+        success: true,
+        categories: tree,
+      });
+    }
     
     return NextResponse.json({
       success: true,
@@ -59,6 +81,19 @@ export async function POST(request: NextRequest) {
     // Generate code if not provided
     if (!data.code) {
       data.code = data.name.substring(0, 3).toUpperCase() + Date.now();
+    }
+    
+    // Calculate level and path based on parent
+    if (data.parentCategory) {
+      const parent = await Category.findById(data.parentCategory);
+      if (parent) {
+        data.level = (parent.level || 0) + 1;
+        data.path = parent.path ? `${parent.path}/${parent._id}` : `${parent._id}`;
+        data.parentName = parent.name;
+      }
+    } else {
+      data.level = 0;
+      data.path = '';
     }
     
     const category = await Category.create(data);

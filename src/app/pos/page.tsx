@@ -37,13 +37,21 @@ interface Product {
   wholesalePrice: number;
   stockQuantity: number;
   category: { name: string };
-  units?: { name: string; price: number; conversionQty: number }[];
+  baseUnit: string;
+  units?: {
+    name: string;
+    abbreviation: string;
+    conversionToBase: number;
+    price: number;
+    barcode?: string;
+  }[];
 }
 
 interface UnitOption {
   name: string;
+  abbreviation: string;
+  conversionToBase: number;
   price: number;
-  conversionQty: number;
 }
 
 interface Customer {
@@ -77,7 +85,14 @@ export default function POSPage() {
   const [printMode, setPrintMode] = useState(false);
   const [openUnitSelector, setOpenUnitSelector] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState('POS');
-  const [cartHeight, setCartHeight] = useState(250);
+  const [cartHeight, setCartHeight] = useState(() => {
+    // Load saved cart height from localStorage
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('pos-cart-height');
+      return saved ? parseInt(saved, 10) : 250;
+    }
+    return 250;
+  });
   const [isDragging, setIsDragging] = useState(false);
   const receiptRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -180,6 +195,19 @@ export default function POSPage() {
     }
   };
 
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch('/api/categories');
+      const data = await response.json();
+      if (data.success && data.categories?.length > 0) {
+        const categoryNames = data.categories.map((cat: any) => cat.name);
+        setCategories(categoryNames);
+      }
+    } catch (error) {
+      console.error('Failed to fetch categories:', error);
+    }
+  };
+
   const fetchSettings = async () => {
     try {
       const response = await fetch('/api/settings');
@@ -192,8 +220,17 @@ export default function POSPage() {
     }
   };
 
-  const handleAddToCart = (product: Product) => {
-    const existingItem = items.find((item) => item.productId === product._id);
+  const handleAddToCart = (product: Product, selectedUnit?: UnitOption) => {
+    const unitToUse = selectedUnit || null;
+    const existingItem = items.find((item) => 
+      item.productId === product._id && 
+      item.unitName === (unitToUse?.name || product.baseUnit)
+    );
+    
+    const price = unitToUse?.price || product.retailPrice;
+    const unitName = unitToUse?.name || product.baseUnit;
+    const unitAbbreviation = unitToUse?.abbreviation || '';
+    const conversionToBase = unitToUse?.conversionToBase || 1;
     
     if (existingItem) {
       updateQuantity(product._id, existingItem.quantity + 1);
@@ -204,9 +241,12 @@ export default function POSPage() {
         sku: product.sku,
         barcode: product.barcode,
         quantity: 1,
-        unitPrice: product.retailPrice,
+        unitPrice: price,
+        unitName: unitName,
+        unitAbbreviation: unitAbbreviation,
+        conversionToBase: conversionToBase,
         discount: 0,
-        total: product.retailPrice,
+        total: price,
       };
       addItem(cartItem);
     }
@@ -217,20 +257,23 @@ export default function POSPage() {
   const handleUnitChange = (productId: string, unit: UnitOption) => {
     const item = items.find(i => i.productId === productId);
     if (item) {
-      updateQuantity(productId, item.quantity);
-      // Update the item with new unit price
+      // Remove the old item
       removeItem(productId);
       const product = products.find(p => p._id === productId);
       if (product) {
+        const price = unit.price || product.retailPrice;
         const cartItem: CartItem = {
           productId: product._id,
           productName: product.name,
           sku: product.sku,
           barcode: product.barcode,
           quantity: item.quantity,
-          unitPrice: unit.price,
+          unitPrice: price,
+          unitName: unit.name,
+          unitAbbreviation: unit.abbreviation,
+          conversionToBase: unit.conversionToBase,
           discount: item.discount,
-          total: unit.price * item.quantity,
+          total: price * item.quantity,
         };
         addItem(cartItem);
       }
@@ -512,6 +555,13 @@ export default function POSPage() {
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
+  // Persist cart height to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pos-cart-height', cartHeight.toString());
+    }
+  }, [cartHeight]);
+
   const { subtotal, discount, tax, total } = calculateTotals();
 
   if (saleComplete && lastSale) {
@@ -732,7 +782,7 @@ export default function POSPage() {
                   {[...items].reverse().map((item) => {
                     const product = products.find(p => p._id === item.productId);
                     const hasUnits = product?.units && product.units.length > 0;
-                    const defaultUnit = hasUnits ? product!.units![0] : { name: 'Pcs', price: item.unitPrice, conversionQty: 1 };
+                    const currentUnitName = item.unitName || product?.baseUnit || 'piece';
                     return (
                     <tr key={item.productId} className="border-b border-gray-100 hover:bg-gray-50">
                       <td className="py-2 px-2">
@@ -740,30 +790,50 @@ export default function POSPage() {
                         <div className="text-xs text-gray-500">{item.sku}</div>
                       </td>
                       <td className="py-2 px-2">
-                        {hasUnits ? (
+                        {hasUnits || product?.baseUnit ? (
                           <div className="relative">
                             <button
                               onClick={() => setOpenUnitSelector(openUnitSelector === item.productId ? null : item.productId)}
                               className="text-xs px-2 py-1 border border-gray-200 rounded hover:bg-gray-50"
                             >
-                              {defaultUnit.name}
+                              {item.unitAbbreviation || product?.baseUnit || 'pc'}
                             </button>
                             {openUnitSelector === item.productId && (
-                              <div className="absolute z-10 top-full left-0 mt-1 bg-white border border-gray-200 rounded shadow-lg min-w-[100px]">
-                                {product!.units!.map((unit, idx) => (
+                              <div className="absolute z-10 top-full left-0 mt-1 bg-white border border-gray-200 rounded shadow-lg min-w-[140px]">
+                                {/* Base unit option */}
+                                <button
+                                  onClick={() => handleUnitChange(item.productId, { 
+                                    name: product!.baseUnit, 
+                                    abbreviation: product!.baseUnit.substring(0, 3), 
+                                    conversionToBase: 1, 
+                                    price: product!.retailPrice 
+                                  })}
+                                  className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 ${
+                                    !item.unitName || item.unitName === product?.baseUnit ? 'bg-emerald-50 font-medium' : ''
+                                  }`}
+                                >
+                                  {product?.baseUnit} (base) - {formatCurrency(product!.retailPrice)}
+                                </button>
+                                {/* Additional units */}
+                                {product?.units?.map((unit, idx) => (
                                   <button
                                     key={idx}
                                     onClick={() => handleUnitChange(item.productId, unit)}
-                                    className="block w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50"
+                                    className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 ${
+                                      item.unitName === unit.name ? 'bg-emerald-50 font-medium' : ''
+                                    }`}
                                   >
-                                    {unit.name} - {formatCurrency(unit.price)}
+                                    {unit.name} ({unit.abbreviation}) - {formatCurrency(unit.price)}
+                                    <span className="text-gray-400 ml-1">
+                                      (1 {unit.abbreviation} = {unit.conversionToBase} {product?.baseUnit})
+                                    </span>
                                   </button>
                                 ))}
                               </div>
                             )}
                           </div>
                         ) : (
-                          <span className="text-xs text-gray-500">Pcs</span>
+                          <span className="text-xs text-gray-500">pc</span>
                         )}
                       </td>
                       <td className="text-right py-2 px-2 text-gray-600 text-xs">

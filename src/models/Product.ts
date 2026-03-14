@@ -41,7 +41,17 @@ export interface IProduct extends Document {
   // Expiry
   expiryDate?: Date;
   
-  // Units
+  // Units - Multiple units of measure with base unit system
+  baseUnit: string;
+  units?: {
+    name: string;
+    abbreviation: string;
+    conversionToBase: number; // How many base units are in this unit
+    price: number; // Price per unit
+    barcode?: string;
+  }[];
+  
+  // Legacy single unit field (kept for backward compatibility)
   unit: string;
   unitSize?: string;
   weight?: number;
@@ -106,7 +116,17 @@ const ProductSchema = new Schema<IProduct>(
     // Expiry
     expiryDate: { type: Date },
     
-    // Units
+    // Units - Multiple units of measure with base unit system
+    baseUnit: { type: String, default: 'piece' },
+    units: [{
+      name: String,
+      abbreviation: String,
+      conversionToBase: { type: Number, default: 1 },
+      price: { type: Number, default: 0 },
+      barcode: String,
+    }],
+    
+    // Legacy single unit field
     unit: { type: String, default: 'piece' },
     unitSize: { type: String },
     weight: { type: Number },

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { DataTable } from '@/components/ui/DataTable';
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
 import { Search, Eye, RefreshCw, Download, Printer } from 'lucide-react';
+import PrintPreview from '@/components/print/PrintPreview';
 
 interface SaleItem {
   productName: string;
@@ -41,6 +42,7 @@ export default function SalesPage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [status, setStatus] = useState('');
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
 
   useEffect(() => {
     fetchSales();
@@ -358,7 +360,11 @@ export default function SalesPage() {
             </div>
 
             <div className="p-6 border-t border-gray-200 flex gap-3">
-              <Button variant="outline" className="flex-1 gap-2">
+              <Button 
+                variant="outline" 
+                className="flex-1 gap-2"
+                onClick={() => setShowPrintPreview(true)}
+              >
                 <Printer className="w-4 h-4" />
                 Print Receipt
               </Button>
@@ -372,6 +378,37 @@ export default function SalesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Print Preview Modal */}
+      {showPrintPreview && selectedSale && (
+        <PrintPreview
+          documentType="receipt"
+          document={{
+            invoiceNumber: (selectedSale as any).receiptNumber || (selectedSale as any)._id,
+            date: (selectedSale as any).createdAt,
+            customer: {
+              name: (selectedSale as any).customer?.name || 'Cash Customer',
+              phone: (selectedSale as any).customer?.phone || ''
+            },
+            items: (selectedSale as any).items?.map((item: any) => ({
+              name: item.productName,
+              quantity: item.quantity,
+              price: item.unitPrice,
+              total: item.total
+            })) || [],
+            subtotal: (selectedSale as any).subtotal,
+            tax: (selectedSale as any).tax,
+            taxRate: (selectedSale as any).taxRate || 16,
+            total: (selectedSale as any).total,
+            payment: {
+              amount: (selectedSale as any).amountPaid,
+              method: (selectedSale as any).paymentMethod,
+              change: (selectedSale as any).change
+            }
+          }}
+          onClose={() => setShowPrintPreview(false)}
+        />
       )}
     </div>
   );

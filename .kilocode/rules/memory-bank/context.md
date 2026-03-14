@@ -1,10 +1,10 @@
-# Active Context: Next.js Starter Template
+# Active Context: POS System with Receipt Printing Engine
 
 ## Current State
 
-**Template Status**: ✅ Ready for development
+**Template Status**: ✅ Receipt Printing Engine with Template Selection
 
-The template is a clean Next.js 16 starter with TypeScript and Tailwind CSS 4. It's ready for AI-assisted expansion to build any type of application.
+The POS system now has a comprehensive receipt printing engine with support for multiple document types, printer models, paper sizes, character encodings, and output formats including ESC/POS commands, PDF generation, and direct USB/Bluetooth/Network printing while handling various design templates, dynamic data binding, barcode generation, QR codes, logo printing, and multi-language text with proper alignment, formatting, and error handling.
 
 ## Recently Completed
 
@@ -14,59 +14,103 @@ The template is a clean Next.js 16 starter with TypeScript and Tailwind CSS 4. I
 - [x] ESLint configuration
 - [x] Memory bank documentation
 - [x] Recipe system for common features
+- [x] Receipt Printing Engine Implementation
+  - ESC/POS command generator
+  - Barcode/QR code generators
+  - PDF generation module
+  - Printer connection handlers (USB/Bluetooth/Network)
+  - Template rendering engine
+  - Document type handlers
+- [x] Print API endpoints
+- [x] PrintPreview UI component with template selection
+- [x] Backoffice invoices print integration
+- [x] Sales page print integration with template selection
 
 ## Current Structure
 
 | File/Directory | Purpose | Status |
 |----------------|---------|--------|
-| `src/app/page.tsx` | Home page | ✅ Ready |
-| `src/app/layout.tsx` | Root layout | ✅ Ready |
-| `src/app/globals.css` | Global styles | ✅ Ready |
-| `.kilocode/` | AI context & recipes | ✅ Ready |
+| `src/lib/print-engine/` | Print engine core | ✅ Complete |
+| `src/lib/print-engine/types.ts` | TypeScript types | ✅ |
+| `src/lib/print-engine/escpos-generator.ts` | ESC/POS commands | ✅ |
+| `src/lib/print-engine/barcode-generator.ts` | Barcode/QR generation | ✅ |
+| `src/lib/print-engine/pdf-generator.ts` | PDF generation | ✅ |
+| `src/lib/print-engine/printer-connection.ts` | USB/BT/Network | ✅ |
+| `src/lib/print-engine/template-engine.ts` | Template rendering | ✅ |
+| `src/models/Printer.ts` | Printer model | ✅ |
+| `src/app/api/print/route.ts` | Print API | ✅ |
+| `src/app/api/printers/route.ts` | Printer management | ✅ |
+| `src/components/print/PrintPreview.tsx` | Print UI | ✅ |
 
-## Current Focus
+## Print Engine Features
 
-The template is ready. Next steps depend on user requirements:
+### Document Types Supported
+- Receipts
+- Invoices
+- Orders
+- Quotations
+- Delivery Notes
+- Purchase Orders
+- Payment Receipts
+- Financial Statements
+- Transactions
 
-1. What type of application to build
-2. What features are needed
-3. Design/branding preferences
+### Printer Support
+- USB (WebUSB)
+- Bluetooth (Web Bluetooth)
+- Network (TCP/IP)
+- Serial (Web Serial)
+
+### Paper Sizes
+- 58mm thermal
+- 80mm thermal
+- A4
+- A4 Landscape
+- Half Page
+
+### Output Formats
+- ESC/POS commands (thermal printers)
+- PDF generation
+- Raw data
+
+### Barcode/QR Support
+- CODE39
+- CODE128
+- UPC-A
+- EAN-13
+- QR Codes with error correction
+
+### Character Encodings
+- PC437, PC850, PC860, PC863, PC865, PC858
+- UTF-8
+- GB18030, Shift-JIS, EUC-KR
 
 ## Quick Start Guide
 
-### To add a new page:
+### To use the print engine:
 
-Create a file at `src/app/[route]/page.tsx`:
-```tsx
-export default function NewPage() {
-  return <div>New page content</div>;
-}
+```typescript
+import { PrintEngine, DocumentHandler } from '@/lib/print-engine';
+
+// Prepare data
+const data = DocumentHandler.prepareData('invoice', invoiceDoc, business);
+
+// Print
+const result = await printEngine.print({
+  documentType: 'invoice',
+  document: invoiceDoc,
+  business,
+  template,
+  format: 'escpos'
+});
 ```
 
-### To add components:
+### API Endpoints
 
-Create `src/components/` directory and add components:
-```tsx
-// src/components/ui/Button.tsx
-export function Button({ children }: { children: React.ReactNode }) {
-  return <button className="px-4 py-2 bg-blue-600 text-white rounded">{children}</button>;
-}
-```
-
-### To add a database:
-
-Follow `.kilocode/recipes/add-database.md`
-
-### To add API routes:
-
-Create `src/app/api/[route]/route.ts`:
-```tsx
-import { NextResponse } from "next/server";
-
-export async function GET() {
-  return NextResponse.json({ message: "Hello" });
-}
-```
+- `POST /api/print` - Print document
+- `GET /api/print` - Get capabilities
+- `GET /api/printers` - List printers
+- `POST /api/printers` - Add printer
 
 ## Available Recipes
 
@@ -74,14 +118,14 @@ export async function GET() {
 |--------|------|----------|
 | Add Database | `.kilocode/recipes/add-database.md` | Data persistence with Drizzle + SQLite |
 
-## Pending Improvements
-
-- [ ] Add more recipes (auth, email, etc.)
-- [ ] Add example components
-- [ ] Add testing setup recipe
-
 ## Session History
 
 | Date | Changes |
 |------|---------|
 | Initial | Template created with base setup |
+| 2026-03-14 | Implemented comprehensive receipt printing engine |
+| 2026-03-14 | Added template selection to PrintPreview, integrated in backoffice-invoices and sales pages |
+
+## Notes
+
+The print engine integrates with the existing DocumentTemplate system. Templates can be designed using the document-templates page and then used for printing via the print engine.

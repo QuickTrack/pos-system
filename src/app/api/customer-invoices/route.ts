@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/mongodb';
-import Sale from '@/models/Sale';
-import Product from '@/models/Product';
+import CustomerInvoice from '@/models/CustomerInvoice';
 import Customer from '@/models/Customer';
+import Product from '@/models/Product';
 import { getAuthUser } from '@/lib/auth-server';
 import { hasPermission } from '@/lib/auth';
-import { generateInvoiceNumber } from '@/lib/utils';
+
+// Generate invoice number
+function generateInvoiceNumber(): string {
+  const prefix = 'INV';
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const random = Math.random().toString(36).substring(2, 5).toUpperCase();
+  return `${prefix}-${timestamp}-${random}`;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,28 +24,26 @@ export async function GET(request: NextRequest) {
     await dbConnect();
     
     const { searchParams } = new URL(request.url);
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
-    const customer = searchParams.get('customer');
     const status = searchParams.get('status');
+    const customer = searchParams.get('customer');
+    const overdue = searchParams.get('overdue');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
     
     const query: any = {};
     
-    if (startDate && endDate) {
-      query.saleDate = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate),
-      };
+    if (status && status !== 'all') {
+      query.status = status;
     }
     
     if (customer) {
       query.customer = customer;
     }
     
-    if (status) {
-      query.status = status;
+    // Check for overdue invoices
+    if (overdue === 'true') {
+      query.status = { $in: ['sent', 'partial'] };
+      query.dueDate = { $lt: new Date() };
     }
     
     if (user.role !== 'admin' && user.branch) {
@@ -47,31 +52,43 @@ export async function GET(request: NextRequest) {
     
     const skip = (page - 1) * limit;
     
-    const [sales, total] = await Promise.all([
-      Sale.find(query)
-        .populate('customer', 'name phone')
-        .populate('cashier', 'name')
-        .populate('branch', 'name')
-        .sort({ saleDate: -1 })
+    const [invoices, total] = await Promise.all([
+      CustomerInvoice.find(query)
+        .populate('customer', 'name phone creditLimit')
+        .sort({ invoiceDate: -1 })
         .skip(skip)
         .limit(limit),
-      Sale.countDocuments(query),
+      CustomerInvoice.countDocuments(query),
+    ]);
+    
+    // Calculate totals
+    const summary = await CustomerInvoice.aggregate([
+      { $match: query },
+      {
+        $group: {
+          _id: null,
+          totalAmount: { $sum: '$total' },
+          totalPaid: { $sum: '$amountPaid' },
+          totalBalance: { $sum: '$balanceDue' },
+        },
+      },
     ]);
     
     return NextResponse.json({
       success: true,
-      sales,
+      invoices,
       pagination: {
         page,
         limit,
         total,
         pages: Math.ceil(total / limit),
       },
+      summary: summary[0] || { totalAmount: 0, totalPaid: 0, totalBalance: 0 },
     });
   } catch (error) {
-    console.error('Get sales error:', error);
+    console.error('Get invoices error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch sales' },
+      { error: 'Failed to fetch invoices' },
       { status: 500 }
     );
   }
@@ -92,14 +109,16 @@ export async function POST(request: NextRequest) {
     
     const data = await request.json();
     
-    // Generate invoice number
-    const invoiceNumber = generateInvoiceNumber('INV');
+    // Validate customer
+    const customer = await Customer.findById(data.customerId);
+    if (!customer) {
+      return NextResponse.json({ error: 'Customer not found' }, { status: 400 });
+    }
     
     // Calculate totals
     let subtotal = 0;
     let totalDiscount = 0;
     let totalTax = 0;
-    let profit = 0;
     
     const items = data.items.map((item: any) => {
       const itemSubtotal = item.unitPrice * item.quantity;
@@ -108,55 +127,66 @@ export async function POST(request: NextRequest) {
         : item.discount;
       const itemTax = (itemSubtotal - itemDiscount) * (data.taxRate || 16) / 100;
       const itemTotal = itemSubtotal - itemDiscount + itemTax;
-      const costPrice = item.costPrice || 0;
-      const itemProfit = (item.unitPrice - costPrice) * item.quantity;
       
       subtotal += itemSubtotal;
       totalDiscount += itemDiscount;
       totalTax += itemTax;
-      profit += itemProfit;
       
       return {
         product: item.productId,
         productName: item.productName,
         sku: item.sku,
-        barcode: item.barcode,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         discount: item.discount,
         discountType: item.discountType,
         tax: itemTax,
         total: itemTotal,
-        costPrice: costPrice,
-        variant: item.variant,
-        // Unit information for multi-unit products
-        unitName: item.unitName,
-        unitAbbreviation: item.unitAbbreviation,
-        conversionToBase: item.conversionToBase || 1,
-        // Base unit quantity for inventory tracking
-        baseQuantity: item.quantity * (item.conversionToBase || 1),
       };
     });
     
-    // Calculate order totals
     const orderDiscountAmount = data.discountType === 'percentage'
       ? (subtotal * data.discount) / 100
       : (data.discount || 0);
     
     const taxableAmount = subtotal - orderDiscountAmount;
     const taxRate = data.taxRate || 16;
-    const orderTax = data.applyTax !== false ? taxableAmount * taxRate / 100 : 0;
+    const orderTax = taxableAmount * taxRate / 100;
     const total = taxableAmount + orderTax;
     
-    // Create sale
-    const sale = await Sale.create({
-      invoiceNumber,
-      customer: data.customerId,
-      customerName: data.customerName,
-      customerPhone: data.customerPhone,
-      branch: user.branch || data.branchId,
-      cashier: user.userId,
-      cashierName: user.name,
+    // Calculate due date based on payment terms
+    const paymentTerms = data.paymentTerms || 30;
+    const dueDate = data.dueDate ? new Date(data.dueDate) : new Date();
+    if (!data.dueDate) {
+      dueDate.setDate(dueDate.getDate() + paymentTerms);
+    }
+    
+    // Get branch from user or data
+    let branch = user.branch || data.branchId;
+    const createdBy = user.userId;
+    const createdByName = user.name;
+    
+    // If no branch, fetch default branch
+    if (!branch) {
+      const Branch = (await import('@/models/Branch')).default;
+      const defaultBranch = await Branch.findOne();
+      if (defaultBranch) {
+        branch = defaultBranch._id.toString();
+      }
+    }
+    
+    // Create invoice
+    const invoice = await CustomerInvoice.create({
+      invoiceNumber: data.invoiceNumber || generateInvoiceNumber(),
+      customer: customer._id,
+      customerName: customer.name,
+      customerPhone: customer.phone,
+      customerAddress: customer.address,
+      customerKraPin: customer.kraPin,
+      creditLimit: customer.creditLimit,
+      paymentTerms,
+      dueDate,
+      invoiceDate: data.invoiceDate ? new Date(data.invoiceDate) : new Date(),
       items,
       subtotal,
       discount: data.discount || 0,
@@ -165,53 +195,25 @@ export async function POST(request: NextRequest) {
       tax: orderTax,
       taxRate,
       total,
-      paymentMethod: data.paymentMethod,
-      paymentDetails: data.paymentDetails,
-      amountPaid: data.amountPaid,
-      change: data.change || 0,
-      status: 'completed',
-      mpesaReference: data.mpesaReference,
-      mpesaPhone: data.mpesaPhone,
-      mpesaTransactionId: data.mpesaTransactionId,
-      profit,
+      amountPaid: 0,
+      balanceDue: total,
+      status: 'draft',
+      branch,
+      createdBy,
+      createdByName,
       notes: data.notes,
-      saleDate: new Date(),
+      payments: [],
+      terms: data.terms,
     });
-    
-    // Update product stock using base unit quantity
-    for (const item of items) {
-      await Product.findByIdAndUpdate(item.product, {
-        $inc: { stockQuantity: -item.baseQuantity },
-      });
-    }
-    
-    // Update customer stats if customer is provided
-    if (data.customerId) {
-      const updateData: any = {
-        $inc: {
-          totalPurchases: 1,
-          totalSpent: total,
-          loyaltyPoints: Math.floor(total / 100),
-        },
-        lastPurchaseDate: new Date(),
-      };
-      
-      // Add to credit balance if account payment
-      if (data.paymentMethod === 'account') {
-        updateData.$inc.creditBalance = total;
-      }
-      
-      await Customer.findByIdAndUpdate(data.customerId, updateData);
-    }
     
     return NextResponse.json({
       success: true,
-      sale,
+      invoice,
     }, { status: 201 });
   } catch (error) {
-    console.error('Create sale error:', error);
+    console.error('Create invoice error:', error);
     return NextResponse.json(
-      { error: 'Failed to create sale' },
+      { error: 'Failed to create invoice' },
       { status: 500 }
     );
   }
