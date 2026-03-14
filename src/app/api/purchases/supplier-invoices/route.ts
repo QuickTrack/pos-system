@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       const supplierKey = purchase.supplier?.toString() || purchase.supplierName;
       if (!supplierInvoices[supplierKey]) {
         supplierInvoices[supplierKey] = {
-          supplierId: purchase.supplier,
+          supplierId: purchase.supplier?.toString(),
           supplierName: purchase.supplierName,
           invoices: [],
           totalOutstanding: 0,

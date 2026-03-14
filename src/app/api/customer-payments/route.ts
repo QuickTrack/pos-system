@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    const query: Record<string, unknown> = {};
+    const query: any = {};
 
     if (search) {
       query.$or = [
