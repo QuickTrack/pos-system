@@ -73,10 +73,10 @@ export default function WelcomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-2">
-              <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center">
-                <Store className="w-6 h-6 text-white" />
+              <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center overflow-hidden">
+                <img src="/Gemini_Generated_Image_iikvdoiikvdoiikv.png" alt="Logo" className="w-full h-full object-cover" />
               </div>
-              <span className="text-xl font-bold text-gray-900">NairobiPOS</span>
+              <span className="text-xl font-bold text-gray-900">QuickTrack InfoSystems ERP</span>
             </div>
             <div className="hidden md:flex items-center gap-4">
               <Link 
@@ -106,10 +106,10 @@ export default function WelcomePage() {
           <div className="text-center">
             {/* Logo Badge */}
             <div className={`inline-flex items-center gap-2 bg-white px-4 py-2 rounded-full shadow-lg border border-gray-100 mb-8 transition-all duration-700 delay-200 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-              <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
-                <Store className="w-5 h-5 text-emerald-600" />
+              <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center overflow-hidden">
+                <img src="/Gemini_Generated_Image_iikvdoiikvdoiikv.png" alt="Logo" className="w-full h-full object-cover" />
               </div>
-              <span className="text-sm font-medium text-gray-700">Cloud POS System</span>
+              <span className="text-sm font-medium text-gray-700">QuickTrack InfoSystems ERP</span>
               <span className="text-gray-300">•</span>
               <span className="text-sm text-emerald-600 font-medium">For Kenyan Businesses</span>
             </div>
@@ -284,13 +284,13 @@ export default function WelcomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
-                <Store className="w-5 h-5 text-white" />
+              <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center overflow-hidden">
+                <img src="/Gemini_Generated_Image_iikvdoiikvdoiikv.png" alt="Logo" className="w-full h-full object-cover" />
               </div>
-              <span className="font-semibold text-gray-900">NairobiPOS</span>
+              <span className="font-semibold text-gray-900">QuickTrack InfoSystems ERP</span>
             </div>
             <div className="text-sm text-gray-500">
-              © 2024 NairobiPOS. Cloud POS for Kenyan Businesses.
+              © 2024 QuickTrack InfoSystems ERP. Enterprise Resource Planning.
             </div>
           </div>
         </div>

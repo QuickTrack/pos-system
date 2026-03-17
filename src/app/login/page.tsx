@@ -87,10 +87,10 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-gray-100 p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-600 rounded-2xl mb-4">
-            <Store className="w-8 h-8 text-white" />
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-600 rounded-2xl mb-4 overflow-hidden">
+            <img src="/Gemini_Generated_Image_iikvdoiikvdoiikv.png" alt="Logo" className="w-full h-full object-cover" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">NairobiPOS</h1>
+          <h1 className="text-2xl font-bold text-gray-900">QuickTrack InfoSystems ERP</h1>
           <p className="text-gray-500 mt-1">Sign in to your account</p>
         </div>
 
