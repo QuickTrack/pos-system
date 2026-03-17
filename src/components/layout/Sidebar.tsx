@@ -19,12 +19,13 @@ import {
   LogOut,
   ShoppingBag,
   DollarSign,
-  CreditCard
+  CreditCard,
+  Shield
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/lib/store';
 import { useAuth } from '@/lib/auth-context';
-import { hasPermission, PERMISSIONS, Role } from '@/lib/auth';
+import { hasPermission, isSuperAdmin, Role } from '@/lib/auth';
 
 const menuItems = [
   { 
@@ -124,10 +125,19 @@ export function Sidebar() {
   const { sidebarOpen, setSidebarOpen } = useUIStore();
   const { user, logout } = useAuth();
 
+  // Get user role
+  const userRole = user?.role as Role;
+  const isAdmin = isSuperAdmin(userRole);
+
   // Filter menu items based on user role and permissions
+  // Super admin sees all menu items
   const filteredMenuItems = menuItems.filter((item) => {
-    if (!user?.role) return false;
-    return hasPermission(user.role as Role, item.permission);
+    if (!userRole) return false;
+    // Super admin sees everything
+    if (isSuperAdmin(userRole)) {
+      return true;
+    }
+    return hasPermission(userRole, item.permission);
   });
 
   const handleLogout = async () => {
@@ -207,7 +217,17 @@ export function Sidebar() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-900 truncate">{user?.name || 'User'}</p>
-              <p className="text-xs text-gray-500 truncate">{user?.role || 'Role'}</p>
+              <div className="flex items-center gap-1">
+                {isAdmin && (
+                  <span className="inline-flex items-center gap-0.5 text-xs font-medium text-amber-600">
+                    <Shield className="w-3 h-3" />
+                    Super Admin
+                  </span>
+                )}
+                {!isAdmin && (
+                  <p className="text-xs text-gray-500 capitalize">{user?.role || 'Role'}</p>
+                )}
+              </div>
             </div>
             <button 
               onClick={handleLogout}

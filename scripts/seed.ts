@@ -23,10 +23,19 @@ async function seedDatabase(clearFirst = false) {
   // Create Users
   console.log('Creating users...');
   const adminPassword = await bcrypt.hash('admin123', 10);
+  const superAdminPassword = await bcrypt.hash('superadmin123', 10);
   const managerPassword = await bcrypt.hash('manager123', 10);
   const cashierPassword = await bcrypt.hash('cashier123', 10);
 
   const users = await User.insertMany([
+    {
+      name: 'Super Administrator',
+      email: 'superadmin@pos.com',
+      phone: '+254700000000',
+      password: superAdminPassword,
+      role: 'super_admin',
+      isActive: true,
+    },
     {
       name: 'System Administrator',
       email: 'admin@pos.com',
