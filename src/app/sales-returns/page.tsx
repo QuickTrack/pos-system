@@ -113,6 +113,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function BackofficeInvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [salesReturns, setSalesReturns] = useState<any[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
@@ -218,19 +219,25 @@ export default function BackofficeInvoicesPage() {
       if (searchQuery) params.set('search', searchQuery);
       if (statusFilter !== 'all') params.set('status', statusFilter);
 
-      const [invoicesRes, customersRes, productsRes] = await Promise.all([
+      const [invoicesRes, customersRes, productsRes, returnsRes] = await Promise.all([
         fetch(`/api/customer-invoices?${params}`),
         fetch('/api/customers'),
         fetch('/api/products?limit=100'),
+        fetch('/api/sales/returns'),
       ]);
 
       const invoicesData = await invoicesRes.json();
       const customersData = await customersRes.json();
       const productsData = await productsRes.json();
+      const returnsData = await returnsRes.json();
 
       if (invoicesData.success) {
         setInvoices(invoicesData.invoices);
         setSummary(invoicesData.summary);
+      }
+
+      if (returnsData.success) {
+        setSalesReturns(returnsData.refunds || []);
       }
       if (customersData.success) setCustomers(customersData.customers);
       if (productsData.success) setProducts(productsData.products);
@@ -701,6 +708,57 @@ export default function BackofficeInvoicesPage() {
             emptyMessage="No invoices found"
           />
         </Card>
+
+        {/* Sales Returns Table */}
+        {salesReturns.length > 0 && (
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Sales Returns (from Cash Sales)</h3>
+            <Card>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gray-50 border-b">
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Return #</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Original Invoice</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Date</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Items</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Amount</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Reason</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 uppercase">Processed By</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {salesReturns.map((returnItem: any, idx: number) => (
+                      <tr key={idx} className="border-b hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm font-medium text-blue-600">
+                          {returnItem.invoiceNumber}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {returnItem.originalInvoiceNumber || returnItem.refundedSale}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {returnItem.saleDate ? new Date(returnItem.saleDate).toLocaleDateString() : '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {returnItem.items?.length || 0}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium text-red-600 text-right">
+                          {formatCurrency(Math.abs(returnItem.total))}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {returnItem.refundReason || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {returnItem.cashierName}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+        )}
       </div>
 
       {/* Create Invoice Modal - Full Screen - POS Style */}
