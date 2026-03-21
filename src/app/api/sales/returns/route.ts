@@ -13,11 +13,23 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { saleId, items, reason, refundMethod, customerId } = body;
+    // Accept both saleId and originalSaleId for compatibility
+    const saleId = body.saleId || body.originalSaleId;
+    const items = body.items;
+    const reason = body.reason;
+    const refundMethod = body.refundMethod;
+    const customerId = body.customerId;
 
-    if (!saleId || !items || items.length === 0) {
+    if (!saleId) {
       return NextResponse.json(
-        { error: 'Sale ID and items are required' },
+        { error: 'Sale ID is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!items || items.length === 0) {
+      return NextResponse.json(
+        { error: 'Items are required' },
         { status: 400 }
       );
     }
@@ -35,8 +47,18 @@ export async function POST(request: NextRequest) {
     let totalReturnAmount = 0;
 
     for (const item of items) {
-      const { productId, quantity, unitPrice } = item;
+      // Accept both productId and product fields
+      const productId = item.productId || item.product;
+      const quantity = item.quantity;
+      const unitPrice = item.unitPrice;
       
+      if (!productId) {
+        return NextResponse.json(
+          { error: 'Product ID is missing in items' },
+          { status: 400 }
+        );
+      }
+
       // Find product and restore quantity
       const product = await Product.findById(productId);
       if (!product) {
