@@ -1,21 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-
-interface PrintTemplate {
-  _id: string;
-  name: string;
-  category: string;
-  pageSize: string;
-  isDefault?: boolean;
-}
+import React, { useState, useRef, useEffect } from 'react';
+import QRCode from 'qrcode';
+import { generateKRAQRData, calculateTaxableAmount, calculateVAT } from '@/lib/kra-qr-generator';
 
 interface PrintPreviewProps {
   documentType: string;
   document: any;
-  template?: any;
   printer?: any;
-  format?: 'pdf' | 'escpos';
   onPrint?: () => void;
   onClose?: () => void;
 }
@@ -23,288 +15,345 @@ interface PrintPreviewProps {
 export default function PrintPreview({
   documentType,
   document,
-  template,
-  printer,
-  format = 'pdf',
   onPrint,
   onClose
 }: PrintPreviewProps) {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [printing, setPrinting] = useState(false);
-  const [templates, setTemplates] = useState<PrintTemplate[]>([]);
-  const [selectedTemplate, setSelectedTemplate] = useState<PrintTemplate | null>(template || null);
+  const [copies, setCopies] = useState(1);
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+  const documentRef = useRef<HTMLDivElement>(null);
 
+  // Generate KRA QR code when document data changes
   useEffect(() => {
-    fetchTemplates();
-  }, []);
-
-  useEffect(() => {
-    generatePreview();
-  }, [documentType, document, selectedTemplate, format]);
-
-  const fetchTemplates = async () => {
-    try {
-      const response = await fetch(`/api/document-templates?category=${documentType}`);
-      const data = await response.json();
+    const generateQR = async () => {
+      if (!document) return;
       
-      if (data.templates && data.templates.length > 0) {
-        setTemplates(data.templates);
-        // Set default template if none selected
-        if (!selectedTemplate) {
-          const defaultTemplate = data.templates.find((t: PrintTemplate) => t.isDefault) || data.templates[0];
-          setSelectedTemplate(defaultTemplate);
+      const doc = document || {};
+      
+      // Only generate QR if we have KRA PIN and invoice number
+      if (doc.kraPin && doc.invoiceNumber) {
+        try {
+          // Calculate taxable amount and VAT
+          const total = doc.total || 0;
+          const vatRate = doc.taxRate || 16;
+          const vatAmount = calculateVAT(total, vatRate);
+          const taxableAmount = calculateTaxableAmount(total, vatRate);
+          
+          const kraData = {
+            sellerPin: doc.kraPin || '',
+            invoiceNumber: doc.invoiceNumber || '',
+            dateOfIssue: doc.date || new Date().toISOString(),
+            taxableAmount: Math.round(taxableAmount * 100) / 100,
+            vatAmount: Math.round(vatAmount * 100) / 100,
+            totalAmount: Math.round(total * 100) / 100,
+            invoiceType: documentType.toUpperCase()
+          };
+          
+          const qrData = generateKRAQRData(kraData);
+          
+          // Generate QR code as data URL
+          const url = await QRCode.toDataURL(qrData, {
+            width: 200,
+            margin: 1,
+            color: {
+              dark: '#000000',
+              light: '#ffffff'
+            },
+            errorCorrectionLevel: 'M'
+          });
+          
+          setQrCodeUrl(url);
+        } catch (error) {
+          console.error('Failed to generate QR code:', error);
+          setQrCodeUrl('');
         }
-      }
-    } catch (error) {
-      console.error('Failed to fetch templates:', error);
-    }
-  };
-
-  const generatePreview = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const response = await fetch('/api/print', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          documentType,
-          document,
-          templateId: selectedTemplate?._id,
-          printerId: printer?._id,
-          format,
-          preview: true
-        })
-      });
-
-      const data = await response.json();
-
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to generate preview');
-      }
-
-      if (data.preview) {
-        // Create blob URL for preview
-        const binary = atob(data.preview.data);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-          bytes[i] = binary.charCodeAt(i);
-        }
-        
-        const blob = new Blob([bytes], { type: data.preview.mimeType });
-        const url = URL.createObjectURL(blob);
-        setPreviewUrl(url);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePrint = async () => {
-    try {
-      setPrinting(true);
-
-      const response = await fetch('/api/print', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          documentType,
-          document,
-          templateId: selectedTemplate?._id,
-          printerId: printer?._id,
-          format,
-          copies: 1
-        })
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        onPrint?.();
       } else {
-        setError(data.error || 'Print failed');
+        setQrCodeUrl('');
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Print failed');
-    } finally {
-      setPrinting(false);
+    };
+    
+    generateQR();
+  }, [document, documentType]);
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'KES'
+    }).format(amount || 0);
+  };
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const handlePrint = () => {
+    if (documentRef.current) {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        const content = documentRef.current.innerHTML;
+        const doc = document || {};
+        const customerName = doc.customer?.name || doc.customerName || 'Customer';
+        const invoiceNumber = doc.invoiceNumber || 'Invoice';
+        const sanitizedName = customerName.replace(/[^a-zA-Z0-9]/g, '-');
+        const fileName = `${sanitizedName}-${invoiceNumber}`;
+        
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>${fileName}</title>
+              <script src="https://cdn.tailwindcss.com"></script>
+              <style>
+                @page { margin: 10mm; size: A4; }
+                @media print {
+                  body { font-family: system-ui, -apple-system, sans-serif; }
+                  .page-break { page-break-after: always; }
+                  .no-break { page-break-inside: avoid; }
+                  .print-footer { 
+                    position: fixed; 
+                    bottom: 0; 
+                    left: 0; 
+                    right: 0; 
+                    height: 60px;
+                    background: white;
+                    border-top: 1px solid #e5e7eb;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 0 15mm;
+                  }
+                  .print-content { margin-bottom: 70px; }
+                }
+              </style>
+            </head>
+            <body>${content}</body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+          printWindow.print();
+          printWindow.close();
+        }, 500);
+      }
     }
   };
+
+  const doc = document || {};
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl h-[95vh] flex flex-col ml-4 mr-4">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <div className="flex items-center gap-4">
-            <h2 className="text-lg font-semibold">
-              Print Preview - {documentType.charAt(0).toUpperCase() + documentType.slice(1)}
-            </h2>
-            {templates.length > 0 && (
-              <select
-                value={selectedTemplate?._id || ''}
-                onChange={(e) => {
-                  const template = templates.find(t => t._id === e.target.value);
-                  setSelectedTemplate(template || null);
-                }}
-                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Select Template</option>
-                {templates.map((template) => (
-                  <option key={template._id} value={template._id}>
-                    {template.name} ({template.pageSize})
-                  </option>
-                ))}
-              </select>
-            )}
+            <h2 className="text-lg font-semibold capitalize">Print {documentType}</h2>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
-          >
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        {/* Preview Area */}
-        <div className="flex-1 overflow-auto p-6 bg-gray-100">
-          {loading ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-            </div>
-          ) : error ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center text-red-500">
-                <svg className="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <p>{error}</p>
+        {/* Preview */}
+        <div className="flex-1 overflow-auto p-6 bg-gray-600">
+          <div className="flex justify-center">
+            <div ref={documentRef} className="transform scale-75 origin-top md:scale-90 lg:scale-100 bg-white" style={{ width: '210mm', minHeight: '297mm', padding: '15mm', paddingBottom: '80px' }}>
+              {/* Header */}
+              <div className="flex justify-between items-start mb-6 pb-4 border-b-2 border-emerald-600">
+                <div className="flex items-start gap-4">
+                  {doc.logo && (
+                    <img src={doc.logo} alt="Logo" className="w-20 h-20 object-contain" style={{ maxHeight: '80px' }} />
+                  )}
+                  <div className="flex-1">
+                    <h1 className="text-2xl font-bold text-emerald-600">{doc.businessName || 'Business Name'}</h1>
+                    <p className="text-sm text-gray-500 mt-1">{doc.businessTagline || 'Your Trusted Partner'}</p>
+                    <div className="text-sm text-gray-500 mt-4 space-y-1">
+                      {doc.businessAddress && <div>📍 {doc.businessAddress}</div>}
+                      {doc.businessPhone && <div>📞 {doc.businessPhone}</div>}
+                      {doc.businessEmail && <div>✉️ {doc.businessEmail}</div>}
+                      {doc.vatNumber && <div>🏢 VAT: {doc.vatNumber}</div>}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <h2 className="text-2xl font-bold text-gray-900">{documentType === 'receipt' ? 'RECEIPT' : 'INVOICE'}</h2>
+                  <p className="text-lg text-gray-600 mt-1">#{doc.invoiceNumber || '-'}</p>
+                  <p className="text-sm text-gray-500 mt-2">Date: {formatDate(doc.date)}</p>
+                  {doc.dueDate && <p className="text-sm text-amber-600 mt-1">Due: {formatDate(doc.dueDate)}</p>}
+                </div>
+              </div>
+
+              {/* Customer */}
+              <div className="grid grid-cols-2 gap-8 mb-8">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Bill To</p>
+                  <p className="font-semibold text-gray-900 text-lg">{doc.customer?.name || 'Customer Name'}</p>
+                  <div className="mt-2 text-sm text-gray-600 space-y-1">
+                    {doc.customer?.phone && <div>📞 {doc.customer.phone}</div>}
+                    {doc.customer?.email && <div>✉️ {doc.customer.email}</div>}
+                  </div>
+                </div>
+                <div className="bg-emerald-50 p-3 rounded-lg">
+                  <p className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wide mb-1">Invoice Summary</p>
+                  <div className="grid grid-cols-2 gap-2 mt-1">
+                    <div><p className="text-[10px] text-gray-500">Subtotal</p><p className="font-semibold text-gray-900 text-[10px]">{formatCurrency(doc.subtotal)}</p></div>
+                    <div><p className="text-[10px] text-gray-500">VAT ({doc.taxRate || 16}%)</p><p className="font-semibold text-gray-900 text-[10px]">{formatCurrency(doc.tax)}</p></div>
+                    <div className="col-span-2 pt-1 border-t border-emerald-200">
+                      <p className="text-[10px] text-gray-500">Total Amount</p>
+                      <p className="font-bold text-base text-emerald-600">{formatCurrency(doc.total)}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Items */}
+              <div className="mb-6">
+                <h3 className="text-xs font-semibold text-gray-700 mb-2">Item Details</h3>
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="text-left p-2 text-[10px] font-semibold text-gray-600 uppercase">Item</th>
+                      <th className="text-center p-2 text-[10px] font-semibold text-gray-600 uppercase">Qty</th>
+                      <th className="text-center p-2 text-[10px] font-semibold text-gray-600 uppercase">Unit</th>
+                      <th className="text-right p-2 text-[10px] font-semibold text-gray-600 uppercase">Price</th>
+                      <th className="text-right p-2 text-[10px] font-semibold text-gray-600 uppercase">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {doc.items?.map((item: any, idx: number) => (
+                      <tr key={idx} className="border-b border-gray-100">
+                        <td className="p-2 text-[10px] text-gray-900">{item.name}</td>
+                        <td className="p-2 text-[10px] text-gray-600 text-center">{item.quantity}</td>
+                        <td className="p-2 text-[10px] text-gray-600 text-center">{item.unit || '-'}</td>
+                        <td className="p-2 text-[10px] text-gray-600 text-right">{item.price?.toLocaleString()}</td>
+                        <td className="p-2 text-[10px] text-gray-900 text-right font-medium">{item.total?.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Payment */}
+              {doc.payment && (
+                <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">Payment Details</p>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div><p className="text-[10px] text-gray-500">Amount Paid</p><p className="font-semibold text-green-600 text-xs">{doc.payment.amount?.toLocaleString()}</p></div>
+                    <div><p className="text-[10px] text-gray-500">Payment Method</p><p className="font-semibold text-gray-900 text-[10px] capitalize">{doc.payment.method || 'Cash'}</p></div>
+                    {doc.payment.change > 0 && <div><p className="text-[10px] text-gray-500">Change</p><p className="font-semibold text-gray-900 text-xs">{doc.payment.change?.toLocaleString()}</p></div>}
+                  </div>
+                </div>
+              )}
+
+              {/* Invoice Totals */}
+              <div className="mb-6 flex justify-end">
+                <div className="w-64">
+                  <div className="flex justify-between py-2 border-b border-gray-100">
+                    <span className="text-[10px] text-gray-600 align-middle">Subtotal</span>
+                    <span className="text-[10px] font-medium text-gray-900 align-middle">{doc.subtotal?.toLocaleString()}</span>
+                  </div>
+                  {doc.tax > 0 && (
+                    <div className="flex justify-between py-2 border-b border-gray-100">
+                      <span className="text-[10px] text-gray-600 align-middle">Tax ({doc.taxRate || 16}%)</span>
+                      <span className="text-[10px] font-medium text-gray-900 align-middle">{doc.tax?.toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between py-3 bg-gray-100 rounded px-3 mt-2">
+                    <span className="text-sm font-semibold text-gray-900 align-middle">Total</span>
+                    <span className="text-base font-bold text-emerald-600 align-middle">{doc.total?.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Terms */}
+              {doc.terms && (
+                <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Terms & Payment Terms</p>
+                  <p className="text-[10px] text-gray-700 whitespace-pre-wrap">{doc.terms}</p>
+                </div>
+              )}
+
+              {/* Status */}
+              {doc.status && doc.status !== 'draft' && (
+                <div className="mb-4 text-center">
+                  <span className={`inline-block px-2 py-0.5 text-[10px] font-semibold rounded-full ${
+                    doc.status === 'paid' ? 'bg-green-100 text-green-800' :
+                    doc.status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
+                    doc.status === 'sent' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                  }`}>{doc.status.toUpperCase()}</span>
+                </div>
+              )}
+
+              {/* Notes */}
+              {doc.notes && (
+                <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Notes</p>
+                  <p className="text-[10px] text-gray-700 italic">{doc.notes}</p>
+                </div>
+              )}
+
+              {/* Bank */}
+              {doc.bankName && doc.bankName !== 'N/A' && (
+                <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Payment Information</p>
+                  <div className="grid grid-cols-3 gap-2 text-[10px]">
+                    <div><p className="text-gray-500">Bank Name</p><p className="font-medium text-gray-900">{doc.bankName}</p></div>
+                    <div><p className="text-gray-500">Account Number</p><p className="font-medium text-gray-900">{doc.bankAccount}</p></div>
+                    {doc.bankBranch && <div><p className="text-gray-500">Branch</p><p className="font-medium text-gray-900">{doc.bankBranch}</p></div>}
+                  </div>
+                </div>
+              )}
+
+              {/* Footer - Always at bottom */}
+              <div className="print-footer absolute bottom-0 left-0 right-0 flex justify-between items-center py-4 px-15mm border-t border-gray-200 bg-white" style={{ paddingLeft: '15mm', paddingRight: '15mm' }}>
+                <div className="text-left">
+                  <p className="text-gray-600 font-medium">Thank you for your business!</p>
+                  <p className="text-xs text-gray-400 mt-1">Powered by POS System</p>
+                </div>
+                {qrCodeUrl && (
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <p className="text-[8px] text-gray-500">KRA Tax Compliance</p>
+                      <p className="text-[8px] text-gray-400">Scan to verify</p>
+                    </div>
+                    <img 
+                      src={qrCodeUrl} 
+                      alt="KRA QR Code" 
+                      className="w-16 h-16"
+                      style={{ width: '60px', height: '60px' }}
+                    />
+                  </div>
+                )}
               </div>
             </div>
-          ) : previewUrl ? (
-            format === 'pdf' ? (
-              <iframe
-                src={previewUrl}
-                className="w-full h-full min-h-[500px] border-0"
-                title="Print Preview"
-              />
-            ) : (
-              <div className="bg-white p-4 rounded shadow max-w-md mx-auto font-mono text-xs whitespace-pre-wrap">
-                {/* Raw ESC/POS preview - show as hex dump */}
-                [ESC/POS commands - {documentType}]
-              </div>
-            )
-          ) : null}
+          </div>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t bg-gray-50">
-          <div className="text-sm text-gray-500">
-            {template?.name || 'Default Template'} • {format.toUpperCase()}
+        <div className="border-t p-4 bg-gray-50">
+          <div className="flex items-center gap-4 mb-4">
+            <label className="text-sm text-gray-600">Copies:</label>
+            <select value={copies} onChange={(e) => setCopies(Number(e.target.value))} className="px-3 py-1.5 border border-gray-200 rounded text-sm">
+              {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
           </div>
-          <div className="flex gap-3">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handlePrint}
-              disabled={loading || printing}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
-            >
-              {printing ? (
-                <>
-                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Printing...
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                  </svg>
-                  Print
-                </>
-              )}
+          <div className="flex justify-end gap-3">
+            <button onClick={onClose} className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50">Cancel</button>
+            <button onClick={handlePrint} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              Print
             </button>
           </div>
         </div>
       </div>
     </div>
-  );
-}
-
-// Print Button Component
-interface PrintButtonProps {
-  documentType: string;
-  document: any;
-  template?: any;
-  printer?: any;
-  label?: string;
-  variant?: 'primary' | 'secondary' | 'outline';
-  size?: 'sm' | 'md' | 'lg';
-  disabled?: boolean;
-}
-
-export function PrintButton({
-  documentType,
-  document,
-  template,
-  printer,
-  label = 'Print',
-  variant = 'primary',
-  size = 'md',
-  disabled = false
-}: PrintButtonProps) {
-  const [showPreview, setShowPreview] = useState(false);
-
-  const baseClasses = 'inline-flex items-center justify-center font-medium rounded transition-colors';
-  
-  const variantClasses = {
-    primary: 'bg-blue-600 text-white hover:bg-blue-700',
-    secondary: 'bg-gray-600 text-white hover:bg-gray-700',
-    outline: 'border border-gray-300 text-gray-700 hover:bg-gray-50'
-  };
-  
-  const sizeClasses = {
-    sm: 'px-3 py-1.5 text-sm',
-    md: 'px-4 py-2',
-    lg: 'px-6 py-3 text-lg'
-  };
-
-  return (
-    <>
-      <button
-        onClick={() => setShowPreview(true)}
-        disabled={disabled}
-        className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-      >
-        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-        </svg>
-        {label}
-      </button>
-
-      {showPreview && (
-        <PrintPreview
-          documentType={documentType}
-          document={document}
-          template={template}
-          printer={printer}
-          onClose={() => setShowPreview(false)}
-        />
-      )}
-    </>
   );
 }

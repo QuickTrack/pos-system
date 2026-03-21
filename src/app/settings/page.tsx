@@ -10,16 +10,19 @@ import { Save, Building2, Receipt, Bell, Shield, Palette } from 'lucide-react';
 interface Settings {
   business: {
     name: string;
+    tagline: string;
     email: string;
     phone: string;
     address: string;
     taxNumber: string;
     currency: string;
+    logo?: string;
   };
   tax: {
     enabled: boolean;
     rate: number;
     includeInPrice: boolean;
+    invoiceTerms: string;
   };
   notifications: {
     email: boolean;
@@ -48,16 +51,19 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings>({
     business: {
       name: '',
+      tagline: '',
       email: '',
       phone: '',
       address: '',
       taxNumber: '',
       currency: 'KES',
+      logo: '',
     },
     tax: {
       enabled: true,
       rate: 16,
       includeInPrice: false,
+      invoiceTerms: '',
     },
     notifications: {
       email: true,
@@ -84,16 +90,19 @@ export default function SettingsPage() {
           setSettings({
             business: {
               name: data.settings.businessName || '',
+              tagline: data.settings.businessTagline || '',
               email: data.settings.email || '',
               phone: data.settings.phone || '',
               address: data.settings.address || '',
               taxNumber: data.settings.kraPin || '',
               currency: 'KES',
+              logo: data.settings.logo || '',
             },
             tax: {
               enabled: data.settings.enableTax ?? true,
               rate: data.settings.taxRate || 16,
               includeInPrice: false,
+              invoiceTerms: data.settings.invoiceTerms || '',
             },
             notifications: {
               email: true,
@@ -118,10 +127,26 @@ export default function SettingsPage() {
     setSaving(true);
     setMessage({ type: '', text: '' });
     try {
+      // Map nested frontend structure to flat database format
+      const dbSettings = {
+        businessName: settings.business.name,
+        businessTagline: settings.business.tagline || 'Your One-Stop Shop',
+        email: settings.business.email,
+        phone: settings.business.phone,
+        address: settings.business.address,
+        kraPin: settings.business.taxNumber,
+        logo: settings.business.logo,
+        taxRate: settings.tax.rate,
+        enableTax: settings.tax.enabled,
+        taxName: 'VAT',
+        lowStockAlert: settings.notifications.lowStock,
+        invoiceTerms: settings.tax.invoiceTerms,
+      };
+
       const response = await fetch('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
+        body: JSON.stringify(dbSettings),
       });
 
       if (response.ok) {
@@ -141,6 +166,35 @@ export default function SettingsPage() {
       ...prev,
       business: { ...prev.business, [field]: value },
     }));
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      alert('File size must be less than 2MB');
+      return;
+    }
+
+    // Check file type
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml'];
+    if (!validTypes.includes(file.type)) {
+      alert('File must be PNG, JPG, or SVG');
+      return;
+    }
+
+    // Convert to base64
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      updateBusinessField('logo', base64);
+    };
+    reader.onerror = () => {
+      alert('Failed to read file');
+    };
+    reader.readAsDataURL(file);
   };
 
   const updateTaxField = (field: string, value: any) => {
@@ -214,6 +268,52 @@ export default function SettingsPage() {
             <div className="p-6">
               {activeTab === 'business' && (
                 <div className="space-y-4">
+                  {/* Logo Upload */}
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Business Logo
+                    </label>
+                    <div className="flex items-center gap-4">
+                      <div className="w-24 h-24 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center overflow-hidden bg-gray-50">
+                        {settings.business.logo ? (
+                          <img 
+                            src={settings.business.logo} 
+                            alt="Business Logo" 
+                            className="w-full h-full object-contain"
+                          />
+                        ) : (
+                          <span className="text-gray-400 text-xs text-center p-2">No Logo</span>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/jpg,image/svg+xml"
+                          onChange={handleLogoUpload}
+                          className="block w-full text-sm text-gray-500
+                            file:mr-4 file:py-2 file:px-4
+                            file:rounded-full file:border-0
+                            file:text-sm file:font-semibold
+                            file:bg-emerald-50 file:text-emerald-700
+                            hover:file:bg-emerald-100
+                          "
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          PNG, JPG, or SVG. Max 2MB.
+                        </p>
+                        {settings.business.logo && (
+                          <button
+                            type="button"
+                            onClick={() => updateBusinessField('logo', '')}
+                            className="text-xs text-red-600 mt-2 hover:underline"
+                          >
+                            Remove logo
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -224,6 +324,17 @@ export default function SettingsPage() {
                         value={settings.business.name}
                         onChange={(e) => updateBusinessField('name', e.target.value)}
                         placeholder="Your Business Name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Tagline
+                      </label>
+                      <Input
+                        type="text"
+                        value={settings.business.tagline}
+                        onChange={(e) => updateBusinessField('tagline', e.target.value)}
+                        placeholder="Your One-Stop Shop"
                       />
                     </div>
                     <div>
@@ -321,6 +432,20 @@ export default function SettingsPage() {
                       min="0"
                       max="100"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Invoice Terms & Payment Terms
+                    </label>
+                    <textarea
+                      value={settings.tax.invoiceTerms}
+                      onChange={(e) => updateTaxField('invoiceTerms', e.target.value)}
+                      placeholder="e.g., Payment due within 30 days. Late payments may attract a penalty of 2% per month."
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">These terms will appear on invoices</p>
                   </div>
 
                   <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">

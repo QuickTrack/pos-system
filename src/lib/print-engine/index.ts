@@ -143,16 +143,19 @@ export class PrintEngine {
     let base64: string;
     let mimeType: string;
 
+    // Use Buffer for proper base64 encoding in Node.js
     if (output instanceof Uint8Array) {
-      let binary = '';
-      for (let i = 0; i < output.length; i++) {
-        binary += String.fromCharCode(output[i]);
-      }
-      base64 = btoa(binary);
+      base64 = Buffer.from(output).toString('base64');
       mimeType = format === 'pdf' ? 'application/pdf' : 'application/octet-stream';
     } else {
-      base64 = btoa(output);
-      mimeType = 'text/plain';
+      // Handle string output - convert to buffer without specifying encoding to preserve bytes
+      base64 = Buffer.from(output).toString('base64');
+      // Check if it's PDF format (starts with %PDF) or requested as PDF
+      if (format === 'pdf' || (typeof output === 'string' && output.startsWith('%PDF'))) {
+        mimeType = 'application/pdf';
+      } else {
+        mimeType = 'text/plain';
+      }
     }
 
     return {

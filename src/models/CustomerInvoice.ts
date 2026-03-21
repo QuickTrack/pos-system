@@ -23,6 +23,9 @@ export interface IInvoicePayment {
 
 export interface ICustomerInvoice extends Document {
   invoiceNumber: string;
+  invoiceType: 'sale' | 'credit';
+  referenceInvoiceId?: mongoose.Types.ObjectId;
+  referenceInvoiceNumber?: string;
   
   // Customer
   customer: mongoose.Types.ObjectId;
@@ -100,6 +103,9 @@ const InvoicePaymentSchema = new Schema<IInvoicePayment>({
 
 const CustomerInvoiceSchema = new Schema<ICustomerInvoice>({
   invoiceNumber: { type: String, required: true, unique: true },
+  invoiceType: { type: String, enum: ['sale', 'credit'], default: 'sale' },
+  referenceInvoiceId: { type: Schema.Types.ObjectId, ref: 'CustomerInvoice' },
+  referenceInvoiceNumber: { type: String },
   
   // Customer
   customer: { type: Schema.Types.ObjectId, ref: 'Customer', required: true },

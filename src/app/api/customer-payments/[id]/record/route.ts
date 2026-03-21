@@ -30,6 +30,14 @@ export async function POST(
     payment.status = 'paid';
     await payment.save();
 
+    // Update customer creditBalance (decrease by payment amount)
+    if (payment.customer && payment.customer._id) {
+      const Customer = (await import('@/models/Customer')).default;
+      await Customer.findByIdAndUpdate(payment.customer._id, {
+        $inc: { creditBalance: -payment.amount }
+      });
+    }
+
     // Update the linked sales invoices
     if (payment.invoiceNumbers && payment.invoiceNumbers.length > 0) {
       const Sale = (await import('@/models/Sale')).default;

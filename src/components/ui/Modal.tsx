@@ -8,12 +8,14 @@ interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   title?: string;
+  header?: ReactNode;
   children: ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
   closeOnOverlayClick?: boolean;
+  className?: string;
 }
 
-export function Modal({ isOpen, onClose, title, children, size = 'md', closeOnOverlayClick = true }: ModalProps) {
+export function Modal({ isOpen, onClose, title, header, children, size = 'md', closeOnOverlayClick = true, className = '' }: ModalProps) {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -42,20 +44,32 @@ export function Modal({ isOpen, onClose, title, children, size = 'md', closeOnOv
       style={size === 'full' ? { backgroundColor: 'rgba(0,0,0,0.5)' } : undefined}
     >
       <div 
-        className={cn("modal-content animate-slide-up", sizeClasses[size])}
+        className={cn("modal-content animate-slide-up", sizeClasses[size], className)}
         onClick={(e) => e.stopPropagation()}
         style={size === 'full' ? { height: '100vh', overflow: 'auto' } : undefined}
       >
         {/* Header */}
-        {title && (
+        {(title || header) && (
           <div className="flex items-center justify-between p-4 border-b flex-shrink-0">
-            <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-            <button 
-              onClick={onClose}
-              className="p-1 rounded-lg hover:bg-gray-100"
-            >
-              <X className="w-5 h-5 text-gray-500" />
-            </button>
+            {header ? header : (
+              <>
+                <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+                <button 
+                  onClick={onClose}
+                  className="p-1 rounded-lg hover:bg-gray-100"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </>
+            )}
+            {!header && title && (
+              <button 
+                onClick={onClose}
+                className="p-1 rounded-lg hover:bg-gray-100"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            )}
           </div>
         )}
         

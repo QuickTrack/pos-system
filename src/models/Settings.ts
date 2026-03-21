@@ -8,6 +8,12 @@ export interface ISettings extends Document {
   email?: string;
   address?: string;
   kraPin?: string;
+  website?: string;
+  
+  // Bank Details
+  bankName?: string;
+  bankAccount?: string;
+  bankBranch?: string;
   
   // Logo
   logo?: string;
@@ -17,6 +23,7 @@ export interface ISettings extends Document {
   taxRate: number;
   taxName: string;
   enableTax: boolean;
+  vatNumber?: string;
   
   // Receipt Settings
   receiptHeader?: string;
@@ -35,6 +42,7 @@ export interface ISettings extends Document {
   // Invoice Settings
   invoicePrefix: string;
   invoiceNumber: number;
+  invoiceTerms?: string;
   
   // Sale Settings
   defaultPaymentMethod: 'cash' | 'mpesa' | 'card';
@@ -61,6 +69,12 @@ const SettingsSchema = new Schema<ISettings>(
     email: { type: String },
     address: { type: String },
     kraPin: { type: String },
+    website: { type: String },
+    
+    // Bank Details
+    bankName: { type: String },
+    bankAccount: { type: String },
+    bankBranch: { type: String },
     
     // Logo
     logo: { type: String },
@@ -70,6 +84,7 @@ const SettingsSchema = new Schema<ISettings>(
     taxRate: { type: Number, default: 16 }, // 16% VAT in Kenya
     taxName: { type: String, default: 'VAT' },
     enableTax: { type: Boolean, default: true },
+    vatNumber: { type: String },
     
     // Receipt Settings
     receiptHeader: { type: String },
@@ -92,6 +107,7 @@ const SettingsSchema = new Schema<ISettings>(
     // Invoice Settings
     invoicePrefix: { type: String, default: 'INV' },
     invoiceNumber: { type: Number, default: 1 },
+    invoiceTerms: { type: String },
     
     // Sale Settings
     defaultPaymentMethod: { 

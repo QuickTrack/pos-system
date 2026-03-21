@@ -51,7 +51,8 @@ export interface ISale extends Document {
   total: number;
   
   // Payment
-  paymentMethod: 'cash' | 'mpesa' | 'card' | 'mixed' | 'credit';
+  paymentMethod: 'cash' | 'mpesa' | 'card' | 'mixed' | 'credit' | 'account';
+  chargedToAccount?: boolean;
   paymentDetails?: {
     amount: number;
     method: string;
@@ -142,9 +143,11 @@ const SaleSchema = new Schema<ISale>(
     // Payment
     paymentMethod: { 
       type: String, 
-      enum: ['cash', 'mpesa', 'card', 'mixed', 'credit'], 
+      enum: ['cash', 'mpesa', 'card', 'mixed', 'credit', 'account'], 
       required: true 
     },
+    // Account payment - track if this was charged to customer account
+    chargedToAccount: { type: Boolean, default: false },
     paymentDetails: [{
       amount: Number,
       method: String,

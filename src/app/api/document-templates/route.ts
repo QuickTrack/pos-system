@@ -86,45 +86,50 @@ const BUILT_IN_TEMPLATES = [
     isDefault: false
   },
   {
-    name: 'Professional A4 Invoice',
-    description: 'Professional A4 invoice for business transactions',
-    category: 'invoice' as const,
+    name: 'Credit Invoice',
+    description: 'Standard A4 credit invoice for account adjustments',
+    category: 'creditInvoice' as const,
     pageSize: 'A4' as const,
     orientation: 'portrait' as const,
     margins: { top: 20, right: 20, bottom: 20, left: 20 },
     elements: [
-      { id: 'header_bg', type: 'shape', shapeType: 'rectangle', x: 0, y: 0, width: 210, height: 45, backgroundColor: '#1e3a5f' },
+      { id: 'header_bg', type: 'shape', shapeType: 'rectangle', x: 0, y: 0, width: 210, height: 45, backgroundColor: '#7c3aed' },
       { id: 'logo', type: 'image', src: '{{business.logo}}', x: 20, y: 10, width: 40, height: 25 },
       { id: 'company_name', type: 'text', content: '{{business.name}}', x: 70, y: 12, width: 80, height: 12, fontSize: 16, fontWeight: 'bold', color: '#ffffff' },
       { id: 'company_info', type: 'text', content: '{{business.address}}\n{{business.phone}}\n{{business.email}}', x: 70, y: 26, width: 80, height: 15, fontSize: 8, color: '#e0e0e0' },
-      { id: 'invoice_title', type: 'text', content: 'INVOICE', x: 150, y: 10, width: 50, height: 15, fontSize: 20, fontWeight: 'bold', color: '#ffffff', textAlign: 'right' },
-      { id: 'invoice_num', type: 'text', content: '#{{invoice.number}}', x: 150, y: 25, width: 50, height: 10, fontSize: 10, color: '#e0e0e0', textAlign: 'right' },
-      { id: 'bill_to', type: 'text', content: 'BILL TO', x: 20, y: 60, width: 40, height: 8, fontSize: 8, fontWeight: 'bold', color: '#666666' },
+      { id: 'credit_title', type: 'text', content: 'CREDIT INVOICE', x: 150, y: 10, width: 50, height: 15, fontSize: 18, fontWeight: 'bold', color: '#ffffff', textAlign: 'right' },
+      { id: 'credit_num', type: 'text', content: '#{{creditInvoice.number}}', x: 150, y: 25, width: 50, height: 10, fontSize: 10, color: '#e0e0e0', textAlign: 'right' },
+      { id: 'bill_to', type: 'text', content: 'CREDIT TO', x: 20, y: 60, width: 50, height: 8, fontSize: 8, fontWeight: 'bold', color: '#666666' },
       { id: 'customer_name', type: 'text', content: '{{customer.name}}', x: 20, y: 70, width: 80, height: 10, fontSize: 12, fontWeight: 'bold' },
       { id: 'customer_info', type: 'text', content: '{{customer.address}}\n{{customer.phone}}\n{{customer.email}}', x: 20, y: 82, width: 80, height: 20, fontSize: 9 },
-      { id: 'invoice_details', type: 'text', content: 'Invoice Date: {{invoice.date}}\nDue Date: {{invoice.dueDate}}\nPayment Terms: {{invoice.paymentTerms}} days', x: 130, y: 60, width: 60, height: 25, fontSize: 9, textAlign: 'right' },
-      { id: 'items_header_bg', type: 'shape', shapeType: 'rectangle', x: 20, y: 115, width: 170, height: 10, backgroundColor: '#f3f4f6' },
-      { id: 'items_header', type: 'text', content: 'Item', x: 22, y: 117, width: 70, height: 8, fontSize: 9, fontWeight: 'bold' },
-      { id: 'items_header_qty', type: 'text', content: 'Qty', x: 95, y: 117, width: 20, height: 8, fontSize: 9, fontWeight: 'bold', textAlign: 'center' },
-      { id: 'items_header_price', type: 'text', content: 'Unit Price', x: 118, y: 117, width: 30, height: 8, fontSize: 9, fontWeight: 'bold', textAlign: 'right' },
-      { id: 'items_header_total', type: 'text', content: 'Amount', x: 152, y: 117, width: 36, height: 8, fontSize: 9, fontWeight: 'bold', textAlign: 'right' },
-      { id: 'items_table', type: 'table', source: 'items', x: 20, y: 128, width: 170, height: 180, columns: [
+      { id: 'credit_details', type: 'text', content: 'Credit Date: {{creditInvoice.date}}\nDue Date: {{creditInvoice.dueDate}}\nPayment Terms: {{creditInvoice.paymentTerms}} days', x: 130, y: 60, width: 60, height: 25, fontSize: 9, textAlign: 'right' },
+      { id: 'reference_info', type: 'text', content: 'REFERENCE: {{creditInvoice.referenceNumber}}', x: 20, y: 108, width: 170, height: 10, fontSize: 10, fontWeight: 'bold', color: '#7c3aed' },
+      { id: 'reason_label', type: 'text', content: 'Reason:', x: 20, y: 118, width: 30, height: 8, fontSize: 8, fontWeight: 'bold', color: '#666666' },
+      { id: 'reason', type: 'text', content: '{{creditInvoice.reason}}', x: 50, y: 118, width: 140, height: 12, fontSize: 9 },
+      { id: 'items_header_bg', type: 'shape', shapeType: 'rectangle', x: 20, y: 140, width: 170, height: 10, backgroundColor: '#f3f4f6' },
+      { id: 'items_header', type: 'text', content: 'Item', x: 22, y: 142, width: 70, height: 8, fontSize: 9, fontWeight: 'bold' },
+      { id: 'items_header_qty', type: 'text', content: 'Qty', x: 95, y: 142, width: 20, height: 8, fontSize: 9, fontWeight: 'bold', textAlign: 'center' },
+      { id: 'items_header_price', type: 'text', content: 'Unit Price', x: 118, y: 142, width: 30, height: 8, fontSize: 9, fontWeight: 'bold', textAlign: 'right' },
+      { id: 'items_header_total', type: 'text', content: 'Amount', x: 152, y: 142, width: 36, height: 8, fontSize: 9, fontWeight: 'bold', textAlign: 'right' },
+      { id: 'items_table', type: 'table', source: 'items', x: 20, y: 153, width: 170, height: 150, columns: [
         { key: 'name', title: 'Description', width: 70 },
         { key: 'quantity', title: 'Qty', width: 20, align: 'center' as const },
         { key: 'price', title: 'Unit Price', width: 30, align: 'right' as const },
         { key: 'total', title: 'Amount', width: 36, align: 'right' as const }
       ]},
-      { id: 'totals_bg', type: 'shape', shapeType: 'rectangle', x: 120, y: 315, width: 70, height: 50, backgroundColor: '#f9fafb' },
-      { id: 'subtotal_label', type: 'text', content: 'Subtotal:', x: 125, y: 320, width: 30, height: 10, fontSize: 10, textAlign: 'right' },
-      { id: 'subtotal_val', type: 'text', content: '{{invoice.subtotal}}', x: 155, y: 320, width: 32, height: 10, fontSize: 10, textAlign: 'right' },
-      { id: 'tax_label', type: 'text', content: 'Tax ({{invoice.taxRate}}%):', x: 125, y: 332, width: 30, height: 10, fontSize: 10, textAlign: 'right' },
-      { id: 'tax_val', type: 'text', content: '{{invoice.tax}}', x: 155, y: 332, width: 32, height: 10, fontSize: 10, textAlign: 'right' },
-      { id: 'divider', type: 'divider', x: 125, y: 345, width: 60, height: 2 },
-      { id: 'total_label', type: 'text', content: 'TOTAL DUE:', x: 125, y: 350, width: 30, height: 12, fontSize: 11, fontWeight: 'bold', textAlign: 'right' },
-      { id: 'total_val', type: 'text', content: '{{invoice.total}}', x: 155, y: 350, width: 32, height: 12, fontSize: 12, fontWeight: 'bold', textAlign: 'right' },
-      { id: 'footer', type: 'text', content: 'Payment is due within {{invoice.paymentTerms}} days. Thank you for your business!', x: 20, y: 260, width: 170, height: 12, fontSize: 9, textAlign: 'center', color: '#666666' },
-      { id: 'signature', type: 'signature', x: 130, y: 275, width: 60, height: 25 },
-      { id: 'signature_label', type: 'text', content: 'Authorized Signature', x: 130, y: 302, width: 60, height: 8, fontSize: 8, textAlign: 'center' }
+      { id: 'totals_bg', type: 'shape', shapeType: 'rectangle', x: 120, y: 310, width: 70, height: 50, backgroundColor: '#f9fafb' },
+      { id: 'subtotal_label', type: 'text', content: 'Subtotal:', x: 125, y: 315, width: 30, height: 10, fontSize: 10, textAlign: 'right' },
+      { id: 'subtotal_val', type: 'text', content: '{{creditInvoice.subtotal}}', x: 155, y: 315, width: 32, height: 10, fontSize: 10, textAlign: 'right' },
+      { id: 'tax_label', type: 'text', content: 'Tax ({{creditInvoice.taxRate}}%):', x: 125, y: 327, width: 30, height: 10, fontSize: 10, textAlign: 'right' },
+      { id: 'tax_val', type: 'text', content: '{{creditInvoice.tax}}', x: 155, y: 327, width: 32, height: 10, fontSize: 10, textAlign: 'right' },
+      { id: 'divider', type: 'divider', x: 125, y: 340, width: 60, height: 2 },
+      { id: 'total_label', type: 'text', content: 'CREDIT TOTAL:', x: 125, y: 345, width: 30, height: 12, fontSize: 11, fontWeight: 'bold', textAlign: 'right', color: '#7c3aed' },
+      { id: 'total_val', type: 'text', content: '{{creditInvoice.total}}', x: 155, y: 345, width: 32, height: 12, fontSize: 12, fontWeight: 'bold', textAlign: 'right', color: '#7c3aed' },
+      { id: 'notes_label', type: 'text', content: 'Notes:', x: 20, y: 265, width: 40, height: 8, fontSize: 8, fontWeight: 'bold', color: '#666666' },
+      { id: 'notes', type: 'text', content: '{{creditInvoice.notes}}', x: 20, y: 275, width: 170, height: 20, fontSize: 9 },
+      { id: 'footer', type: 'text', content: 'This credit invoice has been applied to your account. Thank you!', x: 20, y: 300, width: 170, height: 12, fontSize: 9, textAlign: 'center', color: '#666666' },
+      { id: 'signature', type: 'signature', x: 130, y: 320, width: 60, height: 25 },
+      { id: 'signature_label', type: 'text', content: 'Authorized Signature', x: 130, y: 347, width: 60, height: 8, fontSize: 8, textAlign: 'center' }
     ],
     isBuiltIn: true,
     isDefault: false
@@ -194,7 +199,7 @@ const BUILT_IN_TEMPLATES = [
   },
   {
     name: 'Quotation',
-    description: 'Professional quotation template',
+    description: 'Standard quotation template',
     category: 'quotation' as const,
     pageSize: 'A4' as const,
     orientation: 'portrait' as const,
@@ -277,41 +282,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const user = await getAuthUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
-    if (!hasPermission(user.role as any, 'manage_settings')) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-    
-    await dbConnect();
-    
-    const data = await request.json();
-    
-    // If setting as default, unset other defaults for this category
-    if (data.isDefault) {
-      await DocumentTemplate.updateMany(
-        { category: data.category, branch: user.branch || data.branch },
-        { isDefault: false }
-      );
-    }
-    
-    const template = await DocumentTemplate.create({
-      ...data,
-      createdBy: user.userId,
-      branch: user.branch || data.branch
-    });
-    
-    return NextResponse.json({ success: true, template }, { status: 201 });
-  } catch (error) {
-    console.error('Create template error:', error);
-    return NextResponse.json(
-      { error: 'Failed to create template' },
-      { status: 500 }
-    );
-  }
+// POST - Template creation disabled (template designer removed)
+export async function POST() {
+  return NextResponse.json(
+    { error: 'Template creation is disabled' },
+    { status: 403 }
+  );
 }

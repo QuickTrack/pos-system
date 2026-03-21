@@ -63,7 +63,6 @@ export class TemplateEngine {
       try {
         this.processElement(element, generator);
       } catch (error) {
-        console.warn(`Failed to process element ${element.id}:`, error);
         // Continue with other elements
       }
     }
@@ -421,7 +420,6 @@ export class TemplateEngine {
     try {
       generator.printQRCode(content, size, correction);
     } catch (error) {
-      console.warn('QR code generation failed:', error);
       // Fallback: print as text
       generator.text(`[QR: ${content}]`);
       generator.newLine();
@@ -444,7 +442,6 @@ export class TemplateEngine {
     try {
       generator.printBarcode(content, 'CODE128');
     } catch (error) {
-      console.warn('Barcode generation failed:', error);
       // Fallback: print as text
       generator.text(`[BARCODE: ${content}]`);
       generator.newLine();
@@ -509,7 +506,10 @@ export class DocumentHandler {
         website: business.website || '',
         logo: business.logo || '',
         kraPin: business.kraPin || '',
-        vatNumber: business.vatNumber || ''
+        vatNumber: business.vatNumber || '',
+        bankName: business.bankName || '',
+        bankAccount: business.bankAccount || '',
+        bankBranch: business.bankBranch || ''
       },
       items: []
     };
@@ -518,6 +518,8 @@ export class DocumentHandler {
       case 'receipt':
       case 'invoice':
         return this.prepareInvoiceData(document, baseData, options);
+      case 'creditInvoice':
+        return this.prepareCreditInvoiceData(document, baseData, options);
       case 'delivery':
         return this.prepareDeliveryData(document, baseData, options);
       case 'purchase':
@@ -543,21 +545,96 @@ export class DocumentHandler {
   private static prepareInvoiceData(doc: any, base: PrintDataContext, options?: any): PrintDataContext {
     const data = { ...base };
     
+
+    
     data.invoice = {
       number: doc.invoiceNumber || doc.number || '',
-      date: this.formatDate(doc.date || doc.createdAt),
+      date: this.formatDate(doc.invoiceDate || doc.date || doc.createdAt),
       dueDate: doc.dueDate ? this.formatDate(doc.dueDate) : '',
       subtotal: this.formatCurrency(doc.subtotal || 0),
       tax: this.formatCurrency(doc.tax || 0),
       taxRate: String(doc.taxRate || 0),
       total: this.formatCurrency(doc.total || 0),
-      paymentTerms: String(doc.paymentTerms || 30)
+      paymentTerms: String(doc.paymentTerms || 30),
+      discount: doc.discount ? this.formatCurrency(doc.discount) : '',
+      status: doc.status || 'Pending'
+    };
+    
+    data.customer = {
+      name: doc.customerName || doc.customer?.name || 'Cash Customer',
+      address: doc.customerAddress || doc.customer?.address || '',
+      phone: doc.customerPhone || doc.customer?.phone || '',
+      email: doc.customer?.email || ''
+    };
+    
+    data.items = (doc.items || []).map((item: any) => ({
+      name: item.productName || item.name || 'Item',
+      quantity: item.quantity || 1,
+      price: this.formatCurrency(item.unitPrice || item.price || 0),
+      total: this.formatCurrency(item.total || item.quantity * (item.unitPrice || item.price) || 0),
+      sku: item.sku || '',
+      unit: item.unit || '',
+      discount: item.discount ? this.formatCurrency(item.discount) : ''
+    }));
+    
+
+    
+    // Handle payment data - can be nested or at root level for invoices
+    if (doc.payment) {
+      data.payment = {
+        amount: this.formatCurrency(doc.payment.amount || doc.total),
+        method: doc.payment.method || 'Cash',
+        reference: doc.payment.reference || '',
+        change: doc.payment.change ? this.formatCurrency(doc.payment.change) : ''
+      };
+    } else if (doc.amountPaid !== undefined) {
+      // Invoice-level payment info
+      const paid = doc.amountPaid || 0;
+      const total = doc.total || 0;
+      const balance = total - paid;
+      const lastPayment = doc.payments && doc.payments.length > 0 ? doc.payments[doc.payments.length - 1] : null;
+      data.payment = {
+        amount: this.formatCurrency(paid),
+        method: lastPayment?.method || 'N/A',
+        reference: lastPayment?.reference || '',
+        change: this.formatCurrency(balance > 0 ? balance : 0)
+      };
+    }
+    
+    if (doc.cashier) {
+      data.cashier = {
+        name: doc.cashier.name || doc.cashierName || '',
+        id: doc.cashier.id || ''
+      };
+    }
+    
+    return data;
+  }
+
+  /**
+   * Prepare credit invoice data
+   */
+  private static prepareCreditInvoiceData(doc: any, base: PrintDataContext, options?: any): PrintDataContext {
+    const data = { ...base };
+    
+    data.creditInvoice = {
+      number: doc.invoiceNumber || doc.number || '',
+      date: this.formatDate(doc.date || doc.invoiceDate || doc.createdAt),
+      dueDate: doc.dueDate ? this.formatDate(doc.dueDate) : '',
+      referenceNumber: doc.referenceInvoiceNumber || '',
+      reason: doc.description || doc.notes || '',
+      subtotal: this.formatCurrency(doc.subtotal || 0),
+      tax: this.formatCurrency(doc.tax || 0),
+      taxRate: String(doc.taxRate || 0),
+      total: this.formatCurrency(doc.total || 0),
+      paymentTerms: String(doc.paymentTerms || 30),
+      notes: doc.notes || ''
     };
     
     data.customer = {
       name: doc.customer?.name || doc.customerName || 'Cash Customer',
-      address: doc.customer?.address || '',
-      phone: doc.customer?.phone || '',
+      address: doc.customer?.address || doc.customerAddress || '',
+      phone: doc.customer?.phone || doc.customerPhone || '',
       email: doc.customer?.email || ''
     };
     
@@ -570,15 +647,6 @@ export class DocumentHandler {
       unit: item.unit || '',
       discount: item.discount ? this.formatCurrency(item.discount) : ''
     }));
-    
-    if (doc.payment) {
-      data.payment = {
-        amount: this.formatCurrency(doc.payment.amount || doc.total),
-        method: doc.payment.method || 'Cash',
-        reference: doc.payment.reference || '',
-        change: doc.payment.change ? this.formatCurrency(doc.payment.change) : ''
-      };
-    }
     
     if (doc.cashier) {
       data.cashier = {
@@ -735,18 +803,24 @@ export class DocumentHandler {
     };
     
     data.customer = {
-      name: doc.customer?.name || doc.customerName || ''
+      name: doc.customer?.name || doc.customerName || '',
+      address: doc.customer?.address || doc.customerAddress || '',
+      phone: doc.customer?.phone || doc.customerPhone || '',
+      email: doc.customer?.email || ''
     };
     
     if (doc.invoice) {
       data.invoice = {
         number: doc.invoice.number || doc.invoiceNumber || '',
-        date: this.formatDate(doc.invoice.date),
-        subtotal: '',
-        tax: '',
-        taxRate: '',
-        total: this.formatCurrency(doc.invoice.total || 0),
-        paymentTerms: ''
+        date: this.formatDate(doc.invoice.date || doc.invoiceDate),
+        subtotal: this.formatCurrency(doc.invoice.subtotal || doc.subtotal || 0),
+        discount: this.formatCurrency(doc.invoice.discountAmount || doc.discountAmount || 0),
+        tax: this.formatCurrency(doc.invoice.tax || doc.tax || 0),
+        taxRate: doc.invoice.taxRate || doc.taxRate || 16,
+        total: this.formatCurrency(doc.invoice.total || doc.total || 0),
+        status: doc.invoice.status || doc.status || 'pending',
+        dueDate: this.formatDate(doc.invoice.dueDate || doc.dueDate),
+        paymentTerms: String(doc.invoice.paymentTerms || doc.paymentTerms || 30)
       };
     }
     

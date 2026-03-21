@@ -91,11 +91,35 @@ export class PDFGenerator {
    * Build PDF header
    */
   private buildHeader(): void {
-    const creationDate = new Date().toISOString();
-    
+    // Add PDF magic number - standard PDF 1.4 header
     this.pdfContent.push('%PDF-1.4');
+    // Add binary marker bytes to ensure PDF viewer treats file as binary
+    // This is the standard approach for PDF files
+    this.pdfContent.push('%' + String.fromCharCode(0xE2, 0xE3, 0xCF, 0xD3));
+    // Add newline
+    this.pdfContent.push('');
     
-    // Font objects (we'll add them after we know their references)
+    // Create Catalog object (object 1) - this is the root object
+    this.pdfContent.push('1 0 obj');
+    this.pdfContent.push('<<');
+    this.pdfContent.push('/Type /Catalog');
+    this.pdfContent.push('/Pages 2 0 R');
+    this.pdfContent.push('>>');
+    this.pdfContent.push('endobj');
+    
+    // Create Pages object (object 2) - will be filled in by startPage
+    this.pdfContent.push('2 0 obj');
+    this.pdfContent.push('<<');
+    this.pdfContent.push('/Type /Pages');
+    this.pdfContent.push('/Kids []');
+    this.pdfContent.push('/Count 0');
+    this.pdfContent.push('>>');
+    this.pdfContent.push('endobj');
+    
+    // Set object count to 2 since we created objects 1 and 2
+    this.objectCount = 2;
+    
+    // Font objects start from object 3
     this.fontObjectRefs = this.addFont('Helvetica');
     this.fontObjectRefs = this.addFont('Helvetica-Bold');
   }
@@ -139,7 +163,8 @@ export class PDFGenerator {
       }
       
       // Add element to content
-      contentBuffer.push(...this.renderElement(processedElement));
+      const rendered = this.renderElement(processedElement);
+      contentBuffer.push(...rendered);
       this.currentY += (element.height || 20);
     }
     
@@ -196,7 +221,9 @@ export class PDFGenerator {
    */
   private startPage(): void {
     this.objectCount++;
+    // Object 2 is already created as Pages, so subsequent pages start from 3
     const pageRef = `${this.objectCount} 0 obj`;
+    const pagesRef = '2 0 R';
     
     this.pdfContent.push(pageRef);
     this.pdfContent.push('<<');
@@ -251,8 +278,10 @@ export class PDFGenerator {
    */
   private renderElement(element: PrintableElement): string[] {
     const lines: string[] = [];
+    // Use element's absolute y position (from top of page), convert to points
+    // PDF uses bottom-up coordinates, but we pass top-down to renderText which converts
     const x = this.convertMmToPt(this.marginLeft + (element.x || 0));
-    const y = this.convertMmToPt(this.currentY);
+    const y = this.convertMmToPt(element.y || 0); // y is from top of page
     
     switch (element.type) {
       case 'text':
@@ -580,6 +609,7 @@ export class PDFGenerator {
     this.pdfContent.push('trailer');
     this.pdfContent.push('<<');
     this.pdfContent.push(`/Size ${this.objectCount + 1}`);
+    // Root should reference the Catalog (object 1)
     this.pdfContent.push('/Root 1 0 R');
     this.pdfContent.push('>>');
     this.pdfContent.push('startxref');

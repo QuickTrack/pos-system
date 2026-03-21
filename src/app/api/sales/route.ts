@@ -21,6 +21,8 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('endDate');
     const customer = searchParams.get('customer');
     const status = searchParams.get('status');
+    const paymentMethod = searchParams.get('paymentMethod');
+    const includeAccount = searchParams.get('includeAccount') === 'true';
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
     
@@ -39,6 +41,19 @@ export async function GET(request: NextRequest) {
     
     if (status) {
       query.status = status;
+    }
+    
+    // Filter by payment method - for cash sales, include cash, mpesa, card, mixed
+    if (paymentMethod) {
+      if (paymentMethod === 'cashsales') {
+        // Cash sales = all payments except account/credit
+        query.paymentMethod = { $in: ['cash', 'mpesa', 'card', 'mixed'] };
+      } else {
+        query.paymentMethod = paymentMethod;
+      }
+    } else if (!includeAccount) {
+      // By default, exclude account/credit payments unless explicitly included
+      query.paymentMethod = { $in: ['cash', 'mpesa', 'card', 'mixed'] };
     }
     
     if (user.role !== 'admin' && user.branch) {

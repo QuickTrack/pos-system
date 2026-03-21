@@ -1,8 +1,9 @@
 'use client';
 
-import { Menu, Bell, Search, Moon, Sun } from 'lucide-react';
+import { Menu, Bell, Search, Moon, Sun, Home } from 'lucide-react';
 import { useUIStore } from '@/lib/store';
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 
 interface HeaderProps {
   title: string;
@@ -29,6 +30,13 @@ export function Header({ title, subtitle }: HeaderProps) {
       <div className="flex items-center justify-between h-16 px-4 lg:px-6">
         {/* Left side */}
         <div className="flex items-center gap-4">
+          <Link 
+            href="/dashboard" 
+            className="p-2 rounded-lg hover:bg-gray-100 text-emerald-600"
+            title="Return to Dashboard"
+          >
+            <Home className="w-5 h-5" />
+          </Link>
           <button 
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="lg:hidden p-2 rounded-lg hover:bg-gray-100"

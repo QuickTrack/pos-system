@@ -49,16 +49,19 @@ export async function POST(request: NextRequest) {
       address: settings?.address || '',
       phone: settings?.phone || '',
       email: settings?.email || '',
-      website: '',
+      website: settings?.website || '',
       logo: settings?.logo || '',
-      kraPin: settings?.kraPin || '',
-      vatNumber: ''
+      kraPin: settings?.kraPin || 'N/A',
+      vatNumber: settings?.vatNumber || '',
+      bankName: settings?.bankName || 'N/A',
+      bankAccount: settings?.bankAccount || 'N/A',
+      bankBranch: settings?.bankBranch || 'N/A'
     };
 
     // Get template
     let template: PrintableTemplate | undefined;
     if (templateId) {
-      const templateDoc = await DocumentTemplate.findById(templateId);
+      const templateDoc = await DocumentTemplate.findById(templateId).lean();
       if (templateDoc) {
         template = templateDoc as unknown as PrintableTemplate;
       }
@@ -71,7 +74,7 @@ export async function POST(request: NextRequest) {
           { isBuiltIn: true }
         ],
         isDefault: true
-      });
+      }).lean();
       
       if (defaultTemplate) {
         template = defaultTemplate as unknown as PrintableTemplate;
@@ -84,11 +87,47 @@ export async function POST(request: NextRequest) {
       template = createDefaultTemplate(documentType, paperSize);
     }
 
-    // Prepare print data
-    const printData = document || { 
-      // If documentId provided, would fetch from database
-      // For now, use empty data
-    };
+    // Prepare print data - normalize document fields for DocumentHandler
+    const printData = { ...document };
+    
+
+    
+    // Ensure customer data is at the top level for DocumentHandler
+    if (printData.customer && typeof printData.customer === 'object') {
+      printData.customerName = printData.customer.name || printData.customerName || '';
+      printData.customerPhone = printData.customer.phone || printData.customerPhone || '';
+      printData.customerAddress = printData.customer.address || printData.customerAddress || '';
+    }
+    
+    // Ensure invoice number is available
+    if (!printData.invoiceNumber && !printData.number) {
+      printData.invoiceNumber = printData.number || '';
+    }
+    
+    // Ensure status is available (map from various sources)
+    if (!printData.status) {
+      printData.status = printData.status || 'Pending';
+    }
+    
+    // Ensure paymentTerms is available
+    if (!printData.paymentTerms && printData.paymentTerms !== 0) {
+      printData.paymentTerms = 30;
+    }
+    
+    // Ensure discount is available
+    if (!printData.discount) {
+      printData.discount = 0;
+    }
+    
+    // Ensure tax fields are available
+    if (!printData.tax) {
+      printData.tax = printData.taxRate ? printData.total * (printData.taxRate / 100) : 0;
+    }
+    
+    // Ensure subtotal is available
+    if (!printData.subtotal) {
+      printData.subtotal = printData.total - (printData.tax || 0) - (printData.discount || 0);
+    }
 
     // Get printer config if printerId provided
     let printerConfig = undefined;
@@ -126,12 +165,20 @@ export async function POST(request: NextRequest) {
         format: format as OutputFormat,
         encoding: encoding as CharacterEncoding
       });
+      
+      // Debug: Verify PDF header
+      const decodedSample = Buffer.from(previewResult.data.substring(0, 50), 'base64').toString('binary');
+      console.log('[PRINT] PDF generated:', {
+        dataLength: previewResult.data.length,
+        header: decodedSample.substring(0, 30)
+      });
 
       return NextResponse.json({
         success: true,
         preview: {
           data: previewResult.data,
-          mimeType: previewResult.mimeType
+          mimeType: previewResult.mimeType,
+          size: previewResult.data.length
         }
       });
     }

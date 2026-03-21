@@ -15,13 +15,14 @@ import {
   BarChart3,
   Store,
   Layout,
-  FileStack,
   X,
   LogOut,
   ShoppingBag,
   DollarSign,
   CreditCard,
-  Shield
+  Shield,
+  FilePlus,
+  Receipt
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/lib/store';
@@ -35,10 +36,16 @@ const menuItems = [
     icon: LayoutDashboard,
     permission: 'view_dashboard',
   },
-  { 
-    label: 'POS Sales', 
-    href: '/pos', 
+  {
+    label: 'POS Sales',
+    href: '/pos',
     icon: ShoppingCart,
+    permission: 'manage_sales',
+  },
+  {
+    label: 'Cash Sales',
+    href: '/cash-sales',
+    icon: Receipt,
     permission: 'manage_sales',
   },
   { 
@@ -78,16 +85,16 @@ const menuItems = [
     permission: 'manage_sales',
   },
   { 
-    label: 'Credit Invoices', 
-    href: '/backoffice-invoices', 
+    label: 'Sales Returns', 
+    href: '/sales-returns', 
     icon: FileText,
     permission: 'manage_sales',
   },
   { 
-    label: 'Templates', 
-    href: '/document-templates', 
-    icon: FileStack,
-    permission: 'manage_settings',
+    label: 'New Invoice', 
+    href: '/create-invoice', 
+    icon: FilePlus,
+    permission: 'manage_sales',
   },
   { 
     label: 'Reports', 

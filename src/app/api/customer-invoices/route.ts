@@ -6,12 +6,30 @@ import Product from '@/models/Product';
 import { getAuthUser } from '@/lib/auth-server';
 import { hasPermission } from '@/lib/auth';
 
-// Generate invoice number
-function generateInvoiceNumber(): string {
+// Generate invoice number - sequential format
+function generateInvoiceNumber(sequence: number): string {
   const prefix = 'INV';
-  const timestamp = Date.now().toString(36).toUpperCase();
-  const random = Math.random().toString(36).substring(2, 5).toUpperCase();
-  return `${prefix}-${timestamp}-${random}`;
+  return `${prefix}-${String(sequence).padStart(4, '0')}`;
+}
+
+// Get the next invoice number
+async function getNextInvoiceNumber(): Promise<string> {
+  const lastInvoice = await CustomerInvoice.findOne({
+    invoiceNumber: { $regex: /^INV-\d{4}$/ }
+  }).sort({ invoiceNumber: -1 });
+  
+  let sequence = 1;
+  if (lastInvoice?.invoiceNumber) {
+    const parts = lastInvoice.invoiceNumber.split('-');
+    if (parts.length === 2) {
+      const num = parseInt(parts[1], 10);
+      if (!isNaN(num)) {
+        sequence = num + 1;
+      }
+    }
+  }
+  
+  return generateInvoiceNumber(sequence);
 }
 
 export async function GET(request: NextRequest) {
@@ -29,6 +47,36 @@ export async function GET(request: NextRequest) {
     const overdue = searchParams.get('overdue');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
+    const next = searchParams.get('next');
+    const type = searchParams.get('type'); // 'sale' or 'credit'
+    
+    // If 'next' parameter is provided, return the next invoice number
+    if (next === 'true') {
+      let nextInvoiceNumber: string;
+      if (type === 'credit') {
+        // Get next credit invoice number - find the highest sequence
+        const lastInvoice = await CustomerInvoice.findOne({
+          invoiceNumber: { $regex: /^CINV-\\d{4}$/ }
+        }).sort({ invoiceNumber: -1 });
+        let sequence = 1;
+        if (lastInvoice?.invoiceNumber) {
+          const parts = lastInvoice.invoiceNumber.split('-');
+          if (parts.length === 2) {
+            const num = parseInt(parts[1], 10);
+            if (!isNaN(num)) {
+              sequence = num + 1;
+            }
+          }
+        }
+        nextInvoiceNumber = `CINV-${String(sequence).padStart(4, '0')}`;
+      } else {
+        nextInvoiceNumber = await getNextInvoiceNumber();
+      }
+      return NextResponse.json({
+        success: true,
+        nextInvoiceNumber
+      });
+    }
     
     const query: any = {};
     
@@ -54,7 +102,7 @@ export async function GET(request: NextRequest) {
     
     const [invoices, total] = await Promise.all([
       CustomerInvoice.find(query)
-        .populate('customer', 'name phone creditLimit')
+        .populate('customer', 'name phone creditLimit creditBalance')
         .sort({ invoiceDate: -1 })
         .skip(skip)
         .limit(limit),
@@ -176,8 +224,9 @@ export async function POST(request: NextRequest) {
     }
     
     // Create invoice
+    const invoiceNumber = data.invoiceNumber || await getNextInvoiceNumber();
     const invoice = await CustomerInvoice.create({
-      invoiceNumber: data.invoiceNumber || generateInvoiceNumber(),
+      invoiceNumber,
       customer: customer._id,
       customerName: customer.name,
       customerPhone: customer.phone,
@@ -205,7 +254,12 @@ export async function POST(request: NextRequest) {
       payments: [],
       terms: data.terms,
     });
-    
+
+    // Update customer's credit balance (debt) - invoices increase what customer owes
+    await Customer.findByIdAndUpdate(customer._id, {
+      $inc: { creditBalance: total },
+    });
+
     return NextResponse.json({
       success: true,
       invoice,

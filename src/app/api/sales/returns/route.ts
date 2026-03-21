@@ -1,0 +1,183 @@
+import { NextRequest, NextResponse } from 'next/server';
+import dbConnect from '@/lib/db/mongodb';
+import Sale from '@/models/Sale';
+import Product from '@/models/Product';
+import { getAuthUser } from '@/lib/auth-server';
+import { hasPermission } from '@/lib/auth';
+
+export async function POST(request: NextRequest) {
+  try {
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { saleId, items, reason, refundMethod, customerId } = body;
+
+    if (!saleId || !items || items.length === 0) {
+      return NextResponse.json(
+        { error: 'Sale ID and items are required' },
+        { status: 400 }
+      );
+    }
+
+    await dbConnect();
+
+    // Find the original sale
+    const originalSale = await Sale.findById(saleId);
+    if (!originalSale) {
+      return NextResponse.json({ error: 'Sale not found' }, { status: 404 });
+    }
+
+    // Process return items and restore inventory
+    const returnItems = [];
+    let totalReturnAmount = 0;
+
+    for (const item of items) {
+      const { productId, quantity, unitPrice } = item;
+      
+      // Find product and restore quantity
+      const product = await Product.findById(productId);
+      if (!product) {
+        return NextResponse.json(
+          { error: `Product not found: ${productId}` },
+          { status: 404 }
+        );
+      }
+
+      // Calculate return amount for this item
+      const itemTotal = quantity * unitPrice;
+      totalReturnAmount += itemTotal;
+
+      // Find the unit in the product to restore correct quantity
+      const saleItem = originalSale.items.find(
+        (si: any) => si.product?.toString() === productId
+      );
+
+      if (saleItem) {
+        // Restore inventory based on the unit used in original sale
+        const conversionToBase = saleItem.conversionToBase || 1;
+        const baseQuantityToRestore = quantity * conversionToBase;
+        
+        // Restore to main stock quantity
+        product.stockQuantity = (product.stockQuantity || 0) + baseQuantityToRestore;
+        await product.save();
+      }
+
+      returnItems.push({
+        productId,
+        productName: product.name,
+        sku: product.sku,
+        quantity,
+        unitPrice,
+        unitName: item.unitName || saleItem?.unitName || product.baseUnit,
+        total: itemTotal
+      });
+    }
+
+    // Create a refund sale record
+    const refundSale = new Sale({
+      invoiceNumber: `REF-${originalSale.invoiceNumber}`,
+      branch: (originalSale as any).branch,
+      cashier: user.userId,
+      cashierName: user.name || user.email || 'System',
+      items: returnItems.map((item: any) => ({
+        product: item.productId,
+        productName: item.productName,
+        sku: item.sku,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        discount: 0,
+        tax: 0,
+        total: item.total,
+        unitName: item.unitName,
+        conversionToBase: 1
+      })),
+      subtotal: -totalReturnAmount,
+      discount: 0,
+      discountAmount: 0,
+      tax: 0,
+      taxRate: 0,
+      total: -totalReturnAmount,
+      paymentMethod: refundMethod || 'cash',
+      amountPaid: 0,
+      change: 0,
+      status: 'refunded',
+      isRefund: true,
+      refundedSale: saleId,
+      refundReason: reason || '',
+      saleDate: new Date(),
+      customer: customerId || originalSale.customer,
+      customerName: originalSale.customerName,
+      customerPhone: originalSale.customerPhone
+    });
+
+    await refundSale.save();
+
+    return NextResponse.json({
+      success: true,
+      message: 'Return processed successfully',
+      returnDetails: {
+        saleId,
+        originalInvoiceNumber: originalSale.invoiceNumber,
+        refundInvoiceNumber: refundSale.invoiceNumber,
+        items: returnItems,
+        totalAmount: totalReturnAmount,
+        reason,
+        refundMethod,
+        processedAt: new Date(),
+        processedBy: user.name || user.email
+      }
+    });
+  } catch (error) {
+    console.error('Process return error:', error);
+    return NextResponse.json(
+      { error: 'Failed to process return' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const saleId = searchParams.get('saleId');
+
+    await dbConnect();
+
+    if (saleId) {
+      // Get refund sales for a specific original sale
+      const refunds = await Sale.find({ 
+        refundedSale: saleId,
+        isRefund: true 
+      });
+
+      return NextResponse.json({
+        success: true,
+        refunds
+      });
+    }
+
+    // Return all refund sales
+    const refunds = await Sale.find({ isRefund: true })
+      .sort({ saleDate: -1 })
+      .limit(100);
+
+    return NextResponse.json({
+      success: true,
+      refunds
+    });
+  } catch (error) {
+    console.error('Get returns error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch returns' },
+      { status: 500 }
+    );
+  }
+}

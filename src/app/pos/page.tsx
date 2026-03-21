@@ -8,6 +8,7 @@ import { Input, Select } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { useCartStore, useHeldSalesStore, CartItem, HeldSale } from '@/lib/store';
 import { formatCurrency, formatDateTime } from '@/lib/utils';
+import { generateThermalReceiptHTML, createReceiptData, ReceiptBusiness, printReceipt } from '@/lib/receipt-generator';
 import { 
   Search, 
   Plus, 
@@ -25,7 +26,9 @@ import {
   ScanBarcode,
   Clock,
   ClipboardList,
-  RotateCcw
+  RotateCcw,
+  FileText,
+  AlertTriangle
 } from 'lucide-react';
 
 interface Product {
@@ -73,6 +76,9 @@ export default function POSPage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showHeldSalesModal, setShowHeldSalesModal] = useState(false);
   const [showHoldModal, setShowHoldModal] = useState(false);
+  const [showCustomerDebtModal, setShowCustomerDebtModal] = useState(false);
+  const [customerDebtData, setCustomerDebtData] = useState<any>(null);
+  const [loadingDebt, setLoadingDebt] = useState(false);
   const [holdNote, setHoldNote] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -82,19 +88,20 @@ export default function POSPage() {
   const [processing, setProcessing] = useState(false);
   const [saleComplete, setSaleComplete] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
-  const [printMode, setPrintMode] = useState(false);
   const [openUnitSelector, setOpenUnitSelector] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState('POS');
-  const [cartHeight, setCartHeight] = useState(() => {
-    // Load saved cart height from localStorage
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('pos-cart-height');
-      return saved ? parseInt(saved, 10) : 250;
-    }
-    return 250;
+  const [businessSettings, setBusinessSettings] = useState<ReceiptBusiness>({
+    name: 'POS',
+    tagline: '',
+    address: '',
+    phone: '',
+    email: '',
+    vatNumber: '',
+    kraPin: ''
   });
+  const [cartHeight, setCartHeight] = useState(250);
   const [isDragging, setIsDragging] = useState(false);
-  const receiptRef = useRef<HTMLDivElement>(null);
+  const [selectedProductIndex, setSelectedProductIndex] = useState(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);
   
   const { 
@@ -150,9 +157,45 @@ export default function POSPage() {
       }
       setFilteredProducts(filtered.slice(0, 20));
     } else {
-      setFilteredProducts(products.slice(0, 20));
+      // Only show products when user searches - not by default
+      setFilteredProducts(searchQuery ? products.slice(0, 20) : []);
     }
   }, [searchQuery, products, selectedCategory]);
+
+  // Reset selected product index when filtered products change
+  useEffect(() => {
+    setSelectedProductIndex(-1);
+  }, [filteredProducts]);
+
+  // Keyboard navigation for product search
+  const handleProductKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      setSearchQuery('');
+      setFilteredProducts([]);
+      setSelectedProductIndex(-1);
+      return;
+    }
+
+    if (filteredProducts.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedProductIndex(prev => 
+        prev < filteredProducts.length - 1 ? prev + 1 : 0
+      );
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedProductIndex(prev => 
+        prev > 0 ? prev - 1 : filteredProducts.length - 1
+      );
+    } else if (e.key === 'Enter' && selectedProductIndex >= 0) {
+      e.preventDefault();
+      handleAddToCart(filteredProducts[selectedProductIndex]);
+      setSearchQuery('');
+      setFilteredProducts([]);
+      setSelectedProductIndex(-1);
+    }
+  };
 
   // Extract unique categories from products
   useEffect(() => {
@@ -181,10 +224,12 @@ export default function POSPage() {
       const data = await response.json();
       if (data.success && data.products?.length > 0) {
         setProducts(data.products);
-        setFilteredProducts(data.products.slice(0, 20));
+        // Only show products when user searches - not by default
+        setFilteredProducts(searchQuery ? data.products.slice(0, 20) : []);
       } else {
         setProducts(DEMO_PRODUCTS);
-        setFilteredProducts(DEMO_PRODUCTS.slice(0, 20));
+        // Only show products when user searches - not by default
+        setFilteredProducts(searchQuery ? DEMO_PRODUCTS.slice(0, 20) : []);
       }
     } catch (error) {
       console.error('Failed to fetch products:', error);
@@ -212,8 +257,18 @@ export default function POSPage() {
     try {
       const response = await fetch('/api/settings');
       const data = await response.json();
-      if (data.settings?.businessName) {
-        setBusinessName(data.settings.businessName);
+      const settings = data.settings;
+      if (settings?.businessName) {
+        setBusinessName(settings.businessName);
+        setBusinessSettings({
+          name: settings.businessName || 'POS',
+          tagline: settings.businessTagline || '',
+          address: settings.address || '',
+          phone: settings.phone || '',
+          email: settings.email || '',
+          vatNumber: settings.vatNumber || '',
+          kraPin: settings.kraPin || ''
+        });
       }
     } catch (error) {
       console.error('Failed to fetch settings:', error);
@@ -350,6 +405,7 @@ export default function POSPage() {
           customerName: customer?.name,
           customerPhone: customer?.phone,
           paymentMethod,
+          chargedToAccount: isAccountPayment,
           amountPaid: paidAmount,
           change: paidAmount - total,
           mpesaPhone: paymentMethod === 'mpesa' ? customer?.phone : undefined,
@@ -360,6 +416,29 @@ export default function POSPage() {
       const data = await response.json();
       
       if (data.success) {
+        // If account payment, create credit invoice
+        if (isAccountPayment && customer?.id) {
+          try {
+            const creditInvoiceResponse = await fetch('/api/customer-invoices/credit', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                customerId: customer.id,
+                amount: total,
+                referenceInvoiceId: data.sale?._id,
+                referenceInvoiceNumber: data.sale?.invoiceNumber,
+                description: `POS Sale - Invoice ${data.sale?.invoiceNumber}`,
+              }),
+            });
+            
+            if (!creditInvoiceResponse.ok) {
+              console.error('Failed to create credit invoice');
+            }
+          } catch (creditError) {
+            console.error('Credit invoice creation error:', creditError);
+          }
+        }
+        
         setLastSale(data.sale);
         setSaleComplete(true);
         clearCart();
@@ -496,6 +575,22 @@ export default function POSPage() {
     setCustomerSearch('');
   };
 
+  const fetchCustomerDebt = async (customerId: string) => {
+    setLoadingDebt(true);
+    try {
+      const response = await fetch(`/api/customers/${customerId}/debt`);
+      const data = await response.json();
+      if (data.success) {
+        setCustomerDebtData(data);
+        setShowCustomerDebtModal(true);
+      }
+    } catch (error) {
+      console.error('Failed to fetch customer debt:', error);
+    } finally {
+      setLoadingDebt(false);
+    }
+  };
+
   const handleHoldSale = () => {
     holdSale(items, customer, holdNote);
     clearCart();
@@ -514,13 +609,27 @@ export default function POSPage() {
     setShowHeldSalesModal(false);
   };
 
-  const handlePrintReceipt = () => {
-    setPrintMode(true);
+  const handlePrintReceipt = async () => {
+    if (!lastSale) return;
+    
+    // Create receipt data
+    const receiptData = createReceiptData(
+      lastSale,
+      businessSettings,
+      lastSale.cashierName || 'Cashier'
+    );
+    
+    // Generate thermal receipt HTML
+    const receiptHTML = await generateThermalReceiptHTML(receiptData);
+    
+    // Print using the receipt generator
+    printReceipt(receiptHTML);
+    
+    // Reset states after print
     setTimeout(() => {
-      window.print();
-      setPrintMode(false);
       setSaleComplete(false);
-    }, 100);
+      setLastSale(null);
+    }, 500);
   };
 
   const handleNewSale = () => {
@@ -561,6 +670,17 @@ export default function POSPage() {
       localStorage.setItem('pos-cart-height', cartHeight.toString());
     }
   }, [cartHeight]);
+
+  // Auto-print receipt after sale completion (works for all payment methods)
+  useEffect(() => {
+    if (saleComplete && lastSale) {
+      // Auto-print after a short delay to ensure the UI has rendered
+      const timer = setTimeout(() => {
+        handlePrintReceipt();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [saleComplete, lastSale]);
 
   const { subtotal, discount, tax, total } = calculateTotals();
 
@@ -605,27 +725,7 @@ export default function POSPage() {
               </Button>
             </div>
 
-            {printMode && (
-              <div ref={receiptRef} className="hidden print:block p-4 text-xs">
-                <div className="text-center border-b pb-2 mb-2">
-                  <h3 className="font-bold">NairobiPOS</h3>
-                  <p>Invoice #{lastSale.invoiceNumber}</p>
-                  <p>{formatDateTime(lastSale.saleDate)}</p>
-                </div>
-                <div className="border-b pb-2 mb-2">
-                  {lastSale.items?.map((item: any, idx: number) => (
-                    <div key={idx} className="flex justify-between">
-                      <span>{item.quantity}x {item.productName}</span>
-                      <span>{formatCurrency(item.total)}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex justify-between font-bold">
-                  <span>Total</span>
-                  <span>{formatCurrency(lastSale.total)}</span>
-                </div>
-              </div>
-            )}
+            {/* Receipt is now generated via receipt-generator - see handlePrintReceipt */}
           </Card>
         </div>
       </div>
@@ -650,7 +750,45 @@ export default function POSPage() {
                 className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={handleProductKeyDown}
               />
+              {/* Floating Product Dropdown */}
+              {searchQuery && filteredProducts.length > 0 && (
+                <div className="fixed z-[9999] w-[calc(100%-24px)] mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-80 overflow-auto" style={{ left: '12px' }}>
+                  {filteredProducts.map((product, index) => (
+                    <div
+                      key={product._id}
+                      onClick={() => {
+                        handleAddToCart(product);
+                        setSearchQuery('');
+                        setFilteredProducts([]);
+                        setSelectedProductIndex(-1);
+                      }}
+                      className={`flex items-center justify-between px-3 py-2 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors ${
+                        selectedProductIndex === index
+                          ? 'bg-emerald-50'
+                          : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-gray-900 text-sm truncate">{product.name}</div>
+                        <div className="text-xs text-gray-500">
+                          {product.sku} • {product.category?.name}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 ml-3">
+                        <span className="text-emerald-600 font-bold text-sm">{formatCurrency(product.retailPrice)}</span>
+                        <span className={`text-xs ${product.stockQuantity < 10 ? 'text-red-500' : 'text-gray-400'}`}>
+                          {product.stockQuantity}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="sticky bottom-0 bg-gray-100 px-3 py-1.5 text-xs text-gray-500 border-t border-gray-200">
+                    ↑↓ Navigate • Enter to select • Esc to close
+                  </div>
+                </div>
+              )}
             </div>
             <button 
               onClick={() => setShowCustomerModal(true)}
@@ -663,6 +801,16 @@ export default function POSPage() {
                 <span className="text-gray-400">Customer</span>
               )}
             </button>
+            {selectedCustomer && (
+              <button
+                onClick={() => fetchCustomerDebt(selectedCustomer._id)}
+                className="flex items-center gap-1 px-3 py-2 text-sm border border-amber-200 rounded-lg hover:border-amber-400 transition-colors bg-amber-50 text-amber-700"
+                title="View Outstanding Debt"
+              >
+                <FileText className="w-4 h-4" />
+                Debt
+              </button>
+            )}
             <Button variant="outline" className="gap-2">
               <ScanBarcode className="w-4 h-4" />
               Scan
@@ -706,48 +854,13 @@ export default function POSPage() {
             </div>
           )}
 
-          {/* Products Grid - Single Row */}
-          <div className="h-full overflow-x-auto overflow-y-hidden" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="spinner" />
-              </div>
-            ) : filteredProducts.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                <p>No products found</p>
-              </div>
-            ) : (
-              <div className="flex gap-2">
-                {filteredProducts.map((product) => (
-                  <button
-                    key={product._id}
-                    onClick={() => handleAddToCart(product)}
-                    className="flex-shrink-0 bg-white p-2 rounded border border-gray-200 hover:border-emerald-500 hover:shadow-sm transition-all text-left" style={{ width: '140px' }}
-                  >
-                    <div className="font-medium text-gray-900 text-xs truncate">
-                      {product.name}
-                    </div>
-                    <div className="text-xs text-gray-500 mb-1 truncate">
-                      {product.category?.name}
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-emerald-600 font-bold text-xs">
-                        {formatCurrency(product.retailPrice)}
-                      </span>
-                      <span className={`text-xs ${product.stockQuantity < 10 ? 'text-red-500' : 'text-gray-400'}`}>
-                        {product.stockQuantity}
-                      </span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* Products Section - Empty */}
+          <div className="flex-1"></div>
         </div>
 
         {/* Cart Section - Resizable */}
         <div 
-          className="bg-white border-t border-gray-200 flex flex-col overflow-auto"
+          className="bg-white border-t border-gray-200 flex flex-col overflow-auto relative z-0"
           style={{ height: cartHeight }}
         >
           {/* Resize Handle */}
@@ -1211,6 +1324,117 @@ export default function POSPage() {
             ))
           )}
         </div>
+      </Modal>
+
+      {/* Customer Debt Modal */}
+      <Modal
+        isOpen={showCustomerDebtModal}
+        onClose={() => setShowCustomerDebtModal(false)}
+        title="Customer Account Summary"
+        size="lg"
+      >
+        {loadingDebt ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
+          </div>
+        ) : customerDebtData ? (
+          <div className="space-y-4">
+            {/* Customer Info */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-lg">{customerDebtData.customer.name}</h3>
+                  <p className="text-sm text-gray-500">{customerDebtData.customer.phone}</p>
+                  {customerDebtData.customer.email && (
+                    <p className="text-sm text-gray-500">{customerDebtData.customer.email}</p>
+                  )}
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-gray-500">Type</p>
+                  <p className="font-medium capitalize">{customerDebtData.customer.customerType}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Debt Summary */}
+            <div className={`rounded-lg p-4 ${customerDebtData.debtSummary.isOverdue ? 'bg-red-50 border border-red-200' : 'bg-emerald-50 border border-emerald-200'}`}>
+              <div className="flex items-center gap-2 mb-3">
+                {customerDebtData.debtSummary.isOverdue ? (
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                ) : (
+                  <FileText className="w-5 h-5 text-emerald-600" />
+                )}
+                <h4 className={`font-semibold ${customerDebtData.debtSummary.isOverdue ? 'text-red-700' : 'text-emerald-700'}`}>
+                  Outstanding Balance
+                </h4>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600">Total Outstanding</p>
+                  <p className="text-2xl font-bold text-gray-900">{formatCurrency(customerDebtData.debtSummary.totalOutstanding)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Overdue Amount</p>
+                  <p className="text-2xl font-bold text-red-600">{formatCurrency(customerDebtData.debtSummary.totalOverdue)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Credit Limit</p>
+                  <p className="text-xl font-semibold text-gray-900">{formatCurrency(customerDebtData.customer.creditLimit)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Available Credit</p>
+                  <p className="text-xl font-semibold text-emerald-600">{formatCurrency(customerDebtData.debtSummary.availableCredit)}</p>
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-gray-200 flex justify-between text-sm">
+                <span className="text-gray-600">{customerDebtData.debtSummary.invoiceCount} outstanding invoice(s)</span>
+                <span className="text-red-600">{customerDebtData.debtSummary.overdueCount} overdue</span>
+              </div>
+            </div>
+
+            {/* Outstanding Invoices */}
+            {customerDebtData.invoices.length > 0 && (
+              <div>
+                <h4 className="font-medium text-gray-900 mb-2">Outstanding Invoices</h4>
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {customerDebtData.invoices.map((invoice: any) => (
+                    <div 
+                      key={invoice._id}
+                      className={`p-3 rounded-lg border ${invoice.isOverdue ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-medium">{invoice.invoiceNumber}</p>
+                          <p className="text-xs text-gray-500">
+                            Due: {new Date(invoice.dueDate).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold">{formatCurrency(invoice.balanceDue)}</p>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${invoice.isOverdue ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                            {invoice.isOverdue ? 'Overdue' : invoice.status}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {customerDebtData.invoices.length === 0 && (
+              <div className="text-center py-6 text-gray-500">
+                <FileText className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                <p>No outstanding invoices</p>
+                <p className="text-sm">This customer has no pending payments</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            <p>Unable to load customer debt information</p>
+          </div>
+        )}
       </Modal>
     </div>
   );

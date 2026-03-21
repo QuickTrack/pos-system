@@ -1,0 +1,507 @@
+/**
+ * ESC/POS Receipt Generator for 80mm Thermal Printers
+ * 
+ * Generates formatted receipt HTML optimized for 80mm thermal printers
+ * with proper tax calculations for Kenyan VAT requirements.
+ */
+
+import QRCode from 'qrcode';
+import { generateKRAQRData, calculateTaxableAmount, calculateVAT } from './kra-qr-generator';
+
+export interface ReceiptBusiness {
+  name: string;
+  tagline?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  vatNumber?: string;
+  kraPin?: string;
+}
+
+export interface ReceiptItem {
+  name: string;
+  unit: string;
+  quantity: number;
+  rate: number;
+  amount: number;
+}
+
+export interface ReceiptData {
+  invoiceNumber: string;
+  date: string;
+  business: ReceiptBusiness;
+  customer?: {
+    name: string;
+    phone?: string;
+  };
+  items: ReceiptItem[];
+  subtotal: number;
+  taxRate: number;
+  taxAmount: number;
+  taxableAmount: number;
+  discount: number;
+  total: number;
+  paymentMethod: string;
+  amountPaid: number;
+  change: number;
+  cashierName: string;
+}
+
+/**
+ * Format currency for Kenyan Shillings
+ */
+export function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('en-KE', {
+    style: 'currency',
+    currency: 'KES',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  }).format(amount);
+}
+
+/**
+ * Format date for receipt
+ */
+export function formatDate(date: Date | string): string {
+  const d = new Date(date);
+  return d.toLocaleDateString('en-KE', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+}
+
+/**
+ * Format time for receipt
+ */
+export function formatTime(date: Date | string): string {
+  const d = new Date(date);
+  return d.toLocaleTimeString('en-KE', {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+/**
+ * Pad text to fit 80mm column width (approximately 48 characters)
+ */
+function padText(text: string, length: number, align: 'left' | 'right' | 'center' = 'left'): string {
+  const textStr = String(text);
+  if (textStr.length >= length) {
+    return textStr.substring(0, length);
+  }
+  const padding = ' '.repeat(length - textStr.length);
+  switch (align) {
+    case 'right':
+      return padding + textStr;
+    case 'center':
+      const leftPad = Math.floor(padding.length / 2);
+      return ' '.repeat(leftPad) + textStr + ' '.repeat(padding.length - leftPad);
+    default:
+      return textStr + padding;
+  }
+}
+
+/**
+ * Truncate text with ellipsis if too long
+ */
+function truncateText(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength - 3) + '...';
+}
+
+/**
+ * Generate formatted item line for receipt
+ * Format: Item Name | Unit | Qty | Rate | Total
+ */
+function formatItemLine(item: ReceiptItem, maxNameLength: number = 22): string {
+  const name = truncateText(item.name, maxNameLength);
+  const unit = item.unit || 'pcs';
+  const qty = item.quantity.toString();
+  const rate = formatCurrency(item.rate);
+  const amount = formatCurrency(item.amount);
+  
+  // Format: name | unit | qty | rate | amount
+  // Using space-padded columns
+  const namePad = maxNameLength - name.length;
+  const unitPad = 6 - unit.length;
+  const qtyPad = 4 - qty.length;
+  const ratePad = 10 - rate.length;
+  
+  return (
+    name + ' '.repeat(namePad) +
+    ' ' + unit + ' '.repeat(unitPad) +
+    ' ' + qty + ' '.repeat(qtyPad) +
+    ' ' + rate + ' '.repeat(ratePad) +
+    amount
+  );
+}
+
+/**
+ * Generate receipt HTML styled for 80mm thermal printer
+ */
+export async function generateThermalReceiptHTML(data: ReceiptData): Promise<string> {
+  const year = new Date().getFullYear();
+  
+  // Calculate tax amounts
+  const total = data.total;
+  const taxRate = data.taxRate || 16;
+  const taxAmount = data.taxAmount || calculateVAT(total, taxRate);
+  const taxableAmount = data.taxableAmount || calculateTaxableAmount(total, taxRate);
+  
+  // Generate KRA QR Code
+  let qrCodeDataUrl = '';
+  if (data.business.kraPin && data.invoiceNumber) {
+    try {
+      const kraData = {
+        sellerPin: data.business.kraPin,
+        invoiceNumber: data.invoiceNumber,
+        dateOfIssue: data.date,
+        taxableAmount: Math.round(taxableAmount * 100) / 100,
+        vatAmount: Math.round(taxAmount * 100) / 100,
+        totalAmount: Math.round(total * 100) / 100,
+        invoiceType: 'RECEIPT'
+      };
+      
+      const qrData = generateKRAQRData(kraData);
+      qrCodeDataUrl = await QRCode.toDataURL(qrData, {
+        width: 120,
+        margin: 1,
+        color: {
+          dark: '#000000',
+          light: '#ffffff'
+        },
+        errorCorrectionLevel: 'M'
+      });
+    } catch (error) {
+      console.error('Failed to generate KRA QR code:', error);
+    }
+  }
+  
+  // Generate HTML receipt
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Receipt - ${data.invoiceNumber}</title>
+  <style>
+    @page {
+      size: 80mm auto;
+      margin: 0;
+    }
+    
+    @media print {
+      body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 11px;
+      line-height: 1.2;
+      width: 76mm;
+      margin: 0 auto;
+      padding: 2mm;
+    }
+    
+    .receipt {
+      width: 100%;
+    }
+    
+    .text-center { text-align: center; }
+    .text-left { text-align: left; }
+    .text-right { text-align: right; }
+    
+    .font-bold { font-weight: bold; }
+    .uppercase { text-transform: uppercase; }
+    
+    .business-name {
+      font-size: 14px;
+      font-weight: bold;
+      margin-bottom: 2px;
+    }
+    
+    .business-tagline {
+      font-size: 9px;
+      margin-bottom: 4px;
+    }
+    
+    .divider {
+      border-top: 1px dashed #333;
+      margin: 4px 0;
+    }
+    
+    .divider-double {
+      border-top: 1px dashed #333;
+      border-bottom: 1px dashed #333;
+      margin: 4px 0;
+      padding: 2px 0;
+    }
+    
+    .item-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 2px;
+    }
+    
+    .item-name {
+      flex: 0 0 45%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    
+    .item-details {
+      flex: 0 0 50%;
+      text-align: right;
+    }
+    
+    .totals-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 2px;
+    }
+    
+    .totals-row.grand-total {
+      font-size: 13px;
+      font-weight: bold;
+      border-top: 1px solid #333;
+      padding-top: 4px;
+      margin-top: 4px;
+    }
+    
+    .footer-text {
+      font-size: 9px;
+      margin-bottom: 2px;
+    }
+    
+    .qr-section {
+      text-align: center;
+      margin-top: 6px;
+    }
+    
+    .qr-section img {
+      width: 50mm;
+      height: auto;
+    }
+    
+    .item-main {
+      margin-bottom: 1px;
+    }
+    
+    .item-name-full {
+      font-weight: bold;
+      font-size: 10px;
+    }
+    
+    .item-details-row {
+      display: flex;
+      font-size: 9px;
+      margin-bottom: 3px;
+    }
+    
+    .item-qty {
+      flex: 0 0 20%;
+    }
+    
+    .item-unit {
+      flex: 0 0 25%;
+    }
+    
+    .item-rate {
+      flex: 0 0 25%;
+      text-align: right;
+    }
+    
+    .item-amount {
+      flex: 0 0 30%;
+      text-align: right;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="receipt">
+    <!-- Business Header -->
+    <div class="text-center">
+      ${data.business.name ? `<div class="business-name">${data.business.name.toUpperCase()}</div>` : ''}
+      ${data.business.tagline ? `<div class="business-tagline">${data.business.tagline}</div>` : ''}
+      ${data.business.address ? `<div>${data.business.address}</div>` : ''}
+      ${data.business.phone ? `<div>Tel: ${data.business.phone}</div>` : ''}
+      ${data.business.email ? `<div>${data.business.email}</div>` : ''}
+      ${data.business.vatNumber ? `<div>VAT No: ${data.business.vatNumber}</div>` : ''}
+      ${data.business.kraPin ? `<div>PIN: ${data.business.kraPin}</div>` : ''}
+    </div>
+    
+    <div class="divider"></div>
+    
+    <!-- Receipt Info -->
+    <div class="text-center">
+      <div class="font-bold">RECEIPT</div>
+      <div>No: ${data.invoiceNumber}</div>
+      <div>${formatDate(data.date)} ${formatTime(data.date)}</div>
+    </div>
+    
+    <div class="divider"></div>
+    
+    <!-- Customer Info -->
+    ${data.customer ? `
+    <div>
+      <div><strong>Customer:</strong> ${data.customer.name}</div>
+      ${data.customer.phone ? `<div>Tel: ${data.customer.phone}</div>` : ''}
+    </div>
+    <div class="divider"></div>
+    ` : ''}
+    
+    <!-- Items with nested layout -->
+    <div class="divider-double">
+      ${data.items.map(item => `
+        <div class="item-main">
+          <div class="item-name-full">${truncateText(item.name, 35)}</div>
+        </div>
+        <div class="item-details-row">
+          <span class="item-qty">${item.quantity}</span>
+          <span class="item-unit">${item.unit || 'pcs'}</span>
+          <span class="item-rate">@${formatCurrency(item.rate)}</span>
+          <span class="item-amount">${formatCurrency(item.amount)}</span>
+        </div>
+      `).join('')}
+    </div>
+    
+    <!-- Totals -->
+    <div class="divider"></div>
+    
+    <div class="totals-row">
+      <span>Subtotal:</span>
+      <span>${formatCurrency(data.subtotal)}</span>
+    </div>
+    
+    ${data.discount > 0 ? `
+    <div class="totals-row">
+      <span>Discount:</span>
+      <span>-${formatCurrency(data.discount)}</span>
+    </div>
+    ` : ''}
+    
+    <div class="totals-row">
+      <span>Taxable Amount:</span>
+      <span>${formatCurrency(taxableAmount)}</span>
+    </div>
+    
+    <div class="totals-row">
+      <span>VAT (${taxRate}%):</span>
+      <span>${formatCurrency(taxAmount)}</span>
+    </div>
+    
+    <div class="totals-row grand-total">
+      <span>TOTAL:</span>
+      <span>${formatCurrency(total)}</span>
+    </div>
+    
+    <div class="divider"></div>
+    
+    <!-- Payment Details -->
+    <div class="totals-row">
+      <span>Paid (${data.paymentMethod}):</span>
+      <span>${formatCurrency(data.amountPaid)}</span>
+    </div>
+    
+    ${data.change > 0 ? `
+    <div class="totals-row">
+      <span>Change:</span>
+      <span>${formatCurrency(data.change)}</span>
+    </div>
+    ` : ''}
+    
+    <div class="divider"></div>
+    
+    <!-- Footer -->
+    <div class="text-center">
+      <div class="footer-text">Prices inclusive of VAT where applicable</div>
+      <div class="footer-text">Served by: ${data.cashierName}</div>
+      <div class="footer-text">Goods once sold cannot be returned</div>
+      <div class="footer-text">Powered by Quicktrack ERP ${year}</div>
+    </div>
+    
+    <!-- QR Code -->
+    ${qrCodeDataUrl ? `
+    <div class="qr-section">
+      <div class="footer-text">KRA Tax Compliance</div>
+      <img src="${qrCodeDataUrl}" alt="KRA QR Code" />
+      <div class="footer-text">Scan to verify</div>
+    </div>
+    ` : ''}
+    
+    <div class="text-center" style="margin-top: 8px;">
+      *** THANK YOU FOR YOUR BUSINESS ***
+    </div>
+  </div>
+</body>
+</html>
+  `.trim();
+  
+  return html;
+}
+
+/**
+ * Create receipt data from sale object and business settings
+ */
+export function createReceiptData(
+  sale: any,
+  business: ReceiptBusiness,
+  cashierName: string
+): ReceiptData {
+  const items: ReceiptItem[] = (sale.items || []).map((item: any) => ({
+    name: item.productName || 'Item',
+    unit: item.unitAbbreviation || item.unitName || 'pcs',
+    quantity: item.quantity,
+    rate: item.unitPrice,
+    amount: item.total
+  }));
+  
+  return {
+    invoiceNumber: sale.invoiceNumber || '',
+    date: sale.saleDate || new Date().toISOString(),
+    business,
+    customer: sale.customerName ? {
+      name: sale.customerName,
+      phone: sale.customerPhone
+    } : undefined,
+    items,
+    subtotal: sale.subtotal || 0,
+    taxRate: sale.taxRate || 16,
+    taxAmount: sale.tax || 0,
+    taxableAmount: sale.subtotal ? calculateTaxableAmount(sale.subtotal, sale.taxRate || 16) : 0,
+    discount: sale.discountAmount || 0,
+    total: sale.total || 0,
+    paymentMethod: sale.paymentMethod || 'cash',
+    amountPaid: sale.amountPaid || 0,
+    change: sale.change || 0,
+    cashierName
+  };
+}
+
+/**
+ * Open print dialog for receipt
+ */
+export function printReceipt(html: string): void {
+  const printWindow = window.open('', '_blank', 'width=400,height=600');
+  if (printWindow) {
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 300);
+  }
+}

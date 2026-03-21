@@ -80,8 +80,12 @@ export async function POST(request: Request) {
     }
 
     // Create payment record
+    // Generate payment ID
+    const count = await CustomerPayment.countDocuments();
+    const paymentId = `CPAY-${String(count + 1).padStart(6, '0')}`;
+    
     const payment = new CustomerPayment({
-      paymentId: '',
+      paymentId,
       customer: customerId,
       customerName: customer.name,
       amount,
@@ -94,6 +98,11 @@ export async function POST(request: Request) {
     });
 
     await payment.save();
+
+    // Update customer creditBalance (decrease by payment amount)
+    await Customer.findByIdAndUpdate(customerId, {
+      $inc: { creditBalance: -amount }
+    });
 
     // If invoices are specified, update their payment status
     if (invoiceNumbers && invoiceNumbers.length > 0) {

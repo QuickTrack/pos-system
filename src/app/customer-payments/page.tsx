@@ -1,20 +1,23 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { CustomerStatementModal } from '@/components/customer-statement/CustomerStatementModal';
 import { DataTable } from '@/components/ui/DataTable';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { Plus, Search, RefreshCw, Eye, DollarSign, FileText, CheckCircle } from 'lucide-react';
+import { Plus, Search, RefreshCw, Eye, DollarSign, FileText, CheckCircle, FileBarChart } from 'lucide-react';
 
 interface Customer {
   _id: string;
   name: string;
   phone?: string;
   email?: string;
+  creditBalance?: number;
 }
 
 interface CustomerPayment {
@@ -39,7 +42,8 @@ interface CustomerInvoice {
   balance: number;
   status: string;
   paymentStatus: string;
-  saleDate: string;
+  saleDate: string | Date;
+  source?: 'pos' | 'backoffice';
 }
 
 interface CustomerInvoices {
@@ -51,6 +55,7 @@ interface CustomerInvoices {
 }
 
 export default function CustomerPaymentsPage() {
+  const searchParams = useSearchParams();
   const [payments, setPayments] = useState<CustomerPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -60,6 +65,7 @@ export default function CustomerPaymentsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showCustomerSelectModal, setShowCustomerSelectModal] = useState(false);
+  const [showStatementModal, setShowStatementModal] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<CustomerPayment | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerInvoices, setCustomerInvoices] = useState<CustomerInvoices[]>([]);
@@ -68,6 +74,8 @@ export default function CustomerPaymentsPage() {
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [searchedCustomers, setSearchedCustomers] = useState<Customer[]>([]);
   const [searchingCustomers, setSearchingCustomers] = useState(false);
+  const [loadingCustomers, setLoadingCustomers] = useState(false);
+  const [preloadedInvoice, setPreloadedInvoice] = useState<string | null>(null);
   const customerSearchTimeout = useRef<NodeJS.Timeout | null>(null);
   
   const [formData, setFormData] = useState({
@@ -84,6 +92,45 @@ export default function CustomerPaymentsPage() {
     fetchCustomers();
     fetchCustomerInvoices();
   }, [status, startDate, endDate]);
+
+  // Handle URL query parameters for pre-loading customer and invoice
+  useEffect(() => {
+    const customerId = searchParams.get('customerId');
+    const invoiceNumber = searchParams.get('invoiceNumber');
+    const amount = searchParams.get('amount');
+
+    if (customerId && customerInvoices.length > 0) {
+      // Find the customer in customerInvoices
+      const customerData = customerInvoices.find(c => c.customerId === customerId);
+      
+      if (customerData) {
+        // Set the customer
+        setFormData(prev => ({
+          ...prev,
+          customerId,
+          amount: amount ? parseFloat(amount) : 0,
+        }));
+        
+        // Find customer name from customers array
+        const customer = customers.find(c => c._id === customerId);
+        if (customer) {
+          setCustomerSearchQuery(customer.name);
+        }
+        
+        // Pre-select the invoice if provided
+        if (invoiceNumber) {
+          setSelectedInvoices([invoiceNumber]);
+          setPreloadedInvoice(invoiceNumber);
+        } else if (customerData.invoices.length > 0) {
+          // Select all invoices for the customer
+          setSelectedInvoices(customerData.invoices.map(i => i.invoiceNumber));
+        }
+        
+        // Open the create modal
+        setShowCreateModal(true);
+      }
+    }
+  }, [searchParams, customerInvoices, customers]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -162,7 +209,8 @@ export default function CustomerPaymentsPage() {
 
   const searchCustomers = async (query: string) => {
     if (!query.trim()) {
-      setSearchedCustomers([]);
+      // When search is empty, show all customers from the cached list
+      setSearchedCustomers(customers.length > 0 ? customers : []);
       return;
     }
     setSearchingCustomers(true);
@@ -170,7 +218,7 @@ export default function CustomerPaymentsPage() {
       const response = await fetch(`/api/customers?search=${encodeURIComponent(query)}`);
       const data = await response.json();
       if (data.success) {
-        setSearchedCustomers(data.customers);
+        setSearchedCustomers(data.customers || []);
       }
     } catch (error) {
       console.error('Failed to search customers:', error);
@@ -203,10 +251,34 @@ export default function CustomerPaymentsPage() {
     setSelectedInvoices(customerData?.invoices.map(i => i.invoiceNumber) || []);
   };
 
-  const openCustomerSelect = () => {
+  const openCustomerSelect = async () => {
     setCustomerSearchQuery('');
-    setSearchedCustomers(customers);
     setShowCustomerSelectModal(true);
+    setLoadingCustomers(true);
+    
+    // Always fetch customers and customer invoices fresh to ensure we have the latest data
+    try {
+      // Fetch customers
+      const customersResponse = await fetch('/api/customers');
+      const customersData = await customersResponse.json();
+      if (customersData.success && customersData.customers) {
+        setCustomers(customersData.customers);
+        setSearchedCustomers(customersData.customers);
+      }
+      
+      // Fetch customer invoices for outstanding balances
+      const invoicesResponse = await fetch('/api/sales/customer-invoices');
+      const invoicesData = await invoicesResponse.json();
+      if (invoicesData.success && invoicesData.customerInvoices) {
+        setCustomerInvoices(invoicesData.customerInvoices);
+      }
+    } catch (error) {
+      console.error('Failed to fetch data:', error);
+      // Fallback to cached customers if fetch fails
+      setSearchedCustomers(customers.length > 0 ? customers : []);
+    } finally {
+      setLoadingCustomers(false);
+    }
   };
 
   const toggleInvoice = (invoiceNumber: string) => {
@@ -233,6 +305,7 @@ export default function CustomerPaymentsPage() {
         setShowCreateModal(false);
         fetchPayments();
         fetchCustomerInvoices();
+        fetchCustomers();
         setFormData({
           customerId: '',
           amount: 0,
@@ -241,6 +314,15 @@ export default function CustomerPaymentsPage() {
           referenceNumber: '',
           notes: '',
         });
+        
+        // If opened from URL params (backoffice-invoices), close the window
+        const customerId = searchParams.get('customerId');
+        if (customerId) {
+          // Close the window after a short delay to ensure payment is processed
+          setTimeout(() => {
+            window.close();
+          }, 500);
+        }
       }
     } catch (error) {
       console.error('Failed to create payment:', error);
@@ -256,6 +338,7 @@ export default function CustomerPaymentsPage() {
       if (response.ok) {
         fetchPayments();
         fetchCustomerInvoices();
+        fetchCustomers();
       }
     } catch (error) {
       console.error('Failed to record payment:', error);
@@ -442,6 +525,10 @@ export default function CustomerPaymentsPage() {
             <Plus className="w-4 h-4" />
             New Payment
           </Button>
+          <Button variant="outline" onClick={() => setShowStatementModal(true)} className="gap-2">
+            <FileBarChart className="w-4 h-4" />
+            Statements
+          </Button>
         </div>
 
         {/* Stats */}
@@ -491,10 +578,18 @@ export default function CustomerPaymentsPage() {
                 <div className="flex items-center gap-2">
                   <div className="flex-1 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
                     <div className="font-medium text-gray-900">
-                      {customerInvoices.find(c => c.customerId === formData.customerId)?.customerName || 'Selected Customer'}
+                      {/* Try to get customer name from customerInvoices first, then from customers array */}
+                      {customerInvoices.find(c => String(c.customerId) === String(formData.customerId))?.customerName || 
+                       customers.find(c => String(c._id) === String(formData.customerId))?.name || 
+                       'Selected Customer'}
                     </div>
                     <div className="text-sm text-gray-500">
-                      Outstanding: {formatCurrency(customerInvoices.find(c => c.customerId === formData.customerId)?.totalOutstanding || 0)}
+                      {/* Show credit balance from customer model */}
+                      Outstanding: {formatCurrency(
+                        customerInvoices.find(c => String(c.customerId) === String(formData.customerId))?.totalOutstanding || 
+                        customers.find(c => String(c._id) === String(formData.customerId))?.creditBalance || 
+                        0
+                      )}
                     </div>
                   </div>
                   <button
@@ -565,29 +660,52 @@ export default function CustomerPaymentsPage() {
               <p className="text-sm text-gray-500 mb-3">
                 Outstanding: {formatCurrency(selectedCustomerData.totalOutstanding)}
               </p>
-              <div className="space-y-2 max-h-48 overflow-auto">
+              <div className="space-y-2 max-h-64 overflow-auto">
                 {selectedCustomerData.invoices.map((invoice) => (
                   <label
                     key={invoice.invoiceNumber}
-                    className="flex items-center justify-between p-2 bg-white rounded border border-gray-200 cursor-pointer hover:border-blue-500"
+                    className="flex items-center justify-between p-3 bg-white rounded border border-gray-200 cursor-pointer hover:border-blue-500"
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                       <input
                         type="checkbox"
                         checked={selectedInvoices.includes(invoice.invoiceNumber)}
                         onChange={() => toggleInvoice(invoice.invoiceNumber)}
                         className="rounded text-blue-600"
                       />
-                      <span className="text-sm font-medium">{invoice.invoiceNumber}</span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">{invoice.invoiceNumber}</span>
+                          {invoice.source && (
+                            <span className={`text-xs px-1.5 py-0.5 rounded ${
+                              invoice.source === 'pos' 
+                                ? 'bg-purple-100 text-purple-700' 
+                                : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {invoice.source === 'pos' ? 'POS' : 'Invoice'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {invoice.saleDate ? formatDate(invoice.saleDate) : 'N/A'}
+                        </div>
+                      </div>
                     </div>
                     <div className="text-right">
-                      <span className="text-sm font-medium">{formatCurrency(invoice.balance)}</span>
-                      <span className={`text-xs ml-2 capitalize ${invoice.paymentStatus === 'unpaid' ? 'text-red-500' : 'text-amber-500'}`}>
+                      <div className="text-sm font-medium">{formatCurrency(invoice.balance)}</div>
+                      <div className="text-xs text-gray-500">
+                        of {formatCurrency(invoice.total)}
+                      </div>
+                      <span className={`text-xs capitalize ${invoice.paymentStatus === 'unpaid' ? 'text-red-500' : invoice.paymentStatus === 'partial' ? 'text-amber-500' : 'text-green-500'}`}>
                         {invoice.paymentStatus}
                       </span>
                     </div>
                   </label>
                 ))}
+              </div>
+              <div className="mt-3 pt-3 border-t border-gray-200 flex justify-between text-sm">
+                <span className="text-gray-600">{selectedCustomerData.invoices.length} invoice(s)</span>
+                <span className="font-medium">Total: {formatCurrency(selectedCustomerData.totalOutstanding)}</span>
               </div>
             </div>
           )}
@@ -719,7 +837,12 @@ export default function CustomerPaymentsPage() {
           </div>
           
           <div className="max-h-96 overflow-auto border border-gray-200 rounded-lg">
-            {searchedCustomers.length > 0 ? (
+            {loadingCustomers ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <span className="ml-3 text-gray-500">Loading customers...</span>
+              </div>
+            ) : searchedCustomers.length > 0 ? (
               <table className="w-full">
                 <thead className="bg-gray-50 sticky top-0">
                   <tr>
@@ -732,10 +855,22 @@ export default function CustomerPaymentsPage() {
                 </thead>
                 <tbody>
                   {searchedCustomers.map(customer => {
-                    const customerData = customerInvoices.find(c => c.customerId === customer._id);
+                    // Ensure we compare as strings to handle ObjectId properly
+                    const customerIdStr = String(customer._id);
+                    const customerData = customerInvoices.find(c => String(c.customerId) === customerIdStr);
                     const outstanding = customerData?.totalOutstanding || 0;
                     return (
-                      <tr key={customer._id} className="border-t border-gray-100 hover:bg-gray-50">
+                      <tr 
+                        key={customer._id} 
+                        className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer"
+                        onClick={() => {
+                          setFormData({ ...formData, customerId: customer._id });
+                          setCustomerSearchQuery(customer.name);
+                          const custData = customerInvoices.find(c => String(c.customerId) === customerIdStr);
+                          setSelectedInvoices(custData?.invoices.map(i => i.invoiceNumber) || []);
+                          setShowCustomerSelectModal(false);
+                        }}
+                      >
                         <td className="px-4 py-3">
                           <div className="font-medium text-gray-900">{customer.name}</div>
                         </td>
@@ -749,10 +884,12 @@ export default function CustomerPaymentsPage() {
                         <td className="px-4 py-3 text-right">
                           <Button
                             size="sm"
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const custIdStr = String(customer._id);
                               setFormData({ ...formData, customerId: customer._id });
                               setCustomerSearchQuery(customer.name);
-                              const custData = customerInvoices.find(c => c.customerId === customer._id);
+                              const custData = customerInvoices.find(c => String(c.customerId) === custIdStr);
                               setSelectedInvoices(custData?.invoices.map(i => i.invoiceNumber) || []);
                               setShowCustomerSelectModal(false);
                             }}
@@ -773,6 +910,13 @@ export default function CustomerPaymentsPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Customer Statement Modal */}
+      <CustomerStatementModal
+        isOpen={showStatementModal}
+        onClose={() => setShowStatementModal(false)}
+        customers={customers}
+      />
     </div>
   );
 }

@@ -6,6 +6,7 @@
 export type DocumentType = 
   | 'receipt' 
   | 'invoice' 
+  | 'creditInvoice'
   | 'order' 
   | 'quotation' 
   | 'delivery' 
@@ -178,6 +179,9 @@ export interface PrintDataContext {
     logo?: string;
     kraPin?: string;
     vatNumber?: string;
+    bankName?: string;
+    bankAccount?: string;
+    bankBranch?: string;
   };
   invoice?: {
     number: string;
@@ -188,6 +192,21 @@ export interface PrintDataContext {
     taxRate: string;
     total: string;
     paymentTerms?: string;
+    discount?: string;
+    status?: string;
+  };
+  creditInvoice?: {
+    number: string;
+    date: string;
+    dueDate?: string;
+    referenceNumber?: string;
+    reason?: string;
+    subtotal: string;
+    tax: string;
+    taxRate: string;
+    total: string;
+    paymentTerms?: string;
+    notes?: string;
   };
   customer?: {
     name: string;

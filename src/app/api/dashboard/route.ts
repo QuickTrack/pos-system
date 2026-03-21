@@ -144,9 +144,10 @@ export async function GET(request: NextRequest) {
       .select('name sku stockQuantity lowStockThreshold')
       .limit(10);
     
-    // Recent sales
+    // Recent sales - filtered by period
     const recentSales = await Sale.find({
       ...branchQuery,
+      saleDate: { $gte: startDate },
       status: 'completed',
     })
       .populate('customer', 'name')
