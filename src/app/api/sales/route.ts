@@ -163,12 +163,57 @@ export async function POST(request: NextRequest) {
     const orderTax = data.applyTax !== false ? taxableAmount * taxRate / 100 : 0;
     const total = taxableAmount + orderTax;
     
+    // Credit limit validation for account payments
+    if (data.paymentMethod === 'account' && data.customerId) {
+      // Fetch customer with creditLimit
+      const customer = await Customer.findById(data.customerId).lean();
+      
+      if (customer && customer.creditLimit && customer.creditLimit > 0) {
+        // Calculate current outstanding balance from unpaid sales
+        const currentOutstanding = await Sale.aggregate([
+          {
+            $match: {
+              customer: customer._id,
+              paymentMethod: 'account',
+              status: 'completed'
+            }
+          },
+          {
+            $group: {
+              _id: null,
+              totalOutstanding: {
+                $sum: { $subtract: ['$total', { $ifNull: ['$amountPaid', 0] }] }
+              }
+            }
+          }
+        ]);
+        
+        const currentDebt = currentOutstanding.length > 0 ? currentOutstanding[0].totalOutstanding : 0;
+        const newDebt = currentDebt + total;
+        
+        if (newDebt > customer.creditLimit) {
+          const availableCredit = Math.max(0, customer.creditLimit - currentDebt);
+          return NextResponse.json({
+            error: 'Credit limit would be exceeded',
+            message: `This sale would exceed the customer's credit limit of ${customer.creditLimit.toLocaleString()}`,
+            currentDebt: currentDebt,
+            creditLimit: customer.creditLimit,
+            availableCredit,
+            saleAmount: total,
+            wouldExceedBy: newDebt - customer.creditLimit
+          }, { status: 400 });
+        }
+      }
+    }
+    
     // Create sale
     const sale = await Sale.create({
       invoiceNumber,
       customer: data.customerId,
       customerName: data.customerName,
       customerPhone: data.customerPhone,
+      customerEmail: data.customerEmail,
+      customerAddress: data.customerAddress,
       branch: user.branch || data.branchId,
       cashier: user.userId,
       cashierName: user.name,
@@ -211,10 +256,15 @@ export async function POST(request: NextRequest) {
         lastPurchaseDate: new Date(),
       };
       
-      // Add to credit balance if account payment
-      if (data.paymentMethod === 'account') {
-        updateData.$inc.creditBalance = total;
+      // Deduct from credit balance if credit payment (customer uses their store credit)
+      // Note: creditBalance represents store credit (overpayments, returns), not debt
+      if (data.paymentMethod === 'credit' && data.creditApplied) {
+        updateData.$inc.creditBalance = -data.creditApplied;
       }
+      
+      // Note: Account payments create credit invoices (debt) - do not affect creditBalance
+      // creditBalance should only represent store credit (positive balance from overpayments/returns)
+      // creditLimit is used to validate account payment eligibility
       
       await Customer.findByIdAndUpdate(data.customerId, updateData);
     }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongodb';
 import Sale from '@/models/Sale';
 import CustomerInvoice from '@/models/CustomerInvoice';
+import Customer from '@/models/Customer';
 
 export async function GET(request: Request) {
   try {
@@ -127,6 +128,16 @@ export async function GET(request: Request) {
       ...customer,
       totalOutstanding: Math.round(customer.totalOutstanding * 100) / 100,
     }));
+
+    // Fetch credit balance for each customer
+    for (const customerData of result) {
+      try {
+        const customerDoc = await Customer.findById(customerData.customerId);
+        customerData.customerCreditBalance = customerDoc?.creditBalance || 0;
+      } catch (err) {
+        customerData.customerCreditBalance = 0;
+      }
+    }
 
     // Sort by total outstanding (highest first)
     result.sort((a, b) => b.totalOutstanding - a.totalOutstanding);

@@ -163,6 +163,58 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 400 });
     }
     
+    // Credit limit validation for sale invoices (not credit invoices)
+    if (data.invoiceType === 'sale' && customer.creditLimit && customer.creditLimit > 0) {
+      // Calculate current outstanding balance from unpaid invoices
+      const currentOutstanding = await CustomerInvoice.aggregate([
+        {
+          $match: {
+            customer: customer._id,
+            invoiceType: 'sale',
+            status: { $in: ['sent', 'partial', 'overdue'] }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalOutstanding: {
+              $sum: { $subtract: ['$total', { $ifNull: ['$amountPaid', 0] }] }
+            }
+          }
+        }
+      ]);
+      
+      // Also check sales with account payment
+      const Sale = (await import('@/models/Sale')).default;
+      const salesOutstanding = await Sale.aggregate([
+        {
+          $match: {
+            customer: customer._id,
+            paymentMethod: 'account',
+            status: 'completed'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalOutstanding: {
+              $sum: { $subtract: ['$total', { $ifNull: ['$amountPaid', 0] }] }
+            }
+          }
+        }
+      ]);
+      
+      const currentDebt = (currentOutstanding.length > 0 ? currentOutstanding[0].totalOutstanding : 0) +
+        (salesOutstanding.length > 0 ? salesOutstanding[0].totalOutstanding : 0);
+      
+      // We don't have the total yet, so we'll calculate it first then validate
+      // This will be checked after totals are calculated
+      
+      // Store current debt for later validation
+      data._currentDebt = currentDebt;
+      data._creditLimit = customer.creditLimit;
+    }
+    
     // Calculate totals
     let subtotal = 0;
     let totalDiscount = 0;
@@ -201,6 +253,23 @@ export async function POST(request: NextRequest) {
     const taxRate = data.taxRate || 16;
     const orderTax = taxableAmount * taxRate / 100;
     const total = taxableAmount + orderTax;
+    
+    // Validate credit limit for sale invoices
+    if (data.invoiceType === 'sale' && data._currentDebt !== undefined && data._creditLimit) {
+      const newDebt = data._currentDebt + total;
+      if (newDebt > data._creditLimit) {
+        const availableCredit = Math.max(0, data._creditLimit - data._currentDebt);
+        return NextResponse.json({
+          error: 'Credit limit would be exceeded',
+          message: `This invoice would exceed the customer's credit limit of ${data._creditLimit.toLocaleString()}`,
+          currentDebt: data._currentDebt,
+          creditLimit: data._creditLimit,
+          availableCredit,
+          invoiceAmount: total,
+          wouldExceedBy: newDebt - data._creditLimit
+        }, { status: 400 });
+      }
+    }
     
     // Calculate due date based on payment terms
     const paymentTerms = data.paymentTerms || 30;
@@ -255,10 +324,10 @@ export async function POST(request: NextRequest) {
       terms: data.terms,
     });
 
-    // Update customer's credit balance (debt) - invoices increase what customer owes
-    await Customer.findByIdAndUpdate(customer._id, {
-      $inc: { creditBalance: total },
-    });
+    // Note: Do NOT update creditBalance here
+    // Invoice represents debt (money customer owes), not store credit
+    // creditBalance should only track store credit (overpayments, returns)
+    // Account payments are tracked via invoices and customer debt APIs
 
     return NextResponse.json({
       success: true,

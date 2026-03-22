@@ -99,10 +99,21 @@ export async function POST(request: Request) {
 
     await payment.save();
 
-    // Update customer creditBalance (decrease by payment amount)
-    await Customer.findByIdAndUpdate(customerId, {
-      $inc: { creditBalance: -amount }
-    });
+    // Update customer creditBalance only if payment method is 'credit'
+    if (paymentMethod === 'credit') {
+      // Validate that customer has sufficient credit balance
+      if (customer.creditBalance < amount) {
+        // If credit balance is less than payment amount, only deduct up to the available balance
+        const creditToUse = Math.min(customer.creditBalance, amount);
+        await Customer.findByIdAndUpdate(customerId, {
+          $inc: { creditBalance: -creditToUse }
+        });
+      } else {
+        await Customer.findByIdAndUpdate(customerId, {
+          $inc: { creditBalance: -amount }
+        });
+      }
+    }
 
     // If invoices are specified, update their payment status
     if (invoiceNumbers && invoiceNumbers.length > 0) {

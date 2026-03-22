@@ -30,6 +30,8 @@ export interface ISale extends Document {
   customer?: mongoose.Types.ObjectId;
   customerName?: string;
   customerPhone?: string;
+  customerEmail?: string;
+  customerAddress?: string;
   
   // Branch
   branch: mongoose.Types.ObjectId;
@@ -120,6 +122,8 @@ const SaleSchema = new Schema<ISale>(
     customer: { type: Schema.Types.ObjectId, ref: 'Customer' },
     customerName: { type: String },
     customerPhone: { type: String },
+    customerEmail: { type: String },
+    customerAddress: { type: String },
     
     // Branch
     branch: { type: Schema.Types.ObjectId, ref: 'Branch' },

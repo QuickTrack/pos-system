@@ -30,8 +30,9 @@ export async function POST(
     payment.status = 'paid';
     await payment.save();
 
-    // Update customer creditBalance (decrease by payment amount)
-    if (payment.customer && payment.customer._id) {
+    // Update customer creditBalance only if payment method is 'credit'
+    // (customer used their store credit to pay)
+    if (payment.customer && payment.customer._id && payment.paymentMethod === 'credit') {
       const Customer = (await import('@/models/Customer')).default;
       await Customer.findByIdAndUpdate(payment.customer._id, {
         $inc: { creditBalance: -payment.amount }

@@ -41,6 +41,14 @@ export async function POST(request: NextRequest) {
     if (!originalSale) {
       return NextResponse.json({ error: 'Sale not found' }, { status: 404 });
     }
+    
+    // Check if sale is already refunded
+    if (originalSale.status === 'refunded') {
+      return NextResponse.json(
+        { error: 'This sale has already been refunded' },
+        { status: 400 }
+      );
+    }
 
     // Process return items and restore inventory
     const returnItems = [];
@@ -72,7 +80,7 @@ export async function POST(request: NextRequest) {
       const itemTotal = quantity * unitPrice;
       totalReturnAmount += itemTotal;
 
-      // Find the unit in the product to restore correct quantity
+      // Find the unit in the original sale to get conversion info
       const saleItem = originalSale.items.find(
         (si: any) => si.product?.toString() === productId
       );
@@ -98,9 +106,14 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Create a unique invoice number for the refund
+    const timestamp = Date.now();
+    const randomSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    const refundInvoiceNumber = `REF-${originalSale.invoiceNumber}-${timestamp}-${randomSuffix}`;
+
     // Create a refund sale record
     const refundSale = new Sale({
-      invoiceNumber: `REF-${originalSale.invoiceNumber}`,
+      invoiceNumber: refundInvoiceNumber,
       branch: (originalSale as any).branch,
       cashier: user.userId,
       cashierName: user.name || user.email || 'System',
@@ -136,6 +149,13 @@ export async function POST(request: NextRequest) {
     });
 
     await refundSale.save();
+    
+    // Update the original sale status to refunded
+    await Sale.findByIdAndUpdate(saleId, {
+      status: 'refunded',
+      isRefund: true,
+      refundedSale: refundSale._id
+    });
 
     return NextResponse.json({
       success: true,

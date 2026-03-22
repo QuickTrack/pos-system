@@ -33,6 +33,8 @@ export interface ReceiptData {
   customer?: {
     name: string;
     phone?: string;
+    email?: string;
+    address?: string;
   };
   items: ReceiptItem[];
   subtotal: number;
@@ -50,13 +52,19 @@ export interface ReceiptData {
 /**
  * Format currency for Kenyan Shillings
  */
-export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-KE', {
-    style: 'currency',
-    currency: 'KES',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2
-  }).format(amount);
+export function formatCurrency(amount: number | string): string {
+  const num = typeof amount === 'string' ? parseFloat(amount) : (amount || 0);
+  if (isNaN(num)) return 'KES 0.00';
+  return 'KES ' + num.toFixed(2);
+}
+
+/**
+ * Format number with 2 decimal places (no currency symbol)
+ */
+export function formatNumber(amount: number | string): string {
+  const num = typeof amount === 'string' ? parseFloat(amount) : (amount || 0);
+  if (isNaN(num)) return '0.00';
+  return num.toFixed(2);
 }
 
 /**
@@ -165,7 +173,7 @@ export async function generateThermalReceiptHTML(data: ReceiptData): Promise<str
       
       const qrData = generateKRAQRData(kraData);
       qrCodeDataUrl = await QRCode.toDataURL(qrData, {
-        width: 120,
+        width: 40,
         margin: 1,
         color: {
           dark: '#000000',
@@ -290,8 +298,35 @@ export async function generateThermalReceiptHTML(data: ReceiptData): Promise<str
     }
     
     .qr-section img {
-      width: 50mm;
+      width: 25mm;
       height: auto;
+    }
+    
+    .item-header-row {
+      display: flex;
+      font-size: 8px;
+      font-weight: bold;
+      margin-bottom: 3px;
+      padding-bottom: 2px;
+      border-bottom: 1px dashed #999;
+    }
+    
+    .item-header-row span:first-child {
+      flex: 0 0 20%;
+    }
+    
+    .item-header-row span:nth-child(2) {
+      flex: 0 0 25%;
+    }
+    
+    .item-header-row span:nth-child(3) {
+      flex: 0 0 25%;
+      text-align: right;
+    }
+    
+    .item-header-row span:nth-child(4) {
+      flex: 0 0 30%;
+      text-align: right;
     }
     
     .item-main {
@@ -356,11 +391,22 @@ export async function generateThermalReceiptHTML(data: ReceiptData): Promise<str
     <!-- Customer Info -->
     ${data.customer ? `
     <div>
-      <div><strong>Customer:</strong> ${data.customer.name}</div>
-      ${data.customer.phone ? `<div>Tel: ${data.customer.phone}</div>` : ''}
+      <div><strong>CUSTOMER DETAILS</strong></div>
+      <div>Name: ${data.customer.name}</div>
+      ${data.customer.phone ? `<div>Phone: ${data.customer.phone}</div>` : ''}
+      ${data.customer.email ? `<div>Email: ${data.customer.email}</div>` : ''}
+      ${data.customer.address ? `<div>Address: ${data.customer.address}</div>` : ''}
     </div>
     <div class="divider"></div>
     ` : ''}
+    
+    <!-- Items Header -->
+    <div class="item-header-row">
+      <span>ITEM/QTY</span>
+      <span>UNITS</span>
+      <span>RATE</span>
+      <span>AMOUNT</span>
+    </div>
     
     <!-- Items with nested layout -->
     <div class="divider-double">
@@ -371,8 +417,8 @@ export async function generateThermalReceiptHTML(data: ReceiptData): Promise<str
         <div class="item-details-row">
           <span class="item-qty">${item.quantity}</span>
           <span class="item-unit">${item.unit || 'pcs'}</span>
-          <span class="item-rate">@${formatCurrency(item.rate)}</span>
-          <span class="item-amount">${formatCurrency(item.amount)}</span>
+          <span class="item-rate">@${formatNumber(item.rate)}</span>
+          <span class="item-amount">${formatNumber(item.amount)}</span>
         </div>
       `).join('')}
     </div>
@@ -474,7 +520,9 @@ export function createReceiptData(
     business,
     customer: sale.customerName ? {
       name: sale.customerName,
-      phone: sale.customerPhone
+      phone: sale.customerPhone,
+      email: sale.customerEmail,
+      address: sale.customerAddress
     } : undefined,
     items,
     subtotal: sale.subtotal || 0,

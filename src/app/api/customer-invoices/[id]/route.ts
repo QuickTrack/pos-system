@@ -96,10 +96,13 @@ export async function PUT(
         invoice.status = 'partial';
       }
       
-      // Update customer credit balance
-      await Customer.findByIdAndUpdate(invoice.customer, {
-        $inc: { creditBalance: -payment.amount },
-      });
+      // Update customer credit balance only if payment method is 'credit'
+      // (customer used their store credit to pay)
+      if (payment.method === 'credit') {
+        await Customer.findByIdAndUpdate(invoice.customer, {
+          $inc: { creditBalance: -payment.amount },
+        });
+      }
     }
     
     await invoice.save();

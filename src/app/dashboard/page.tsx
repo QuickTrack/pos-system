@@ -293,14 +293,24 @@ export default function DashboardPage() {
               </thead>
               <tbody>
                 {recentSales.slice(0, 10).map((sale) => (
-                  <tr key={sale._id}>
-                    <td className="font-medium">{sale.invoiceNumber}</td>
+                  <tr 
+                    key={sale._id} 
+                    className={sale.status === 'refunded' ? 'bg-red-50' : ''}
+                  >
+                    <td className="font-medium">
+                      {sale.invoiceNumber}
+                      {sale.status === 'refunded' && (
+                        <span className="ml-2 badge badge-error">Refunded</span>
+                      )}
+                    </td>
                     <td>{sale.customer?.name || 'Walk-in Customer'}</td>
                     <td>{sale.cashier.name}</td>
                     <td>
                       <span className="badge badge-info capitalize">{sale.paymentMethod}</span>
                     </td>
-                    <td className="font-medium">{formatCurrency(sale.total)}</td>
+                    <td className={`font-medium ${sale.status === 'refunded' ? 'text-red-600 line-through' : ''}`}>
+                      {formatCurrency(sale.total)}
+                    </td>
                     <td className="text-gray-500">{formatDateTime(sale.saleDate)}</td>
                   </tr>
                 ))}

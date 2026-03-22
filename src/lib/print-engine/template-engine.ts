@@ -414,7 +414,7 @@ export class TemplateEngine {
     if (!content) return;
     
     // Get QR code size based on element width
-    const size = Math.min(Math.floor((element.width || 20) / 4), 10);
+    const size = Math.min(Math.floor((element.width || 20) / 8), 4);
     const correction: QRErrorCorrection = 'M';
     
     try {
@@ -900,7 +900,7 @@ export class DocumentHandler {
    * Format currency
    */
   private static formatCurrency(amount: number | string): string {
-    const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+    const num = typeof amount === 'string' ? parseFloat(amount) : (amount || 0);
     if (isNaN(num)) return '0.00';
     
     return num.toFixed(2);

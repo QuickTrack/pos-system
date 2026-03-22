@@ -92,7 +92,12 @@ export default function SalesPage() {
       key: 'invoiceNumber',
       header: 'Invoice',
       render: (item: Sale) => (
-        <span className="font-medium">{item.invoiceNumber}</span>
+        <span className="font-medium">
+          {item.invoiceNumber}
+          {item.status === 'refunded' && (
+            <span className="ml-2 badge badge-error">Refunded</span>
+          )}
+        </span>
       ),
     },
     {
@@ -116,7 +121,9 @@ export default function SalesPage() {
       key: 'total',
       header: 'Amount',
       render: (item: Sale) => (
-        <span className="font-medium">{formatCurrency(item.total)}</span>
+        <span className={`font-medium ${item.status === 'refunded' ? 'text-red-600 line-through' : ''}`}>
+          {formatCurrency(item.total)}
+        </span>
       ),
     },
     {

@@ -52,7 +52,7 @@ export default function PrintPreview({
           
           // Generate QR code as data URL
           const url = await QRCode.toDataURL(qrData, {
-            width: 200,
+            width: 60,
             margin: 1,
             color: {
               dark: '#000000',
@@ -74,11 +74,14 @@ export default function PrintPreview({
     generateQR();
   }, [document, documentType]);
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number | string) => {
+    const num = typeof amount === 'string' ? parseFloat(amount) : (amount || 0);
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'KES'
-    }).format(amount || 0);
+      currency: 'KES',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(num);
   };
 
   const formatDate = (dateStr: string) => {
@@ -200,13 +203,13 @@ export default function PrintPreview({
                   </div>
                 </div>
                 <div className="bg-emerald-50 p-3 rounded-lg">
-                  <p className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wide mb-1">Invoice Summary</p>
+                  <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wide mb-1">Invoice Summary</p>
                   <div className="grid grid-cols-2 gap-2 mt-1">
-                    <div><p className="text-[10px] text-gray-500">Subtotal</p><p className="font-semibold text-gray-900 text-[10px]">{formatCurrency(doc.subtotal)}</p></div>
-                    <div><p className="text-[10px] text-gray-500">VAT ({doc.taxRate || 16}%)</p><p className="font-semibold text-gray-900 text-[10px]">{formatCurrency(doc.tax)}</p></div>
+                    <div><p className="text-[11px] text-gray-500">Subtotal</p><p className="font-semibold text-gray-900 text-[11px]">{formatCurrency(doc.subtotal)}</p></div>
+                    <div><p className="text-[11px] text-gray-500">VAT ({doc.taxRate || 16}%)</p><p className="font-semibold text-gray-900 text-[11px]">{formatCurrency(doc.tax)}</p></div>
                     <div className="col-span-2 pt-1 border-t border-emerald-200">
-                      <p className="text-[10px] text-gray-500">Total Amount</p>
-                      <p className="font-bold text-base text-emerald-600">{formatCurrency(doc.total)}</p>
+                      <p className="text-[11px] text-gray-500">Total Amount</p>
+                      <p className="font-bold text-lg text-emerald-600">{formatCurrency(doc.total)}</p>
                     </div>
                   </div>
                 </div>
@@ -218,21 +221,19 @@ export default function PrintPreview({
                 <table className="w-full">
                   <thead>
                     <tr className="bg-gray-100">
-                      <th className="text-left p-2 text-[10px] font-semibold text-gray-600 uppercase">Item</th>
-                      <th className="text-center p-2 text-[10px] font-semibold text-gray-600 uppercase">Qty</th>
-                      <th className="text-center p-2 text-[10px] font-semibold text-gray-600 uppercase">Unit</th>
-                      <th className="text-right p-2 text-[10px] font-semibold text-gray-600 uppercase">Price</th>
-                      <th className="text-right p-2 text-[10px] font-semibold text-gray-600 uppercase">Total</th>
+                      <th className="text-left p-2 text-[11px] font-semibold text-gray-600 uppercase">Item/Qty</th>
+                      <th className="text-center p-2 text-[11px] font-semibold text-gray-600 uppercase">Units</th>
+                      <th className="text-right p-2 text-[11px] font-semibold text-gray-600 uppercase">Rate</th>
+                      <th className="text-right p-2 text-[11px] font-semibold text-gray-600 uppercase">Amount</th>
                     </tr>
                   </thead>
                   <tbody>
                     {doc.items?.map((item: any, idx: number) => (
                       <tr key={idx} className="border-b border-gray-100">
-                        <td className="p-2 text-[10px] text-gray-900">{item.name}</td>
-                        <td className="p-2 text-[10px] text-gray-600 text-center">{item.quantity}</td>
-                        <td className="p-2 text-[10px] text-gray-600 text-center">{item.unit || '-'}</td>
-                        <td className="p-2 text-[10px] text-gray-600 text-right">{item.price?.toLocaleString()}</td>
-                        <td className="p-2 text-[10px] text-gray-900 text-right font-medium">{item.total?.toLocaleString()}</td>
+                        <td className="p-2 text-[11px] text-gray-900">{item.name} x {item.quantity}</td>
+                        <td className="p-2 text-[11px] text-gray-600 text-center">{item.unit || '-'}</td>
+                        <td className="p-2 text-[11px] text-gray-600 text-right">{formatCurrency(item.price)}</td>
+                        <td className="p-2 text-[11px] text-gray-900 text-right font-medium">{formatCurrency(item.total)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -242,11 +243,11 @@ export default function PrintPreview({
               {/* Payment */}
               {doc.payment && (
                 <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <p className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide mb-2">Payment Details</p>
+                  <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide mb-2">Payment Details</p>
                   <div className="grid grid-cols-3 gap-4">
-                    <div><p className="text-[10px] text-gray-500">Amount Paid</p><p className="font-semibold text-green-600 text-xs">{doc.payment.amount?.toLocaleString()}</p></div>
-                    <div><p className="text-[10px] text-gray-500">Payment Method</p><p className="font-semibold text-gray-900 text-[10px] capitalize">{doc.payment.method || 'Cash'}</p></div>
-                    {doc.payment.change > 0 && <div><p className="text-[10px] text-gray-500">Change</p><p className="font-semibold text-gray-900 text-xs">{doc.payment.change?.toLocaleString()}</p></div>}
+                    <div><p className="text-[11px] text-gray-500">Amount Paid</p><p className="font-semibold text-green-600 text-sm">{doc.payment.amount?.toLocaleString()}</p></div>
+                    <div><p className="text-[11px] text-gray-500">Payment Method</p><p className="font-semibold text-gray-900 text-[11px] capitalize">{doc.payment.method || 'Cash'}</p></div>
+                    {doc.payment.change > 0 && <div><p className="text-[11px] text-gray-500">Change</p><p className="font-semibold text-gray-900 text-sm">{doc.payment.change?.toLocaleString()}</p></div>}
                   </div>
                 </div>
               )}
@@ -255,13 +256,13 @@ export default function PrintPreview({
               <div className="mb-6 flex justify-end">
                 <div className="w-64">
                   <div className="flex justify-between py-2 border-b border-gray-100">
-                    <span className="text-[10px] text-gray-600 align-middle">Subtotal</span>
-                    <span className="text-[10px] font-medium text-gray-900 align-middle">{doc.subtotal?.toLocaleString()}</span>
+                    <span className="text-[11px] text-gray-600 align-middle">Subtotal</span>
+                    <span className="text-[11px] font-medium text-gray-900 align-middle">{doc.subtotal?.toLocaleString()}</span>
                   </div>
                   {doc.tax > 0 && (
                     <div className="flex justify-between py-2 border-b border-gray-100">
-                      <span className="text-[10px] text-gray-600 align-middle">Tax ({doc.taxRate || 16}%)</span>
-                      <span className="text-[10px] font-medium text-gray-900 align-middle">{doc.tax?.toLocaleString()}</span>
+                      <span className="text-[11px] text-gray-600 align-middle">Tax ({doc.taxRate || 16}%)</span>
+                      <span className="text-[11px] font-medium text-gray-900 align-middle">{doc.tax?.toLocaleString()}</span>
                     </div>
                   )}
                   <div className="flex justify-between py-3 bg-gray-100 rounded px-3 mt-2">
@@ -274,15 +275,15 @@ export default function PrintPreview({
               {/* Terms */}
               {doc.terms && (
                 <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Terms & Payment Terms</p>
-                  <p className="text-[10px] text-gray-700 whitespace-pre-wrap">{doc.terms}</p>
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Terms & Payment Terms</p>
+                  <p className="text-[11px] text-gray-700 whitespace-pre-wrap">{doc.terms}</p>
                 </div>
               )}
 
               {/* Status */}
               {doc.status && doc.status !== 'draft' && (
                 <div className="mb-4 text-center">
-                  <span className={`inline-block px-2 py-0.5 text-[10px] font-semibold rounded-full ${
+                  <span className={`inline-block px-2 py-0.5 text-[11px] font-semibold rounded-full ${
                     doc.status === 'paid' ? 'bg-green-100 text-green-800' :
                     doc.status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
                     doc.status === 'sent' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
@@ -293,16 +294,16 @@ export default function PrintPreview({
               {/* Notes */}
               {doc.notes && (
                 <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Notes</p>
-                  <p className="text-[10px] text-gray-700 italic">{doc.notes}</p>
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Notes</p>
+                  <p className="text-[11px] text-gray-700 italic">{doc.notes}</p>
                 </div>
               )}
 
               {/* Bank */}
               {doc.bankName && doc.bankName !== 'N/A' && (
                 <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Payment Information</p>
-                  <div className="grid grid-cols-3 gap-2 text-[10px]">
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Payment Information</p>
+                  <div className="grid grid-cols-3 gap-2 text-[11px]">
                     <div><p className="text-gray-500">Bank Name</p><p className="font-medium text-gray-900">{doc.bankName}</p></div>
                     <div><p className="text-gray-500">Account Number</p><p className="font-medium text-gray-900">{doc.bankAccount}</p></div>
                     {doc.bankBranch && <div><p className="text-gray-500">Branch</p><p className="font-medium text-gray-900">{doc.bankBranch}</p></div>}
@@ -319,8 +320,8 @@ export default function PrintPreview({
                 {qrCodeUrl && (
                   <div className="flex items-center gap-3">
                     <div className="text-right">
-                      <p className="text-[8px] text-gray-500">KRA Tax Compliance</p>
-                      <p className="text-[8px] text-gray-400">Scan to verify</p>
+                      <p className="text-[9px] text-gray-500">KRA Tax Compliance</p>
+                      <p className="text-[9px] text-gray-400">Scan to verify</p>
                     </div>
                     <img 
                       src={qrCodeUrl} 

@@ -243,7 +243,7 @@ export default function CashSalesPage() {
                 </thead>
                 <tbody>
                   {filteredSales.map((sale) => (
-                    <tr key={sale._id} className="border-b hover:bg-gray-50">
+                    <tr key={sale._id} className={`border-b hover:bg-gray-50 ${sale.status === 'refunded' ? 'bg-red-50' : ''}`}>
                       <td className="p-3">
                         <span className="font-medium text-gray-900">{sale.invoiceNumber}</span>
                       </td>
@@ -281,13 +281,20 @@ export default function CashSalesPage() {
                           >
                             <Printer className="w-4 h-4" />
                           </button>
-                          <button
-                            onClick={() => handleSalesReturn(sale)}
-                            className="p-1.5 text-red-600 hover:bg-red-50 rounded"
-                            title="Sales Return"
-                          >
-                            <RotateCcw className="w-4 h-4" />
-                          </button>
+                          {sale.status !== 'refunded' && (
+                            <button
+                              onClick={() => handleSalesReturn(sale)}
+                              className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                              title="Sales Return"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                            </button>
+                          )}
+                          {sale.status === 'refunded' && (
+                            <span className="text-xs text-gray-400 font-medium">
+                              Refunded
+                            </span>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -393,17 +400,24 @@ export default function CashSalesPage() {
                 <Printer className="w-4 h-4 mr-2" />
                 Reprint Receipt
               </Button>
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => {
-                  setShowDetailModal(false);
-                  handleSalesReturn(selectedSale);
-                }}
-              >
-                <RotateCcw className="w-4 h-4 mr-2" />
-                Sales Return
-              </Button>
+              {selectedSale.status !== 'refunded' && (
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setShowDetailModal(false);
+                    handleSalesReturn(selectedSale);
+                  }}
+                >
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Sales Return
+                </Button>
+              )}
+              {selectedSale.status === 'refunded' && (
+                <div className="flex-1 flex items-center justify-center bg-gray-100 rounded-lg px-4 py-2">
+                  <span className="text-gray-500 font-medium">This sale has been refunded</span>
+                </div>
+              )}
             </div>
           </div>
         )}

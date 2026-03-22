@@ -61,8 +61,12 @@ interface Customer {
   _id: string;
   name: string;
   phone: string;
+  email?: string;
+  address?: string;
   customerType: string;
   loyaltyPoints: number;
+  creditBalance: number;
+  creditLimit: number;
 }
 
 export default function POSPage() {
@@ -85,6 +89,7 @@ export default function POSPage() {
   const [customerSearch, setCustomerSearch] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [amountPaid, setAmountPaid] = useState('');
+  const [creditApplied, setCreditApplied] = useState(0);
   const [processing, setProcessing] = useState(false);
   const [saleComplete, setSaleComplete] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
@@ -383,6 +388,13 @@ export default function POSPage() {
       const { total } = calculateTotals();
       
       const isAccountPayment = paymentMethod === 'account';
+      const isCreditPayment = paymentMethod === 'credit';
+      
+      // Calculate credit to apply
+      const creditApplied = isCreditPayment && selectedCustomer 
+        ? Math.min(selectedCustomer.creditBalance || 0, total)
+        : 0;
+      
       const paidAmount = isAccountPayment ? 0 : (parseFloat(amountPaid) || total);
       
       const response = await fetch('/api/sales', {
@@ -401,15 +413,18 @@ export default function POSPage() {
             discountType: item.discountType,
             variant: item.variant,
           })),
-          customerId: customer?.id,
-          customerName: customer?.name,
-          customerPhone: customer?.phone,
+          customerId: selectedCustomer?._id,
+          customerName: selectedCustomer?.name,
+          customerPhone: selectedCustomer?.phone,
+          customerEmail: selectedCustomer?.email,
+          customerAddress: selectedCustomer?.address,
           paymentMethod,
           chargedToAccount: isAccountPayment,
-          amountPaid: paidAmount,
-          change: paidAmount - total,
+          creditApplied: creditApplied,
+          amountPaid: isCreditPayment ? creditApplied : paidAmount,
+          change: isCreditPayment ? 0 : (paidAmount - total),
           mpesaPhone: paymentMethod === 'mpesa' ? customer?.phone : undefined,
-          notes: isAccountPayment ? 'Charge to account' : undefined,
+          notes: isAccountPayment ? 'Charge to account' : isCreditPayment ? 'Paid with store credit' : undefined,
         }),
       });
       
@@ -445,6 +460,7 @@ export default function POSPage() {
         setSelectedCustomer(null);
         setShowPaymentModal(false);
         setAmountPaid('');
+        setCreditApplied(0);
       }
     } catch (error) {
       console.error('Payment failed:', error);
@@ -475,9 +491,11 @@ export default function POSPage() {
             discountType: item.discountType,
             variant: item.variant,
           })),
-          customerId: customer?.id,
-          customerName: customer?.name,
-          customerPhone: customer?.phone,
+          customerId: selectedCustomer?._id,
+          customerName: selectedCustomer?.name,
+          customerPhone: selectedCustomer?.phone,
+          customerEmail: selectedCustomer?.email,
+          customerAddress: selectedCustomer?.address,
           paymentMethod: 'mpesa',
           mpesaPaymentType: 'till',
           amountPaid: total,
@@ -527,9 +545,11 @@ export default function POSPage() {
             discountType: item.discountType,
             variant: item.variant,
           })),
-          customerId: customer?.id,
-          customerName: customer?.name,
-          customerPhone: customer?.phone,
+          customerId: selectedCustomer?._id,
+          customerName: selectedCustomer?.name,
+          customerPhone: selectedCustomer?.phone,
+          customerEmail: selectedCustomer?.email,
+          customerAddress: selectedCustomer?.address,
           paymentMethod: 'mpesa',
           mpesaPaymentType: 'wallet',
           amountPaid: total,
@@ -573,6 +593,8 @@ export default function POSPage() {
     setCustomer({ id: customer._id, name: customer.name, phone: customer.phone });
     setShowCustomerModal(false);
     setCustomerSearch('');
+    // Reset credit applied when customer changes
+    setCreditApplied(0);
   };
 
   const fetchCustomerDebt = async (customerId: string) => {
@@ -1096,16 +1118,23 @@ export default function POSPage() {
 
           <div className="space-y-2">
             <label className="text-xs font-medium text-gray-700"> Payment Method</label>
-            <div className="grid grid-cols-4 gap-1">
+            <div className="grid grid-cols-5 gap-1">
               {[
                 { value: 'cash', label: 'Cash', icon: Banknote },
                 { value: 'mpesa', label: 'M-Pesa', icon: Smartphone },
                 { value: 'card', label: 'Card', icon: CreditCard },
+                { value: 'credit', label: 'Credit', icon: Wallet },
                 { value: 'account', label: 'Account', icon: Wallet },
               ].map((method) => (
                 <button
                   key={method.value}
-                  onClick={() => setPaymentMethod(method.value)}
+                  onClick={() => {
+                    setPaymentMethod(method.value);
+                    // Reset credit applied when switching payment method
+                    if (method.value !== 'credit') {
+                      setCreditApplied(0);
+                    }
+                  }}
                   className={`p-2 rounded-lg border-2 flex flex-col items-center gap-0.5 transition-colors ${
                     paymentMethod === method.value
                       ? 'border-emerald-500 bg-emerald-50'
@@ -1181,6 +1210,53 @@ export default function POSPage() {
             </div>
           )}
 
+          {/* Credit Payment Section */}
+          {paymentMethod === 'credit' && (
+            <div className="space-y-2">
+              {!selectedCustomer ? (
+                <div className="bg-red-50 rounded-lg p-3 text-center">
+                  <p className="text-sm text-red-600">Please select a customer to use credit</p>
+                </div>
+              ) : (
+                <>
+                  <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="text-xs text-blue-600">Available Credit Balance</p>
+                        <p className="text-xl font-bold text-blue-700">{formatCurrency(selectedCustomer.creditBalance || 0)}</p>
+                      </div>
+                      <Wallet className="w-8 h-8 text-blue-400" />
+                    </div>
+                    {selectedCustomer.creditBalance > 0 && (
+                      <p className="text-xs text-blue-600">
+                        Credit will be automatically applied up to {formatCurrency(total)}
+                      </p>
+                    )}
+                  </div>
+                  
+                  {selectedCustomer.creditBalance > 0 && (
+                    <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-200">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-600">Credit to Apply:</span>
+                        <span className="font-semibold text-emerald-700">{formatCurrency(Math.min(selectedCustomer.creditBalance, total))}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm mt-1">
+                        <span className="text-gray-600">Remaining Balance:</span>
+                        <span className="font-semibold text-gray-900">{formatCurrency(Math.max(0, total - selectedCustomer.creditBalance))}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedCustomer.creditBalance <= 0 && (
+                    <div className="bg-amber-50 rounded-lg p-3 text-center">
+                      <p className="text-sm text-amber-700">This customer has no credit balance available</p>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
           {/* Change Display */}
           <div className="bg-gray-50 rounded-lg p-2">
             <div className="flex justify-between items-center mb-1">
@@ -1210,9 +1286,24 @@ export default function POSPage() {
           )}
 
           {paymentMethod === 'account' && customer && (
-            <div className="bg-amber-50 rounded-lg p-3 text-center">
+            <div className="bg-amber-50 rounded-lg p-3 border border-amber-200">
               <p className="text-sm text-amber-700">
                 {formatCurrency(total)} will be added to {customer.name}&apos;s account
+              </p>
+              {selectedCustomer && selectedCustomer.creditLimit > 0 && (
+                <div className="mt-2 pt-2 border-t border-amber-300 text-xs text-amber-600">
+                  <p>Credit Limit: {formatCurrency(selectedCustomer.creditLimit)}</p>
+                  <p className="mt-1">Account purchases are limited by credit limit to prevent overborrowing</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Credit payment message */}
+          {paymentMethod === 'credit' && selectedCustomer && selectedCustomer.creditBalance > 0 && (
+            <div className="bg-emerald-50 rounded-lg p-3 text-center">
+              <p className="text-sm text-emerald-700">
+                {formatCurrency(Math.min(selectedCustomer.creditBalance, total))} credit will be used from {customer.name}&apos;s balance
               </p>
             </div>
           )}
@@ -1224,7 +1315,8 @@ export default function POSPage() {
             isLoading={processing}
             disabled={
               (paymentMethod === 'cash' && (!amountPaid || parseFloat(amountPaid) < total)) ||
-              (paymentMethod === 'account' && !customer)
+              (paymentMethod === 'account' && !customer) ||
+              (paymentMethod === 'credit' && (!customer || (selectedCustomer?.creditBalance || 0) <= 0))
             }
           >
             Complete Sale

@@ -99,6 +99,35 @@ Removed the template designer module completely:
   - Payment creation API now decreases customer creditBalance
   - Payment recording API now decreases customer creditBalance
   - Customer-payments page refreshes customers after payment operations
+- [x] Customer Credit Payment Feature
+  - POS payment modal added credit payment method option
+  - Customer credit balance displayed in POS payment modal
+  - Credit automatically applied up to available balance or total
+  - Remaining balance shown after credit applied
+  - Sales API updated to deduct credit balance for credit payments
+  - Customer payments page credit balance display and validation
+  - Credit balance included in customer invoices API response
+  - API validates credit balance before applying (uses available balance if insufficient)
+- [x] Credit Balance vs Credit Limit Clarification
+  - creditBalance: Store credit (positive balance from overpayments, returns) - used to pay for new purchases
+  - creditLimit: Maximum allowable debt - prevents customer from overborrowing on account
+  - Fixed Sales API to NOT increase creditBalance for account payments
+  - Fixed Customer Invoice creation API to NOT increase creditBalance
+  - Fixed Customer Invoice payment API to only decrease creditBalance for 'credit' payment method
+  - Fixed Customer Payment record API to only decrease creditBalance for 'credit' payment method
+  - POS shows creditLimit when making account payments for reference
+- [x] Credit Limit Validation for Account Payments
+  - Sales API validates credit limit before creating account payments
+  - Customer Invoices API validates credit limit before creating sale invoices
+  - Calculates current outstanding balance from unpaid invoices and account sales
+  - Rejects transaction if new debt would exceed creditLimit
+  - Returns clear error with currentDebt, creditLimit, availableCredit, and wouldExceedBy
+- [x] Receipt Template Font Size Adjustments
+  - Reduced QR code size by 50% (from 200px to 60px)
+  - Increased all font sizes by one point:
+    - text-[10px] → text-[11px] (Invoice Summary, Terms, Notes, Payment Info, Status)
+    - text-[8px] → text-[9px] (KRA QR caption)
+  - Applied to PrintPreview receipt template
 
 ## Current Structure
 
@@ -214,6 +243,7 @@ const result = await printEngine.print({
 | 2026-03-20 | Created Professional A4 Invoice template with correct field mapping |
 | 2026-03-20 | Fixed invoice print - enhanced field mapping, added vatNumber, cleaned debug logs |
 | 2026-03-20 | Enhanced invoice print with Subtotal/Tax/Total breakdown and Terms section |
+| 2026-03-21 | Implemented customer credit payment feature - auto-apply credit balance in POS and customer payments |
 
 ## Notes
 

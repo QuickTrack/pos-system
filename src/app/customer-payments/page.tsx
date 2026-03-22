@@ -52,6 +52,7 @@ interface CustomerInvoices {
   customerPhone?: string;
   invoices: CustomerInvoice[];
   totalOutstanding: number;
+  customerCreditBalance?: number;
 }
 
 export default function CustomerPaymentsPage() {
@@ -645,6 +646,35 @@ export default function CustomerPaymentsPage() {
               />
             </div>
           </div>
+
+          {/* Credit Balance Display - Show when credit payment method is selected */}
+          {formData.paymentMethod === 'credit' && formData.customerId && (() => {
+            const selectedCustomerData = customerInvoices.find(c => c.customerId === formData.customerId);
+            return selectedCustomerData ? (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-sm text-blue-600">Customer Credit Balance</p>
+                    <p className="text-2xl font-bold text-blue-700">{formatCurrency(selectedCustomerData.customerCreditBalance || 0)}</p>
+                  </div>
+                </div>
+                {(selectedCustomerData.customerCreditBalance || 0) < formData.amount && (
+                  <div className="bg-amber-50 border border-amber-200 rounded p-2 mt-2">
+                    <p className="text-sm text-amber-700">
+                      Warning: Credit balance is less than payment amount. Only {formatCurrency(Math.min(selectedCustomerData.customerCreditBalance || 0, formData.amount))} will be used.
+                    </p>
+                  </div>
+                )}
+                {(selectedCustomerData.customerCreditBalance || 0) <= 0 && (
+                  <div className="bg-red-50 border border-red-200 rounded p-2 mt-2">
+                    <p className="text-sm text-red-700">
+                      This customer has no credit balance available.
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : null;
+          })()}
 
           <Input
             label="Reference Number"
