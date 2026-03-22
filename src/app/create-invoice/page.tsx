@@ -130,8 +130,39 @@ export default function CreateInvoicePage() {
     fetchData();
   }, [searchQuery, statusFilter]);
 
+  // Load settings from localStorage for immediate display
+  const loadSettingsFromLocalStorage = () => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const saved = localStorage.getItem('pos-settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.business) {
+          return {
+            businessName: parsed.business.name || '',
+            businessTagline: parsed.business.tagline || '',
+            address: parsed.business.address || '',
+            phone: parsed.business.phone || '',
+            email: parsed.business.email || '',
+            vatNumber: parsed.business.taxNumber || '',
+            kraPin: parsed.business.taxNumber || '',
+            includeInPrice: parsed.tax?.includeInPrice || false
+          };
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load settings from localStorage:', e);
+    }
+    return null;
+  };
+
   const fetchData = async () => {
     try {
+      // First load settings from localStorage for immediate display
+      const cachedSettings = loadSettingsFromLocalStorage();
+      if (cachedSettings) {
+        setBusinessSettings(cachedSettings);
+      }
       setLoading(true);
       
       const [invoicesRes, productsRes, customersRes, settingsRes] = await Promise.all([
@@ -262,12 +293,22 @@ export default function CreateInvoicePage() {
   };
 
   const calculateTax = (subtotal: number) => {
+    const includeInPrice = businessSettings?.includeInPrice ?? false;
+    if (includeInPrice) {
+      // Prices already include tax - no additional tax to add
+      return 0;
+    }
     return subtotal * 0.16; // 16% VAT
   };
 
   const calculateTotal = () => {
     const subtotal = calculateSubtotal();
+    const includeInPrice = businessSettings?.includeInPrice ?? false;
     const tax = calculateTax(subtotal);
+    if (includeInPrice) {
+      // Prices include tax - total is the subtotal
+      return subtotal;
+    }
     return subtotal + tax;
   };
 

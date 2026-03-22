@@ -58,6 +58,7 @@ interface RecentSale {
   customer: { name: string } | null;
   cashier: { name: string };
   saleDate: string;
+  status: string;
 }
 
 export default function DashboardPage() {

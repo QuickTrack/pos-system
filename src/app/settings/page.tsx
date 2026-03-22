@@ -5,7 +5,7 @@ import { Header } from '@/components/layout/Header';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Save, Building2, Receipt, Bell, Shield, Palette } from 'lucide-react';
+import { Save, Building2, Receipt, Bell, Shield, Palette, Calendar } from 'lucide-react';
 
 interface Settings {
   business: {
@@ -33,6 +33,14 @@ interface Settings {
     darkMode: boolean;
     colorScheme: string;
   };
+  financialYear: {
+    startMonth: number;
+    endMonth: number;
+    currentFinancialYear: string;
+    fiscalYearStartDate: string;
+    invoicePrefix: string;
+    cashSalePrefix: string;
+  };
 }
 
 const TABS = [
@@ -41,6 +49,7 @@ const TABS = [
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'security', label: 'Security', icon: Shield },
+  { id: 'financialYear', label: 'Financial Year', icon: Calendar },
 ];
 
 export default function SettingsPage() {
@@ -74,44 +83,85 @@ export default function SettingsPage() {
       darkMode: false,
       colorScheme: 'emerald',
     },
+    financialYear: {
+      startMonth: 7,
+      endMonth: 6,
+      currentFinancialYear: '2025-2026',
+      fiscalYearStartDate: '2025-07-01',
+      invoicePrefix: 'INV',
+      cashSalePrefix: 'CSH',
+    },
   });
 
+  // Load settings from localStorage on mount
   useEffect(() => {
-    fetchSettings();
+    const loadFromLocalStorage = () => {
+      if (typeof window === 'undefined') return null;
+      try {
+        const saved = localStorage.getItem('pos-settings');
+        if (saved) {
+          return JSON.parse(saved);
+        }
+      } catch (e) {
+        console.error('Failed to load settings from localStorage:', e);
+      }
+      return null;
+    };
+
+    // First load from localStorage for immediate display
+    const cachedSettings = loadFromLocalStorage();
+    if (cachedSettings) {
+      setSettings(cachedSettings);
+    }
+    
+    // Then fetch from API to get latest server data (but merge with localStorage)
+    fetchSettings(loadFromLocalStorage);
   }, []);
 
-  const fetchSettings = async () => {
+  const fetchSettings = async (getLocalStorage?: () => any) => {
     try {
       const response = await fetch('/api/settings');
       if (response.ok) {
         const data = await response.json();
         if (data.settings) {
+          // Get localStorage data for merging
+          const localData = getLocalStorage ? getLocalStorage() : null;
+          
           // Map flat database fields to nested frontend structure
+          // Merge with localStorage, preferring localStorage values for settings not in DB
           setSettings({
             business: {
-              name: data.settings.businessName || '',
-              tagline: data.settings.businessTagline || '',
-              email: data.settings.email || '',
-              phone: data.settings.phone || '',
-              address: data.settings.address || '',
-              taxNumber: data.settings.kraPin || '',
+              name: data.settings.businessName || localData?.business?.name || '',
+              tagline: data.settings.businessTagline || localData?.business?.tagline || '',
+              email: data.settings.email || localData?.business?.email || '',
+              phone: data.settings.phone || localData?.business?.phone || '',
+              address: data.settings.address || localData?.business?.address || '',
+              taxNumber: data.settings.kraPin || localData?.business?.taxNumber || '',
               currency: 'KES',
-              logo: data.settings.logo || '',
+              logo: data.settings.logo || localData?.business?.logo || '',
             },
             tax: {
-              enabled: data.settings.enableTax ?? true,
-              rate: data.settings.taxRate || 16,
-              includeInPrice: false,
-              invoiceTerms: data.settings.invoiceTerms || '',
+              enabled: data.settings.enableTax ?? localData?.tax?.enabled ?? true,
+              rate: data.settings.taxRate ?? localData?.tax?.rate ?? 16,
+              includeInPrice: data.settings.includeInPrice ?? localData?.tax?.includeInPrice ?? false,
+              invoiceTerms: data.settings.invoiceTerms || localData?.tax?.invoiceTerms || '',
             },
             notifications: {
-              email: true,
-              lowStock: data.settings.lowStockAlert ?? true,
-              dailySales: false,
+              email: localData?.notifications?.email ?? true,
+              lowStock: data.settings.lowStockAlert ?? localData?.notifications?.lowStock ?? true,
+              dailySales: localData?.notifications?.dailySales ?? false,
             },
             appearance: {
-              darkMode: false,
-              colorScheme: 'emerald',
+              darkMode: localData?.appearance?.darkMode ?? false,
+              colorScheme: localData?.appearance?.colorScheme ?? 'emerald',
+            },
+            financialYear: {
+              startMonth: data.settings.financialYearStartMonth ?? localData?.financialYear?.startMonth ?? 7,
+              endMonth: data.settings.financialYearEndMonth ?? localData?.financialYear?.endMonth ?? 6,
+              currentFinancialYear: data.settings.currentFinancialYear ?? localData?.financialYear?.currentFinancialYear ?? '2025-2026',
+              fiscalYearStartDate: data.settings.fiscalYearStartDate ? new Date(data.settings.fiscalYearStartDate).toISOString().split('T')[0] : localData?.financialYear?.fiscalYearStartDate ?? '2025-07-01',
+              invoicePrefix: data.settings.invoicePrefix ?? localData?.financialYear?.invoicePrefix ?? 'INV',
+              cashSalePrefix: data.settings.cashSalePrefix ?? localData?.financialYear?.cashSalePrefix ?? 'CSH',
             },
           });
         }
@@ -138,9 +188,17 @@ export default function SettingsPage() {
         logo: settings.business.logo,
         taxRate: settings.tax.rate,
         enableTax: settings.tax.enabled,
+        includeInPrice: settings.tax.includeInPrice,
         taxName: 'VAT',
         lowStockAlert: settings.notifications.lowStock,
         invoiceTerms: settings.tax.invoiceTerms,
+        // Financial Year settings
+        financialYearStartMonth: settings.financialYear.startMonth,
+        financialYearEndMonth: settings.financialYear.endMonth,
+        currentFinancialYear: settings.financialYear.currentFinancialYear,
+        fiscalYearStartDate: settings.financialYear.fiscalYearStartDate,
+        invoicePrefix: settings.financialYear.invoicePrefix,
+        cashSalePrefix: settings.financialYear.cashSalePrefix,
       };
 
       const response = await fetch('/api/settings', {
@@ -150,6 +208,12 @@ export default function SettingsPage() {
       });
 
       if (response.ok) {
+        // Also save to localStorage for offline persistence
+        try {
+          localStorage.setItem('pos-settings', JSON.stringify(settings));
+        } catch (e) {
+          console.error('Failed to save settings to localStorage:', e);
+        }
         setMessage({ type: 'success', text: 'Settings saved successfully!' });
       } else {
         setMessage({ type: 'error', text: 'Failed to save settings' });
@@ -215,6 +279,13 @@ export default function SettingsPage() {
     setSettings(prev => ({
       ...prev,
       appearance: { ...prev.appearance, [field]: value },
+    }));
+  };
+
+  const updateFinancialYearField = (field: string, value: any) => {
+    setSettings(prev => ({
+      ...prev,
+      financialYear: { ...prev.financialYear, [field]: value },
     }));
   };
 
@@ -586,6 +657,81 @@ export default function SettingsPage() {
                     <Button variant="outline" size="sm">
                       View Sessions
                     </Button>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'financialYear' && (
+                <div className="space-y-6">
+                  <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-200">
+                    <h3 className="font-medium text-gray-900 mb-2">Current Financial Year</h3>
+                    <p className="text-2xl font-bold text-emerald-600">{settings.financialYear.currentFinancialYear}</p>
+                    <p className="text-sm text-gray-500 mt-1">Invoice and cash sale numbers include this year</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Financial Year Start Month</label>
+                    <select
+                      value={settings.financialYear.startMonth}
+                      onChange={(e) => updateFinancialYearField('startMonth', parseInt(e.target.value))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    >
+                      <option value={1}>January</option>
+                      <option value={2}>February</option>
+                      <option value={3}>March</option>
+                      <option value={4}>April</option>
+                      <option value={5}>May</option>
+                      <option value={6}>June</option>
+                      <option value={7}>July</option>
+                      <option value={8}>August</option>
+                      <option value={9}>September</option>
+                      <option value={10}>October</option>
+                      <option value={11}>November</option>
+                      <option value={12}>December</option>
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">Month when your financial year begins</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Invoice Prefix</label>
+                    <Input
+                      value={settings.financialYear.invoicePrefix}
+                      onChange={(e) => updateFinancialYearField('invoicePrefix', e.target.value)}
+                      placeholder="INV"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Prefix for account/credit sale invoices (e.g., INV-2025-2026-00001)</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Cash Sale Prefix</label>
+                    <Input
+                      value={settings.financialYear.cashSalePrefix}
+                      onChange={(e) => updateFinancialYearField('cashSalePrefix', e.target.value)}
+                      placeholder="CSH"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Prefix for cash sales (e.g., CSH-2025-2026-00001)</p>
+                  </div>
+
+                  <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+                    <h3 className="font-medium text-amber-800 mb-2">Year Transition</h3>
+                    <p className="text-sm text-amber-700">
+                      When the financial year changes, invoice and cash sale numbers will automatically reset to 00001 for the new year.
+                      A system log entry will be created to track the year transition.
+                    </p>
+                  </div>
+
+                  <div className="p-4 bg-gray-50 rounded-lg">
+                    <h3 className="font-medium text-gray-900 mb-3">Numbering Format Examples</h3>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Invoice:</span>
+                        <span className="font-mono text-gray-900">{settings.financialYear.invoicePrefix}{settings.financialYear.currentFinancialYear.replace('-', '').slice(-4)}-00001</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Cash Sale:</span>
+                        <span className="font-mono text-gray-900">{settings.financialYear.cashSalePrefix}{settings.financialYear.currentFinancialYear.replace('-', '').slice(-4)}-00001</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

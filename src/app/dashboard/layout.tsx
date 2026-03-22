@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
+import { LicenseProvider } from '@/lib/license-context';
 
 function AuthCheck({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -44,7 +45,9 @@ export default function DashboardLayout({
 }) {
   return (
     <AuthProvider>
-      <AuthCheck>{children}</AuthCheck>
+      <LicenseProvider>
+        <AuthCheck>{children}</AuthCheck>
+      </LicenseProvider>
     </AuthProvider>
   );
 }

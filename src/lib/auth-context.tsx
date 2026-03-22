@@ -70,6 +70,74 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.refresh();
   };
 
+  // Check and redirect to onboarding if needed
+  useEffect(() => {
+    if (!loading && user) {
+      const currentPath = window.location.pathname;
+      
+      // Skip checks for license and onboarding pages
+      if (currentPath === '/license/activate' || currentPath === '/onboarding') {
+        return;
+      }
+      
+      // Super admins bypass license validation - they can access the system regardless of license status
+      const isSuperAdmin = user.role === 'super_admin';
+      
+      // Check license first
+      const checkLicense = async () => {
+        try {
+          const storedLicense = localStorage.getItem('pos-license');
+          
+          // If super admin, skip license check entirely
+          if (isSuperAdmin) {
+            // Clear any license warnings for super admins
+            localStorage.removeItem('license-warning');
+            return;
+          }
+          
+          if (storedLicense) {
+            const licenseData = JSON.parse(storedLicense);
+            
+            // Validate license with server
+            const response = await fetch(`/api/licenses/validate?licenseKey=${encodeURIComponent(licenseData.licenseKey)}`);
+            const data = await response.json();
+            
+            if (!data.valid) {
+              // License invalid or expired
+              if (currentPath !== '/license/activate') {
+                router.push('/license/activate');
+              }
+              return;
+            }
+            
+            // Check for warnings
+            if (data.warnings && data.warnings.length > 0) {
+              // Store warning for display in header
+              localStorage.setItem('license-warning', JSON.stringify(data.warnings));
+            }
+          } else {
+            // No license found
+            if (currentPath !== '/license/activate') {
+              router.push('/license/activate');
+            }
+          }
+        } catch (error) {
+          console.error('License check failed:', error);
+        }
+      };
+      
+      checkLicense();
+      
+      // Check if onboarding is needed
+      const onboardingComplete = localStorage.getItem('onboarding-complete');
+      
+      // If not on onboarding page and not complete, redirect
+      if (!onboardingComplete && currentPath !== '/onboarding') {
+        router.push('/onboarding');
+      }
+    }
+  }, [user, loading, router]);
+
   useEffect(() => {
     checkAuth();
 

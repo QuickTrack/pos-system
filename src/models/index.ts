@@ -9,6 +9,8 @@ export { default as Purchase } from './Purchase';
 export { default as SupplierPayment } from './SupplierPayment';
 export { default as Settings } from './Settings';
 export { default as ActivityLog } from './ActivityLog';
+export { default as StockTransfer } from './StockTransfer';
+export { default as StockAudit } from './StockAudit';
 
 // Re-export types from each model
 export type { IUser } from './User';
@@ -22,3 +24,5 @@ export type { IPurchase, IPurchaseItem } from './Purchase';
 export type { ISupplierPayment } from './SupplierPayment';
 export type { ISettings } from './Settings';
 export type { IActivityLog } from './ActivityLog';
+export type { IStockTransfer, IStockTransferItem, TransferStatus, StockLocation } from './StockTransfer';
+export type { IStockAudit, MovementType } from './StockAudit';

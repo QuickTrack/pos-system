@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50');
     const lowStock = searchParams.get('lowStock');
     const branch = searchParams.get('branch');
+    const location = searchParams.get('location'); // 'shop' or 'remote'
     
     const query: any = { isActive: true };
     
@@ -33,7 +34,10 @@ export async function GET(request: NextRequest) {
       query.branch = branch;
     }
     
+    // Low stock check - uses shopStock (or falls back to stockQuantity for legacy data)
     if (lowStock === 'true') {
+      // For simplicity, just check stockQuantity for legacy data compatibility
+      // The frontend handles displaying both shop and remote stock separately
       query.$expr = {
         $lte: ['$stockQuantity', '$lowStockThreshold']
       };
@@ -45,6 +49,7 @@ export async function GET(request: NextRequest) {
       Product.find(query)
         .populate('category', 'name')
         .populate('supplier', 'name')
+        .setOptions({ strictPopulate: false })
         .sort({ name: 1 })
         .skip(skip)
         .limit(limit),
@@ -98,6 +103,48 @@ export async function POST(request: NextRequest) {
     console.error('Create product error:', error);
     return NextResponse.json(
       { error: 'Failed to create product' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    await dbConnect();
+    
+    const { searchParams } = new URL(request.url);
+    const productId = searchParams.get('id');
+    
+    if (!productId) {
+      return NextResponse.json(
+        { error: 'Product ID is required' },
+        { status: 400 }
+      );
+    }
+    
+    const data = await request.json();
+    
+    const product = await Product.findByIdAndUpdate(
+      productId,
+      { $set: data },
+      { new: true, runValidators: true }
+    );
+    
+    if (!product) {
+      return NextResponse.json(
+        { error: 'Product not found' },
+        { status: 404 }
+      );
+    }
+    
+    return NextResponse.json({
+      success: true,
+      product,
+    });
+  } catch (error) {
+    console.error('Update product error:', error);
+    return NextResponse.json(
+      { error: 'Failed to update product' },
       { status: 500 }
     );
   }

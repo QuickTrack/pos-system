@@ -102,10 +102,10 @@ export default function POSPage() {
     phone: '',
     email: '',
     vatNumber: '',
-    kraPin: ''
+    kraPin: '',
+    includeInPrice: false
   });
-  const [cartHeight, setCartHeight] = useState(250);
-  const [isDragging, setIsDragging] = useState(false);
+  const [cartHeight] = useState(350);
   const [selectedProductIndex, setSelectedProductIndex] = useState(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);
   
@@ -258,8 +258,52 @@ export default function POSPage() {
     }
   };
 
+  // Load settings from localStorage for immediate display
+  const loadSettingsFromLocalStorage = () => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const saved = localStorage.getItem('pos-settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Map from nested format to business settings format
+        if (parsed.business) {
+          return {
+            businessName: parsed.business.name || 'POS',
+            businessTagline: parsed.business.tagline || '',
+            address: parsed.business.address || '',
+            phone: parsed.business.phone || '',
+            email: parsed.business.email || '',
+            vatNumber: parsed.business.taxNumber || '',
+            kraPin: parsed.business.taxNumber || '',
+            includeInPrice: parsed.tax?.includeInPrice || false
+          };
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load settings from localStorage:', e);
+    }
+    return null;
+  };
+
   const fetchSettings = async () => {
     try {
+      // First load from localStorage for immediate display
+      const cachedSettings = loadSettingsFromLocalStorage();
+      if (cachedSettings) {
+        setBusinessName(cachedSettings.businessName);
+        setBusinessSettings({
+          name: cachedSettings.businessName || 'POS',
+          tagline: cachedSettings.businessTagline || '',
+          address: cachedSettings.address || '',
+          phone: cachedSettings.phone || '',
+          email: cachedSettings.email || '',
+          vatNumber: cachedSettings.vatNumber || '',
+          kraPin: cachedSettings.kraPin || '',
+          includeInPrice: cachedSettings.includeInPrice || false
+        });
+      }
+
+      // Then fetch from API to get latest server data
       const response = await fetch('/api/settings');
       const data = await response.json();
       const settings = data.settings;
@@ -272,7 +316,8 @@ export default function POSPage() {
           phone: settings.phone || '',
           email: settings.email || '',
           vatNumber: settings.vatNumber || '',
-          kraPin: settings.kraPin || ''
+          kraPin: settings.kraPin || '',
+          includeInPrice: settings.includeInPrice ?? cachedSettings?.includeInPrice ?? false
         });
       }
     } catch (error) {
@@ -375,9 +420,16 @@ export default function POSPage() {
     const subtotal = getSubtotal();
     const discount = getTotalDiscount();
     const taxRate = 16;
+    
+    // Calculate tax as 16% of the subtotal (for display purposes)
+    // Product prices in database are already VAT inclusive
+    // So we calculate tax to show the VAT component but don't add it to total
     const taxableAmount = subtotal - discount;
     const tax = (taxableAmount * taxRate) / 100;
-    const total = taxableAmount + tax;
+    
+    // Total is the sum of product prices without additional VAT
+    const total = taxableAmount;
+    
     return { subtotal, discount, tax, total };
   };
 
@@ -425,6 +477,7 @@ export default function POSPage() {
           change: isCreditPayment ? 0 : (paidAmount - total),
           mpesaPhone: paymentMethod === 'mpesa' ? customer?.phone : undefined,
           notes: isAccountPayment ? 'Charge to account' : isCreditPayment ? 'Paid with store credit' : undefined,
+          includeInPrice: businessSettings.includeInPrice,
         }),
       });
       
@@ -501,6 +554,7 @@ export default function POSPage() {
           amountPaid: total,
           change: 0,
           notes: 'Payment via M-Pesa Till Number',
+          includeInPrice: businessSettings.includeInPrice,
         }),
       });
       
@@ -555,6 +609,7 @@ export default function POSPage() {
           amountPaid: total,
           change: 0,
           notes: 'Payment via M-Pesa Owner Wallet',
+          includeInPrice: businessSettings.includeInPrice,
         }),
       });
       
@@ -660,38 +715,7 @@ export default function POSPage() {
     fetchProducts();
   };
 
-  const handleMouseDown = () => {
-    setIsDragging(true);
-  };
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (isDragging) {
-      const newHeight = window.innerHeight - e.clientY - 64;
-      setCartHeight(Math.max(150, Math.min(500, newHeight)));
-    }
-  }, [isDragging]);
-
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  useEffect(() => {
-    if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    }
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging, handleMouseMove, handleMouseUp]);
-
-  // Persist cart height to localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('pos-cart-height', cartHeight.toString());
-    }
-  }, [cartHeight]);
 
   // Auto-print receipt after sale completion (works for all payment methods)
   useEffect(() => {
@@ -876,23 +900,16 @@ export default function POSPage() {
             </div>
           )}
 
-          {/* Products Section - Empty */}
-          <div className="flex-1"></div>
+          {/* Products Section - Empty - Removed for cart space */}
         </div>
 
-        {/* Cart Section - Resizable */}
+        {/* Cart Section - Fixed Height */}
         <div 
-          className="bg-white border-t border-gray-200 flex flex-col overflow-auto relative z-0"
-          style={{ height: cartHeight }}
+          className="bg-white border-t border-gray-200 flex flex-col h-[calc(100vh-150px)]"
         >
-          {/* Resize Handle */}
-          <div 
-            className="h-1 bg-gray-200 hover:bg-emerald-400 cursor-row-resize flex-shrink-0"
-            onMouseDown={handleMouseDown}
-          />
 
           {/* Cart Items - Table Format */}
-          <div className="flex-1 overflow-auto p-3">
+          <div className="flex-1 overflow-y-auto p-3 min-h-0">
             {items.length === 0 ? (
               <div className="flex items-center justify-center h-full text-gray-500">
                 <ShoppingCart className="w-12 h-12 mr-3 text-gray-300" />
@@ -1303,7 +1320,7 @@ export default function POSPage() {
           {paymentMethod === 'credit' && selectedCustomer && selectedCustomer.creditBalance > 0 && (
             <div className="bg-emerald-50 rounded-lg p-3 text-center">
               <p className="text-sm text-emerald-700">
-                {formatCurrency(Math.min(selectedCustomer.creditBalance, total))} credit will be used from {customer.name}&apos;s balance
+                {formatCurrency(Math.min(selectedCustomer.creditBalance, total))} credit will be used from {selectedCustomer.name}&apos;s balance
               </p>
             </div>
           )}

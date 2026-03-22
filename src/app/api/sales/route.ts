@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/mongodb';
-import Sale from '@/models/Sale';
-import Product from '@/models/Product';
-import Customer from '@/models/Customer';
+import { Sale, Product, Customer, User, Branch, Settings, ActivityLog } from '@/models';
 import { getAuthUser } from '@/lib/auth-server';
 import { hasPermission } from '@/lib/auth';
-import { generateInvoiceNumber } from '@/lib/utils';
+import { 
+  generateInvoiceNumber, 
+  generateCashSaleNumber,
+  generateInvoiceNumberWithFY,
+  generateCashSaleNumberWithFY,
+  checkAndUpdateFinancialYear,
+  getFinancialYear,
+  FinancialYearConfig
+} from '@/lib/utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -85,8 +91,9 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Get sales error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to fetch sales' },
+      { error: 'Failed to fetch sales', details: errorMessage },
       { status: 500 }
     );
   }
@@ -107,24 +114,121 @@ export async function POST(request: NextRequest) {
     
     const data = await request.json();
     
-    // Generate invoice number
-    const invoiceNumber = generateInvoiceNumber('INV');
+    // Determine if this is a cash sale (cash, mpesa, card)
+    const isCashSale = ['cash', 'mpesa', 'card'].includes(data.paymentMethod);
+    
+    // Get settings and check for financial year transition
+    const settings = await Settings.findOne({}).lean();
+    const invoicePrefix = settings?.invoicePrefix || 'INV';
+    const cashSalePrefix = settings?.cashSalePrefix || 'CSH';
+    const financialYearStartMonth = settings?.financialYearStartMonth || 7;
+    let currentFinancialYear = settings?.currentFinancialYear || getFinancialYear(new Date(), financialYearStartMonth);
+    
+    // Convert to plain object for invoiceNumbersByYear
+    const invoiceNumbersByYear: Record<string, number> = settings?.invoiceNumbersByYear 
+      ? settings.invoiceNumbersByYear as Record<string, number>
+      : {};
+    const cashSaleNumbersByYear: Record<string, number> = settings?.cashSaleNumbersByYear 
+      ? settings.cashSaleNumbersByYear as Record<string, number>
+      : {};
+    
+    // Check if we've entered a new financial year
+    const today = new Date();
+    const newFinancialYear = getFinancialYear(today, financialYearStartMonth);
+    let isNewYear = false;
+    
+    if (newFinancialYear !== currentFinancialYear) {
+      isNewYear = true;
+      // Log the year transition
+      try {
+        await ActivityLog.create({
+          user: user.userId as any,
+          userName: user.name || 'System',
+          action: 'year_transition',
+          module: 'system',
+          description: `Financial year transitioned from ${currentFinancialYear} to ${newFinancialYear}`,
+          metadata: {
+            previousYear: currentFinancialYear,
+            newYear: newFinancialYear,
+            transitionDate: today
+          }
+        });
+      } catch (e) {
+        console.error('Failed to log year transition:', e);
+      }
+      currentFinancialYear = newFinancialYear;
+      // Initialize counters for new year if not exist
+      if (!invoiceNumbersByYear[currentFinancialYear]) {
+        invoiceNumbersByYear[currentFinancialYear] = 1;
+      }
+      if (!cashSaleNumbersByYear[currentFinancialYear]) {
+        cashSaleNumbersByYear[currentFinancialYear] = 1;
+      }
+    }
+    
+    let invoiceNumber: string;
+    let updateFields: any = {
+      currentFinancialYear,
+      lastYearTransitionDate: isNewYear ? today : settings?.lastYearTransitionDate
+    };
+    
+    if (isCashSale) {
+      // Use sequential cash sale numbering with financial year (CSH-2025-2026-00001)
+      const currentNumber = cashSaleNumbersByYear[currentFinancialYear] || 1;
+      const { invoiceNumber: cashNumber, newNumber } = generateCashSaleNumberWithFY(
+        cashSalePrefix,
+        currentFinancialYear,
+        currentNumber
+      );
+      invoiceNumber = cashNumber;
+      
+      // Update the cash sale number for this financial year
+      cashSaleNumbersByYear[currentFinancialYear] = newNumber;
+      updateFields.cashSaleNumbersByYear = cashSaleNumbersByYear;
+    } else {
+      // Use invoice numbering with financial year (INV-2025-2026-00001)
+      const currentNumber = invoiceNumbersByYear[currentFinancialYear] || 1;
+      const { invoiceNumber: invNumber, newNumber } = generateInvoiceNumberWithFY(
+        invoicePrefix,
+        currentFinancialYear,
+        currentNumber
+      );
+      invoiceNumber = invNumber;
+      
+      // Update the invoice number for this financial year
+      invoiceNumbersByYear[currentFinancialYear] = newNumber;
+      updateFields.invoiceNumbersByYear = invoiceNumbersByYear;
+    }
+    
+    // Update settings with new counters and potentially new financial year
+    await Settings.updateOne({}, { $set: updateFields });
     
     // Calculate totals
     let subtotal = 0;
     let totalDiscount = 0;
     let totalTax = 0;
     let profit = 0;
+    const taxRate = data.taxRate || 16;
+    const includeInPrice = data.includeInPrice ?? false;
     
     const items = data.items.map((item: any) => {
+      // Calculate item total as straightforward QTY * RATE multiplication
+      // No additional VAT calculations or adjustments applied to individual line items
       const itemSubtotal = item.unitPrice * item.quantity;
       const itemDiscount = item.discountType === 'percentage'
         ? (itemSubtotal * item.discount) / 100
         : item.discount;
-      const itemTax = (itemSubtotal - itemDiscount) * (data.taxRate || 16) / 100;
-      const itemTotal = itemSubtotal - itemDiscount + itemTax;
+      
+      // For item tax calculation, we use 16% of the net amount for display purposes
+      // This represents the VAT component but is not added to the total
+      const netAmount = itemSubtotal - itemDiscount;
+      const itemTax = (netAmount * taxRate) / 100;
+      
+      // Item total is simply QTY * RATE minus discount (no hidden fees)
+      const itemTotal = netAmount;
+      
       const costPrice = item.costPrice || 0;
-      const itemProfit = (item.unitPrice - costPrice) * item.quantity;
+      const itemProfit = (netAmount - costPrice) * item.quantity;
       
       subtotal += itemSubtotal;
       totalDiscount += itemDiscount;
@@ -158,10 +262,20 @@ export async function POST(request: NextRequest) {
       ? (subtotal * data.discount) / 100
       : (data.discount || 0);
     
-    const taxableAmount = subtotal - orderDiscountAmount;
-    const taxRate = data.taxRate || 16;
-    const orderTax = data.applyTax !== false ? taxableAmount * taxRate / 100 : 0;
-    const total = taxableAmount + orderTax;
+    const orderTaxableAmount = subtotal - orderDiscountAmount;
+    let orderTax: number;
+    let orderTotal: number;
+    
+    if (includeInPrice) {
+      // Prices already include VAT - reverse calculate
+      const netAmount = orderTaxableAmount / (1 + taxRate / 100);
+      orderTax = orderTaxableAmount - netAmount;
+      orderTotal = orderTaxableAmount; // Total is the VAT-inclusive amount
+    } else {
+      // Prices are VAT-exclusive - calculate tax on top
+      orderTax = data.applyTax !== false ? orderTaxableAmount * taxRate / 100 : 0;
+      orderTotal = orderTaxableAmount + orderTax;
+    }
     
     // Credit limit validation for account payments
     if (data.paymentMethod === 'account' && data.customerId) {
@@ -189,7 +303,7 @@ export async function POST(request: NextRequest) {
         ]);
         
         const currentDebt = currentOutstanding.length > 0 ? currentOutstanding[0].totalOutstanding : 0;
-        const newDebt = currentDebt + total;
+        const newDebt = currentDebt + orderTotal;
         
         if (newDebt > customer.creditLimit) {
           const availableCredit = Math.max(0, customer.creditLimit - currentDebt);
@@ -199,7 +313,7 @@ export async function POST(request: NextRequest) {
             currentDebt: currentDebt,
             creditLimit: customer.creditLimit,
             availableCredit,
-            saleAmount: total,
+            saleAmount: orderTotal,
             wouldExceedBy: newDebt - customer.creditLimit
           }, { status: 400 });
         }
@@ -224,7 +338,7 @@ export async function POST(request: NextRequest) {
       discountAmount: orderDiscountAmount,
       tax: orderTax,
       taxRate,
-      total,
+      total: orderTotal,
       paymentMethod: data.paymentMethod,
       paymentDetails: data.paymentDetails,
       amountPaid: data.amountPaid,
@@ -250,8 +364,8 @@ export async function POST(request: NextRequest) {
       const updateData: any = {
         $inc: {
           totalPurchases: 1,
-          totalSpent: total,
-          loyaltyPoints: Math.floor(total / 100),
+          totalSpent: orderTotal,
+          loyaltyPoints: Math.floor(orderTotal / 100),
         },
         lastPurchaseDate: new Date(),
       };

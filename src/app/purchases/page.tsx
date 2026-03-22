@@ -67,6 +67,7 @@ export default function PurchasesPage() {
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [showProductDropdown, setShowProductDropdown] = useState(false);
   const productSearchRef = useRef<HTMLInputElement>(null);
+  const supplierSelectRef = useRef<HTMLSelectElement>(null);
   const [orderNumber, setOrderNumber] = useState('');
   const [orderNumberSuffix, setOrderNumberSuffix] = useState('');
   const [formData, setFormData] = useState({
@@ -82,6 +83,17 @@ export default function PurchasesPage() {
   useEffect(() => {
     fetchPurchases();
   }, [status, paymentStatus]);
+
+  // Auto-focus supplier select when modal opens
+  useEffect(() => {
+    if (showCreateModal && supplierSelectRef.current) {
+      // Small delay to ensure modal is fully rendered
+      const timer = setTimeout(() => {
+        supplierSelectRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [showCreateModal]);
 
   useEffect(() => {
     // Filter products based on search query
@@ -643,6 +655,7 @@ export default function PurchasesPage() {
                 </div>
                 <div className="flex-1 max-w-sm">
                   <select
+                    ref={supplierSelectRef}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     value={formData.supplierId}
                     onChange={(e) => handleSupplierChange(e.target.value)}

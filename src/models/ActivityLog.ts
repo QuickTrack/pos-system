@@ -4,7 +4,7 @@ export interface IActivityLog extends Document {
   user: mongoose.Types.ObjectId;
   userName: string;
   action: string;
-  module: 'users' | 'products' | 'sales' | 'customers' | 'suppliers' | 'purchases' | 'settings' | 'branches' | 'categories' | 'reports';
+  module: 'users' | 'products' | 'sales' | 'customers' | 'suppliers' | 'purchases' | 'settings' | 'branches' | 'categories' | 'reports' | 'system';
   description: string;
   ipAddress?: string;
   userAgent?: string;
@@ -20,7 +20,7 @@ const ActivityLogSchema = new Schema<IActivityLog>(
     action: { type: String, required: true },
     module: { 
       type: String, 
-      enum: ['users', 'products', 'sales', 'customers', 'suppliers', 'purchases', 'settings', 'branches', 'categories', 'reports'],
+      enum: ['users', 'products', 'sales', 'customers', 'suppliers', 'purchases', 'settings', 'branches', 'categories', 'reports', 'system'],
       required: true 
     },
     description: { type: String, required: true },

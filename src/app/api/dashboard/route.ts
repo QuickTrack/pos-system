@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/mongodb';
-import Sale from '@/models/Sale';
-import Product from '@/models/Product';
-import Customer from '@/models/Customer';
-import Supplier from '@/models/Supplier';
-import Purchase from '@/models/Purchase';
+import { Sale, Product, Customer, Supplier, Purchase, User, Branch } from '@/models';
 import { getAuthUser } from '@/lib/auth-server';
 
 export async function GET(request: NextRequest) {

@@ -55,6 +55,136 @@ export function generateInvoiceNumber(prefix: string = 'INV'): string {
   return `${prefix}${year}${month}${day}${random}`;
 }
 
+/**
+ * Generate a sequential cash sale number like CSH-00001
+ * Uses the settings to track and increment the number
+ */
+export function generateCashSaleNumber(settings: { cashSalePrefix?: string; cashSaleNumber?: number }): { 
+  invoiceNumber: string; 
+  newCashSaleNumber: number 
+} {
+  const prefix = settings.cashSalePrefix || 'CSH';
+  const currentNumber = settings.cashSaleNumber || 1;
+  const newNumber = currentNumber + 1;
+  const invoiceNumber = `${prefix}-${String(currentNumber).padStart(5, '0')}`;
+  return {
+    invoiceNumber,
+    newCashSaleNumber: newNumber
+  };
+}
+
+// Financial Year Types and Functions
+
+export interface FinancialYearConfig {
+  startMonth: number; // 1-12
+  endMonth: number; // 1-12
+  currentYear: string;
+  startDate: Date;
+  invoiceNumbersByYear: Record<string, number>;
+  cashSaleNumbersByYear: Record<string, number>;
+}
+
+/**
+ * Calculate the financial year string for a given date
+ * Format: "2025-2026"
+ */
+export function getFinancialYear(date: Date, startMonth: number): string {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1; // 1-12
+  
+  // If we're in months before the start month, we're in the previous financial year
+  if (month < startMonth) {
+    return `${year - 1}-${year}`;
+  }
+  return `${year}-${year + 1}`;
+}
+
+/**
+ * Get the start date of a financial year
+ */
+export function getFinancialYearStartDate(financialYear: string, startMonth: number): Date {
+  const [startYear] = financialYear.split('-').map(Number);
+  return new Date(startYear, startMonth - 1, 1);
+}
+
+/**
+ * Check if a date is in a new financial year compared to the stored current year
+ */
+export function isNewFinancialYear(
+  currentDate: Date,
+  currentFinancialYear: string,
+  startMonth: number
+): boolean {
+  const newYear = getFinancialYear(currentDate, startMonth);
+  return newYear !== currentFinancialYear;
+}
+
+/**
+ * Generate invoice number with financial year (e.g., INV2526-00001)
+ */
+export function generateInvoiceNumberWithFY(
+  prefix: string,
+  financialYear: string,
+  currentNumber: number
+): { invoiceNumber: string; newNumber: number } {
+  // Extract short year from format "2025-2026" -> "2526"
+  const shortYear = financialYear.replace('-', '').slice(-4);
+  const newNumber = currentNumber + 1;
+  const invoiceNumber = `${prefix}${shortYear}-${String(currentNumber).padStart(5, '0')}`;
+  return {
+    invoiceNumber,
+    newNumber
+  };
+}
+
+/**
+ * Generate cash sale number with financial year (e.g., CSH2526-00001)
+ */
+export function generateCashSaleNumberWithFY(
+  prefix: string,
+  financialYear: string,
+  currentNumber: number
+): { invoiceNumber: string; newNumber: number } {
+  // Extract short year from format "2025-2026" -> "2526"
+  const shortYear = financialYear.replace('-', '').slice(-4);
+  const newNumber = currentNumber + 1;
+  const invoiceNumber = `${prefix}${shortYear}-${String(currentNumber).padStart(5, '0')}`;
+  return {
+    invoiceNumber,
+    newNumber
+  };
+}
+
+/**
+ * Check and update financial year if needed
+ * Returns the current (potentially updated) financial year
+ */
+export function checkAndUpdateFinancialYear(
+  settings: FinancialYearConfig
+): { 
+  financialYear: string; 
+  isNewYear: boolean;
+  resetInvoiceNumber: boolean;
+  resetCashSaleNumber: boolean;
+} {
+  const today = new Date();
+  const { startMonth, currentYear, invoiceNumbersByYear, cashSaleNumbersByYear } = settings;
+  
+  const newYear = getFinancialYear(today, startMonth);
+  const isNewYear = newYear !== currentYear;
+  
+  // Check if we need to reset counters
+  const shouldResetInvoice = isNewYear && (!invoiceNumbersByYear || !invoiceNumbersByYear[newYear]);
+  const shouldResetCashSale = isNewYear && (!cashSaleNumbersByYear || !cashSaleNumbersByYear[newYear]);
+  
+  return {
+    financialYear: newYear,
+    isNewYear,
+    resetInvoiceNumber: shouldResetInvoice,
+    resetCashSaleNumber: shouldResetCashSale
+  };
+}
+
 export function generateSKU(categoryCode: string): string {
   const random = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
   return `${categoryCode.toUpperCase()}${random}`;

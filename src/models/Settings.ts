@@ -23,6 +23,7 @@ export interface ISettings extends Document {
   taxRate: number;
   taxName: string;
   enableTax: boolean;
+  includeInPrice: boolean;
   vatNumber?: string;
   
   // Receipt Settings
@@ -43,6 +44,21 @@ export interface ISettings extends Document {
   invoicePrefix: string;
   invoiceNumber: number;
   invoiceTerms?: string;
+  
+  // Cash Sale Settings
+  cashSalePrefix: string;
+  cashSaleNumber: number;
+  
+  // Financial Year Settings
+  financialYearStartMonth: number; // 1-12
+  financialYearEndMonth: number; // 1-12
+  currentFinancialYear: string; // e.g., "2025-2026"
+  fiscalYearStartDate: Date;
+  
+  // Invoice numbering per financial year
+  invoiceNumbersByYear: { [year: string]: number }; // e.g., { "2025-2026": 100 }
+  cashSaleNumbersByYear: { [year: string]: number }; // e.g., { "2025-2026": 50 }
+  lastYearTransitionDate: Date;
   
   // Sale Settings
   defaultPaymentMethod: 'cash' | 'mpesa' | 'card';
@@ -84,6 +100,7 @@ const SettingsSchema = new Schema<ISettings>(
     taxRate: { type: Number, default: 16 }, // 16% VAT in Kenya
     taxName: { type: String, default: 'VAT' },
     enableTax: { type: Boolean, default: true },
+    includeInPrice: { type: Boolean, default: false },
     vatNumber: { type: String },
     
     // Receipt Settings
@@ -108,6 +125,21 @@ const SettingsSchema = new Schema<ISettings>(
     invoicePrefix: { type: String, default: 'INV' },
     invoiceNumber: { type: Number, default: 1 },
     invoiceTerms: { type: String },
+    
+    // Cash Sale Settings
+    cashSalePrefix: { type: String, default: 'CSH' },
+    cashSaleNumber: { type: Number, default: 1 },
+    
+    // Financial Year Settings
+    financialYearStartMonth: { type: Number, default: 7 }, // July (7) - typical for Kenya
+    financialYearEndMonth: { type: Number, default: 6 }, // June (6)
+    currentFinancialYear: { type: String, default: '2025-2026' },
+    fiscalYearStartDate: { type: Date, default: () => new Date(new Date().getFullYear(), 6, 1) }, // July 1st
+    
+    // Invoice numbering per financial year
+    invoiceNumbersByYear: { type: Map, of: Number, default: {} },
+    cashSaleNumbersByYear: { type: Map, of: Number, default: {} },
+    lastYearTransitionDate: { type: Date, default: null },
     
     // Sale Settings
     defaultPaymentMethod: { 

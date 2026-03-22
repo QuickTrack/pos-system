@@ -62,16 +62,32 @@ export default function CashSalesPage() {
     fetchSettings();
   }, []);
 
+  const [error, setError] = useState<string | null>(null);
+
   const fetchSales = async () => {
     try {
       setLoading(true);
+      setError(null);
       const response = await fetch('/api/sales?paymentMethod=cashsales&limit=100');
       const data = await response.json();
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          setError('You are not authorized. Please log in again.');
+        } else {
+          setError(data.error || 'Failed to fetch sales');
+        }
+        return;
+      }
+      
       if (data.success) {
         setSales(data.sales);
+      } else {
+        setError(data.error || 'Failed to fetch sales');
       }
-    } catch (error) {
-      console.error('Failed to fetch sales:', error);
+    } catch (err) {
+      console.error('Failed to fetch sales:', err);
+      setError('Failed to fetch sales. Please check your connection.');
     } finally {
       setLoading(false);
     }
@@ -203,6 +219,19 @@ export default function CashSalesPage() {
       <Header title="Cash Sales" subtitle="View and manage cash-based transactions" />
       
       <div className="p-4">
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between">
+            <p className="text-red-700 text-sm">{error}</p>
+            <button
+              onClick={fetchSales}
+              className="ml-4 px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Search Bar */}
         <div className="mb-4">
           <div className="relative">

@@ -16,6 +16,7 @@ export interface ReceiptBusiness {
   email?: string;
   vatNumber?: string;
   kraPin?: string;
+  includeInPrice?: boolean;
 }
 
 export interface ReceiptItem {
@@ -47,6 +48,7 @@ export interface ReceiptData {
   amountPaid: number;
   change: number;
   cashierName: string;
+  includeInPrice?: boolean;
 }
 
 /**
@@ -154,8 +156,38 @@ export async function generateThermalReceiptHTML(data: ReceiptData): Promise<str
   // Calculate tax amounts
   const total = data.total;
   const taxRate = data.taxRate || 16;
-  const taxAmount = data.taxAmount || calculateVAT(total, taxRate);
-  const taxableAmount = data.taxableAmount || calculateTaxableAmount(total, taxRate);
+  // Check includeInPrice from data first, then from business settings
+  const includeInPrice = data.includeInPrice ?? data.business.includeInPrice ?? false;
+  
+  let taxAmount: number;
+  let taxableAmount: number;
+  
+  // Calculate VAT for each item and total VAT
+  let totalVATFromItems = 0;
+  let totalNetFromItems = 0;
+  
+  if (data.items && data.items.length > 0) {
+    for (const item of data.items) {
+      // Calculate VAT from item amount (prices are stored as VAT-inclusive)
+      // VAT = amount - (amount / 1.16), Net = amount / 1.16
+      const itemNet = item.amount / (1 + taxRate / 100);
+      const itemVAT = item.amount - itemNet;
+      totalVATFromItems += itemVAT;
+      totalNetFromItems += itemNet;
+    }
+  }
+  
+  if (includeInPrice) {
+    // Prices already include tax (VAT-inclusive)
+    // Use calculated VAT from items
+    taxAmount = totalVATFromItems;
+    taxableAmount = totalNetFromItems;
+  } else {
+    // For VAT-exclusive, still use the same calculation from total
+    // since prices are stored as VAT-inclusive but should be displayed as VAT-exclusive
+    taxAmount = totalVATFromItems || (total / (1 + taxRate / 100) * taxRate / 100);
+    taxableAmount = totalNetFromItems || (total / (1 + taxRate / 100));
+  }
   
   // Generate KRA QR Code
   let qrCodeDataUrl = '';
@@ -410,25 +442,29 @@ export async function generateThermalReceiptHTML(data: ReceiptData): Promise<str
     
     <!-- Items with nested layout -->
     <div class="divider-double">
-      ${data.items.map(item => `
+      ${data.items.map(item => {
+        // Display rate as-is: when includeInPrice is true, rate is already VAT-inclusive
+        // when false, rate is VAT-exclusive (base price)
+        const displayRate = item.rate;
+        return `
         <div class="item-main">
           <div class="item-name-full">${truncateText(item.name, 35)}</div>
         </div>
         <div class="item-details-row">
           <span class="item-qty">${item.quantity}</span>
           <span class="item-unit">${item.unit || 'pcs'}</span>
-          <span class="item-rate">@${formatNumber(item.rate)}</span>
+          <span class="item-rate">@${formatNumber(displayRate)}</span>
           <span class="item-amount">${formatNumber(item.amount)}</span>
         </div>
-      `).join('')}
+      `;}).join('')}
     </div>
     
     <!-- Totals -->
     <div class="divider"></div>
     
     <div class="totals-row">
-      <span>Subtotal:</span>
-      <span>${formatCurrency(data.subtotal)}</span>
+      <span>Subtotal${includeInPrice ? ' (incl. VAT)' : ''}:</span>
+      <span>${formatCurrency(includeInPrice ? data.items.reduce((sum, item) => sum + item.amount, 0) : data.subtotal)}</span>
     </div>
     
     ${data.discount > 0 ? `
@@ -438,6 +474,7 @@ export async function generateThermalReceiptHTML(data: ReceiptData): Promise<str
     </div>
     ` : ''}
     
+    ${!includeInPrice ? `
     <div class="totals-row">
       <span>Taxable Amount:</span>
       <span>${formatCurrency(taxableAmount)}</span>
@@ -447,6 +484,7 @@ export async function generateThermalReceiptHTML(data: ReceiptData): Promise<str
       <span>VAT (${taxRate}%):</span>
       <span>${formatCurrency(taxAmount)}</span>
     </div>
+    ` : ''}
     
     <div class="totals-row grand-total">
       <span>TOTAL:</span>
@@ -506,12 +544,34 @@ export function createReceiptData(
   business: ReceiptBusiness,
   cashierName: string
 ): ReceiptData {
+  const taxRate = sale.taxRate || 16;
+  
+  // Check if prices include VAT (from business settings or sale metadata)
+  const includeInPrice = business.includeInPrice ?? false;
+  
+  // Calculate totals - item amounts are now straightforward QTY * RATE
+  let subtotal: number;
+  let taxAmount: number;
+  let taxableAmount: number;
+  
+  // Subtotal is the sum of item amounts (QTY * RATE for each item)
+  subtotal = (sale.items || []).reduce((sum: number, item: any) => sum + (item.quantity * item.unitPrice), 0);
+  
+  // Calculate tax as 16% of (subtotal - discount) for display purposes
+  const discount = sale.discountAmount || 0;
+  taxableAmount = subtotal - discount;
+  taxAmount = (taxableAmount * taxRate) / 100;
+  
+  // Total is subtotal minus discount (no additional VAT added)
+  const total = taxableAmount;
+
   const items: ReceiptItem[] = (sale.items || []).map((item: any) => ({
     name: item.productName || 'Item',
     unit: item.unitAbbreviation || item.unitName || 'pcs',
     quantity: item.quantity,
     rate: item.unitPrice,
-    amount: item.total
+    // Item amount is straightforward QTY * RATE (no hidden calculations)
+    amount: item.quantity * item.unitPrice
   }));
   
   return {
@@ -525,16 +585,17 @@ export function createReceiptData(
       address: sale.customerAddress
     } : undefined,
     items,
-    subtotal: sale.subtotal || 0,
-    taxRate: sale.taxRate || 16,
-    taxAmount: sale.tax || 0,
-    taxableAmount: sale.subtotal ? calculateTaxableAmount(sale.subtotal, sale.taxRate || 16) : 0,
+    subtotal,
+    taxRate,
+    taxAmount,
+    taxableAmount,
     discount: sale.discountAmount || 0,
-    total: sale.total || 0,
+    total,
     paymentMethod: sale.paymentMethod || 'cash',
     amountPaid: sale.amountPaid || 0,
     change: sale.change || 0,
-    cashierName
+    cashierName,
+    includeInPrice
   };
 }
 

@@ -1,10 +1,14 @@
-# Active Context: POS System with Full-Screen Create Invoice
+# Active Context: POS System with License Management
 
 ## Current State
 
-**Template Status**: ✅ Template Designer Removed
+**Template Status**: ✅ License Activation Auto-Populate from Onboarding
 
-Removed the template designer module completely:
+Implemented automated license activation workflow:
+- Business info auto-populated from onboarding localStorage and Settings API
+- Trial plan bypasses license key field
+- Trial plan redirects to /login after activation
+- Added license upgrade functionality in license management page
 - Removed document-templates page (template designer UI)
 - Disabled template creation API (POST returns 403)
 - Removed individual template edit/delete API routes
@@ -128,6 +132,179 @@ Removed the template designer module completely:
     - text-[10px] → text-[11px] (Invoice Summary, Terms, Notes, Payment Info, Status)
     - text-[8px] → text-[9px] (KRA QR caption)
   - Applied to PrintPreview receipt template
+- [x] POS Cart Section Fixed Height
+  - Removed dynamic resize functionality (isDragging, resize handle)
+  - Applied fixed height CSS rule: `h-[calc(100vh-150px)]`
+  - Cart fills remaining vertical space below search/filter area
+  - Height persists across page reloads (no localStorage needed - fixed CSS)
+  - Cart items container uses `overflow-y-auto` with `min-h-0` for proper scrolling
+- [x] Settings Persistent Storage (localStorage)
+  - Settings saved to localStorage on save (key: 'pos-settings')
+  - Settings loaded from localStorage on page load as fallback
+  - Applied to: Settings page, POS page, Create Invoice page
+  - Provides offline persistence and faster initial load
+- [x] Receipt VAT Calculation Fix
+  - Receipt generator now calculates VAT from individual items
+  - For each item: extracts VAT using formula (amount - amount/1.16)
+  - Total VAT = sum of all individual item VAT amounts
+  - Total shown at receipt footer (Taxable Amount and VAT lines)
+  - Per-item VAT display removed (not shown in item details)
+- [x] Onboarding Wizard Implementation
+  - Created comprehensive multi-step onboarding wizard at /onboarding
+  - 7-step wizard: Business Profile, Tax Config, Currency/Region, Invoice Numbering, Payment Methods, Receipt/Printing, Opening Balances
+  - Progress persistence using localStorage
+  - Skip optional steps functionality
+  - Redirects to onboarding on first login (checks localStorage)
+  - Auto-redirect to dashboard after completion
+  - Card component updated to support children in CardHeader
+- [x] License System Implementation
+  - License model for database storage (src/models/License.ts)
+  - License API routes: generate, activate, validate, renew
+  - License key generator (POS-XXXX-XXXX-XXXX-XXXX format)
+  - License activation page (/license/activate)
+  - Admin license management page (/licenses)
+  - License check on application startup (redirects if invalid/expired)
+  - License status display in header (days remaining, warnings)
+  - Supports trial (14 days), annual, and lifetime licenses
+- [x] Dashboard RecentSale Type Fix
+  - Added status property to RecentSale interface in dashboard page
+  - Fixes TypeScript errors for sales status display
+- [x] Cash Sales Data Retrieval Fix
+  - Fixed API route model imports to use models index
+  - Changed import from individual model imports to barrel export import
+  - Fixed MissingSchemaError for User and Branch models in /api/sales
+  - Fixed same issue in /api/dashboard route
+  - Added proper error handling in cash-sales page
+- [x] Receipt Generator VAT-Inclusive Prices
+  - Modified createReceiptData to properly reverse-calculate base amount and VAT from VAT-inclusive totals
+  - Fixed formula: baseAmount = total / (1 + taxRate/100), vatAmount = total - baseAmount
+  - Display rate shows as-is (already VAT-inclusive when includeInPrice is true)
+  - Updated subtotal to show VAT-inclusive total when includeInPrice is true
+  - Hidden taxable amount and VAT rows when prices are already inclusive
+- [x] Cash Sales Page Error Display Fix
+  - Added error state display to cash-sales page
+  - Error messages now show when API fails (401 Unauthorized, network errors, etc.)
+  - Added retry button to reload data after errors
+- [x] POS Page TypeScript Fix
+  - Fixed shorthand property errors for includeInPrice in M-Pesa payment handlers
+  - Changed from `includeInPrice,` to `includeInPrice: businessSettings.includeInPrice,`
+- [x] POS Cart VAT Calculation Fix
+  - Changed calculateTotals to always calculate tax as 16% of (subtotal - discount) for display
+  - Total now equals (subtotal - discount) - no additional VAT added on top
+  - Prevents customer overcharging when product prices are already VAT-inclusive
+- [x] Receipt Generator Item Total Fix
+  - Item amounts now calculated as straightforward QTY * RATE multiplication
+  - No hidden VAT calculations or adjustments on individual line items
+  - Updated createReceiptData in receipt-generator.ts
+  - Updated sales API route to use simple calculation for item totals
+- [x] Cash Sale Sequential Numbering
+  - Added cashSalePrefix and cashSaleNumber fields to Settings model
+  - Created generateCashSaleNumber function in utils.ts
+  - Cash sales now use format CSH-00001 with auto-incrementing
+  - Account/credit sales continue to use INV-YYYYMMDD-#### format
+- [x] Purchases Page Auto-Focus Supplier Selection
+  - Added supplierSelectRef to reference the supplier dropdown
+  - Added useEffect to auto-focus on supplier select when create modal opens
+  - Uses 100ms delay to ensure modal is fully rendered before focusing
+- [x] License Pricing Page
+  - Created /pricing page with license options
+  - Three plans: Trial (14 days free), Annual ($199/year), Lifetime ($499 one-time)
+  - Updated "Get one here" button on license activation page to link to /pricing
+- [x] M-Pesa Payment Page
+  - Created /payment page with M-pesa payment details
+  - Till No: 649469, Contact: 0720086614
+  - Currency displayed in KSH (Kenyan Shillings)
+  - Shows selected plan and amount
+  - Includes payment instructions
+  - Updated pricing page "Get Started" buttons to navigate to /payment
+- [x] License Activation Auto-Population from Onboarding
+  - License activation page at /license/activate?plan=trial now auto-populates business info
+  - Retrieves business data from onboarding localStorage (onboarding-progress)
+  - Retrieves business data from Settings localStorage (pos-settings)
+  - Retrieves business data from Settings API
+  - Maps: businessName, businessPhone, businessEmail, businessAddress, taxNumber, industry
+  - Trial plan: license key field hidden/bypassed (no license key required)
+  - Trial plan: redirects to /login after activation instead of /dashboard
+  - Validates required fields (businessName, email, phone) before activation
+  - Added new fields to License model: address, taxNumber, industry, contactPerson
+  - License activation API updated to handle trial plan without authentication
+- [x] License Upgrade Functionality
+  - Added PUT method to /api/licenses route for upgrading trial licenses
+  - Generates new license key for upgraded license
+  - Tracks upgrade history in license document
+  - Added upgrade button in licenses management page UI
+  - Upgrade modal with plan selection (Annual $199 or Lifetime $499)
+- [x] Super Admin License Bypass
+  - Modified auth-context.tsx to check user role before license validation
+  - Super admins bypass license validation during authentication
+  - Super admins can access system even with expired/invalid license
+  - License validation API updated to return bypass status for super admins
+  - License warnings still displayed but don't block access
+  - Bypass only applies to authentication - other operations still require valid license
+- [x] Real-Time License Status Synchronization
+  - Created LicenseProvider context for centralized license state management
+  - Polling mechanism checks for license status every 30 seconds (configurable)
+  - License validation caching with 10-second cache duration
+  - Cross-tab communication via localStorage storage events
+  - Automatic license refresh when window gains focus
+  - Manual sync button in header for immediate refresh
+  - When license is upgraded, localStorage is updated for instant sync across tabs
+  - Sync interval can be adjusted via setSyncInterval() function
+- [x] License Management Actions (Upgrade, Downgrade, Suspend, Restore)
+  - Added PATCH API endpoint for license actions
+  - Upgrade: Change from trial to paid (annual/lifetime)
+  - Downgrade: Change from paid to lower tier (lifetime→annual, annual→trial)
+  - Suspend: Mark license as suspended with reason, restricts access
+  - Restore: Reactivate suspended license
+  - All actions update localStorage for instant UI sync
+  - Added action buttons in licenses management page UI
+  - Confirmation modals with warnings for destructive actions
+- [x] Header Component Bug Fix
+  - Fixed duplicate/misplaced JSX closing tags causing build error
+  - Added missing lastChecked state variable for license sync display
+  - Fixed title attribute syntax for license status link
+- [x] License Activation Form Validation Enhancement
+  - Updated submit button disabled state to check all required fields
+  - Button now disabled when businessName, email, or phone are empty (for all plans)
+  - For non-trial plans, also checks that licenseKey is not empty
+- [x] Dual Location Inventory Management
+  - Added shopStock and remoteStock fields to Product model
+  - Added lowStockThresholdShop and lowStockThresholdRemote for per-location thresholds
+  - Inventory page now displays stock levels for both Shop and Remote locations
+- [x] Stock Transfer System
+  - Created StockTransfer model with transfer workflow (Pending → Approved → In Transit → Received/Rejected)
+  - Created Stock Transfer API endpoints (GET, POST, PATCH)
+  - Created stock transfers page at /stock-transfers with full UI
+  - Transfers validate stock availability at source location before creation
+  - Stock automatically deducted from source when shipped, added to destination when received
+  - Partial receive supported
+- [x] Stock Audit Trail
+  - Created StockAudit model for tracking all stock movements
+  - Records: product, quantity before/after, location, movement type, user, reference
+  - Movement types: purchase, sale, transfer_out, transfer_in, adjustment, return, damage, opening_balance
+  - Created /api/stock-audit endpoint for viewing audit logs
+- [x] Purchase Receiving with Location Selection
+  - Updated purchase receive API to accept location parameter (shop or remote)
+  - Stock added to selected location only
+  - Audit logs created for each received item with location info
+- [x] Stock Transfers Sidebar Navigation
+  - Added Stock Transfers link to sidebar navigation
+- [x] Product Units Enhancement
+  - Added Base Unit with Price section in edit product form
+    - Shows base unit name with inline price editing
+    - Uses retailPrice as base unit price
+    - Real-time validation for positive numbers
+  - Enhanced Additional Units section with inline price editing
+    - Price field with step=0.01, min=0 for precise pricing
+    - Real-time validation prevents negative prices
+    - Auto-converts invalid input to 0
+  - Updated Product interface in inventory page to include baseUnit and units fields
+  - Fixed product units not saving issue using useRef
+    - Added productUnitsRef to reliably track units data
+    - Updated addProductUnit, removeProductUnit, updateProductUnit to sync with ref
+    - Updated handleSubmit to use ref for units data
+  - POS already supports unit prices from API (Product.units array with price field)
+  - Product units are properly saved/loaded via products API
 
 ## Current Structure
 
@@ -244,6 +421,12 @@ const result = await printEngine.print({
 | 2026-03-20 | Fixed invoice print - enhanced field mapping, added vatNumber, cleaned debug logs |
 | 2026-03-20 | Enhanced invoice print with Subtotal/Tax/Total breakdown and Terms section |
 | 2026-03-21 | Implemented customer credit payment feature - auto-apply credit balance in POS and customer payments |
+| 2026-03-22 | POS cart fixed height CSS rule; Settings persistent storage with localStorage |
+| 2026-03-22 | Implemented license activation auto-population from onboarding data |
+| 2026-03-22 | Added license upgrade functionality for trial licenses |
+| 2026-03-22 | Added super admin license bypass - super admins can access system regardless of license status |
+| 2026-03-22 | Implemented real-time license status synchronization with polling mechanism |
+| 2026-03-22 | Added license downgrade, suspend, and restore actions |
 
 ## Notes
 

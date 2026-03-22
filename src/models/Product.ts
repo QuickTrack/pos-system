@@ -23,9 +23,13 @@ export interface IProduct extends Document {
     price: number;
   }[];
   
-  // Stock
-  stockQuantity: number;
+  // Stock - Dual Location Support
+  stockQuantity: number; // Total stock (legacy, kept for compatibility)
+  shopStock: number; // Stock at Shop/Onsite location
+  remoteStock: number; // Stock at Remote Store/Branch location
   lowStockThreshold: number;
+  lowStockThresholdShop: number;
+  lowStockThresholdRemote: number;
   branch?: mongoose.Types.ObjectId;
   
   // Variants
@@ -64,7 +68,10 @@ export interface IProduct extends Document {
   image?: string;
   images?: string[];
   
-  // Supplier
+  // Suppliers - Multiple suppliers support
+  suppliers?: mongoose.Types.ObjectId[];
+  
+  // Legacy single supplier field (kept for backward compatibility)
   supplier?: mongoose.Types.ObjectId;
   
   // Barcode
@@ -98,9 +105,13 @@ const ProductSchema = new Schema<IProduct>(
       price: Number,
     }],
     
-    // Stock
-    stockQuantity: { type: Number, default: 0 },
-    lowStockThreshold: { type: Number, default: 10 },
+    // Stock - Dual Location Support
+    stockQuantity: { type: Number, default: 0 }, // Legacy field
+    shopStock: { type: Number, default: 0 }, // Stock at Shop/Onsite
+    remoteStock: { type: Number, default: 0 }, // Stock at Remote Store
+    lowStockThreshold: { type: Number, default: 10 }, // Legacy field
+    lowStockThresholdShop: { type: Number, default: 10 }, // Threshold for Shop
+    lowStockThresholdRemote: { type: Number, default: 10 }, // Threshold for Remote
     branch: { type: Schema.Types.ObjectId, ref: 'Branch' },
     
     // Variants
@@ -139,7 +150,10 @@ const ProductSchema = new Schema<IProduct>(
     image: { type: String },
     images: [{ type: String }],
     
-    // Supplier
+    // Suppliers - Multiple suppliers support
+    suppliers: [{ type: Schema.Types.ObjectId, ref: 'Supplier' }],
+    
+    // Legacy single supplier field
     supplier: { type: Schema.Types.ObjectId, ref: 'Supplier' },
     
     // Barcode

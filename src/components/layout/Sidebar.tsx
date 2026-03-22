@@ -18,11 +18,13 @@ import {
   X,
   LogOut,
   ShoppingBag,
+  ArrowRightLeft,
   DollarSign,
   CreditCard,
   Shield,
   FilePlus,
-  Receipt
+  Receipt,
+  Key
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/lib/store';
@@ -52,6 +54,12 @@ const menuItems = [
     label: 'Inventory', 
     href: '/inventory', 
     icon: Package,
+    permission: 'manage_products',
+  },
+  {
+    label: 'Stock Transfers',
+    href: '/stock-transfers',
+    icon: ArrowRightLeft,
     permission: 'manage_products',
   },
   { 
@@ -119,6 +127,12 @@ const menuItems = [
     href: '/users', 
     icon: UserCog,
     permission: 'manage_users',
+  },
+  { 
+    label: 'Licenses', 
+    href: '/licenses', 
+    icon: Key,
+    permission: 'super_admin',
   },
   { 
     label: 'Settings', 

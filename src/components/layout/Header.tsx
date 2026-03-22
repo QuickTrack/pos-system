@@ -1,7 +1,8 @@
 'use client';
 
-import { Menu, Bell, Search, Moon, Sun, Home } from 'lucide-react';
+import { Menu, Bell, Search, Moon, Sun, Home, Calendar, AlertTriangle, Shield, RefreshCw } from 'lucide-react';
 import { useUIStore } from '@/lib/store';
+import { useLicense } from '@/lib/license-context';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
@@ -12,7 +13,47 @@ interface HeaderProps {
 
 export function Header({ title, subtitle }: HeaderProps) {
   const { sidebarOpen, setSidebarOpen, darkMode, toggleDarkMode } = useUIStore();
+  
+  // License context - may not be available in all layouts
+  let licenseContext: any = null;
+  let license: any = null;
+  let checkLicense: any = null;
+  
+  try {
+    licenseContext = useLicense();
+    license = licenseContext.license;
+    checkLicense = licenseContext.checkLicense;
+  } catch (e) {
+    // License context not available - will use localStorage fallback
+  }
+  
   const [currentTime, setCurrentTime] = useState('');
+  const [financialYear, setFinancialYear] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
+  const [lastChecked, setLastChecked] = useState<Date | null>(null);
+
+  // Update lastChecked when license is checked
+  useEffect(() => {
+    if (license) {
+      setLastChecked(new Date());
+    }
+  }, [license]);
+
+  // Fallback to localStorage if license context not available
+  useEffect(() => {
+    if (!license) {
+      try {
+        const storedLicense = localStorage.getItem('pos-license');
+        if (storedLicense) {
+          license = JSON.parse(storedLicense);
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, [license]);
+
+  const licenseDaysRemaining = license?.daysRemaining ?? null;
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -24,6 +65,26 @@ export function Header({ title, subtitle }: HeaderProps) {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Load financial year from settings
+  useEffect(() => {
+    const loadFinancialYear = async () => {
+      try {
+        const response = await fetch('/api/settings');
+        const data = await response.json();
+        if (data.settings?.currentFinancialYear) {
+          setFinancialYear(data.settings.currentFinancialYear);
+        }
+      } catch (error) {
+        console.error('Failed to load financial year:', error);
+      }
+    };
+    loadFinancialYear();
+  }, []);
+
+  // Load license info
+  // License is now managed by LicenseProvider - no local storage needed
+  // Real-time updates happen automatically through polling
 
   return (
     <header className="sticky top-0 z-30 bg-white border-b border-gray-200">
@@ -65,6 +126,64 @@ export function Header({ title, subtitle }: HeaderProps) {
 
         {/* Right side */}
         <div className="flex items-center gap-2">
+          {/* Real-time License Status - Clickable to upgrade/renew */}
+          {license && (
+            <div className="relative">
+              <Link 
+                href="/license/activate"
+                className={`hidden sm:flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity ${
+                  licenseDaysRemaining !== null && licenseDaysRemaining < 0 
+                    ? 'bg-red-50 text-red-700' 
+                    : licenseDaysRemaining !== null && licenseDaysRemaining <= 14 
+                      ? 'bg-amber-50 text-amber-700'
+                      : 'bg-green-50 text-green-700'
+                }`}
+                title={`License: ${license?.plan || 'Unknown'} - Click to upgrade or renew`}
+              >
+                {licenseDaysRemaining !== null && licenseDaysRemaining < 0 ? (
+                  <>
+                    <AlertTriangle className="w-3 h-3" />
+                    <span>License Expired - Click to Renew</span>
+                  </>
+                ) : licenseDaysRemaining !== null && licenseDaysRemaining <= 14 ? (
+                  <>
+                    <RefreshCw className="w-3 h-3" />
+                    <span>{licenseDaysRemaining}d left - Click to Upgrade</span>
+                  </>
+                ) : (
+                  <>
+                    <Shield className="w-3 h-3" />
+                    <span>{licenseDaysRemaining !== null ? `${licenseDaysRemaining}d left` : 'Active'}</span>
+                  </>
+                )}
+              </Link>
+              {/* Sync indicator */}
+              {checkLicense && (
+                <button
+                  onClick={() => checkLicense()}
+                  className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center"
+                  title="Click to sync now"
+                >
+                  <RefreshCw className="w-2 h-2 text-white" />
+                </button>
+              )}
+            </div>
+          )}
+          {/* License sync settings */}
+          {process.env.NODE_ENV === 'development' && (
+            <button
+              onClick={() => setShowSettings(!showSettings)}
+              className="text-xs text-gray-400 hover:text-gray-600"
+            >
+              ⚙️
+            </button>
+          )}
+          {financialYear && (
+            <div className="hidden sm:flex items-center gap-1 px-2 py-1 bg-emerald-50 rounded-md text-emerald-700 text-xs font-medium">
+              <Calendar className="w-3 h-3" />
+              <span>FY: {financialYear}</span>
+            </div>
+          )}
           <span className="hidden sm:block text-sm text-gray-500 mr-2">
             {currentTime}
           </span>
