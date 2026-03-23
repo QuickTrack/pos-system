@@ -28,7 +28,8 @@ import {
   ClipboardList,
   RotateCcw,
   FileText,
-  AlertTriangle
+  AlertTriangle,
+  UserPlus
 } from 'lucide-react';
 
 interface Product {
@@ -64,9 +65,12 @@ interface Customer {
   email?: string;
   address?: string;
   customerType: string;
+  customerCategory?: string;
   loyaltyPoints: number;
   creditBalance: number;
   creditLimit: number;
+  businessName?: string;
+  kraPin?: string;
 }
 
 export default function POSPage() {
@@ -87,6 +91,20 @@ export default function POSPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerSearch, setCustomerSearch] = useState('');
+  const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
+  const [newCustomer, setNewCustomer] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    address: '',
+    customerType: 'retail',
+    customerCategory: 'individual',
+    businessName: '',
+    kraPin: '',
+    creditLimit: 0,
+  });
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
+  const [customerError, setCustomerError] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [selectedPaymentMethodIndex, setSelectedPaymentMethodIndex] = useState(0);
   const [amountPaid, setAmountPaid] = useState('');
@@ -740,6 +758,74 @@ export default function POSPage() {
     setCreditApplied(0);
   };
 
+  const handleCreateCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCustomerError('');
+    
+    // Validate required fields
+    if (!newCustomer.name.trim()) {
+      setCustomerError('Customer name is required');
+      return;
+    }
+    if (!newCustomer.phone.trim()) {
+      setCustomerError('Phone number is required');
+      return;
+    }
+
+    setCreatingCustomer(true);
+    try {
+      const response = await fetch('/api/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newCustomer.name.trim(),
+          phone: newCustomer.phone.trim(),
+          email: newCustomer.email.trim() || undefined,
+          address: newCustomer.address.trim() || undefined,
+          customerType: newCustomer.customerType,
+          customerCategory: newCustomer.customerCategory,
+          businessName: newCustomer.businessName.trim() || undefined,
+          kraPin: newCustomer.kraPin.trim() || undefined,
+          creditLimit: newCustomer.creditLimit,
+          creditBalance: 0,
+          loyaltyPoints: 0,
+          totalPurchases: 0,
+          totalSpent: 0,
+          isActive: true,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setCustomerError(data.error || 'Failed to create customer');
+        return;
+      }
+
+      // Auto-select the newly created customer
+      if (data.customer) {
+        selectCustomer(data.customer);
+        setShowAddCustomerModal(false);
+        setNewCustomer({
+          name: '',
+          phone: '',
+          email: '',
+          address: '',
+          customerType: 'retail',
+          customerCategory: 'individual',
+          businessName: '',
+          kraPin: '',
+          creditLimit: 0,
+        });
+      }
+    } catch (error) {
+      console.error('Error creating customer:', error);
+      setCustomerError('An error occurred while creating the customer');
+    } finally {
+      setCreatingCustomer(false);
+    }
+  };
+
   const fetchCustomerDebt = async (customerId: string) => {
     setLoadingDebt(true);
     try {
@@ -1199,26 +1285,227 @@ export default function POSPage() {
         title="Select Customer"
       >
         <div className="space-y-4">
-          <Input
-            placeholder="Search by name or phone..."
-            value={customerSearch}
-            onChange={(e) => handleSearchCustomer(e.target.value)}
-          />
+          <div className="flex gap-2">
+            <Input
+              placeholder="Search by name or phone..."
+              value={customerSearch}
+              onChange={(e) => handleSearchCustomer(e.target.value)}
+              className="flex-1"
+            />
+            <Button
+              onClick={() => {
+                setShowCustomerModal(false);
+                setShowAddCustomerModal(true);
+              }}
+              className="flex items-center gap-1 whitespace-nowrap"
+            >
+              <UserPlus className="w-4 h-4" />
+              Add New
+            </Button>
+          </div>
           <div className="max-h-64 overflow-y-auto space-y-2">
-            {customers.map((customer) => (
-              <button
-                key={customer._id}
-                onClick={() => selectCustomer(customer)}
-                className="w-full p-3 text-left bg-gray-50 rounded-lg hover:bg-emerald-50 transition-colors"
-              >
-                <div className="font-medium">{customer.name}</div>
-                <div className="text-sm text-gray-500">
-                  {customer.phone} • {customer.customerType}
-                </div>
-              </button>
-            ))}
+            {customers.length === 0 && customerSearch.length >= 2 ? (
+              <div className="text-center py-4 text-gray-500">
+                <p>No customers found</p>
+                <Button
+                  onClick={() => {
+                    setShowCustomerModal(false);
+                    setShowAddCustomerModal(true);
+                  }}
+                  variant="outline"
+                  className="mt-2"
+                >
+                  <UserPlus className="w-4 h-4 mr-1" />
+                  Create New Customer
+                </Button>
+              </div>
+            ) : customers.length === 0 ? (
+              <div className="text-center py-4 text-gray-500">
+                <p>Type to search customers</p>
+              </div>
+            ) : (
+              customers.map((customer) => (
+                <button
+                  key={customer._id}
+                  onClick={() => selectCustomer(customer)}
+                  className="w-full p-3 text-left bg-gray-50 rounded-lg hover:bg-emerald-50 transition-colors"
+                >
+                  <div className="font-medium">{customer.name}</div>
+                  <div className="text-sm text-gray-500">
+                    {customer.phone} • {customer.customerType}
+                  </div>
+                </button>
+              ))
+            )}
           </div>
         </div>
+      </Modal>
+
+      {/* Add Customer Modal */}
+      <Modal
+        isOpen={showAddCustomerModal}
+        onClose={() => {
+          setShowAddCustomerModal(false);
+          setCustomerError('');
+          setNewCustomer({
+            name: '',
+            phone: '',
+            email: '',
+            address: '',
+            customerType: 'retail',
+            customerCategory: 'individual',
+            businessName: '',
+            kraPin: '',
+            creditLimit: 0,
+          });
+        }}
+        title="Add New Customer"
+      >
+        <form onSubmit={handleCreateCustomer} className="space-y-4">
+          {customerError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-600">
+              {customerError}
+            </div>
+          )}
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Customer Name <span className="text-red-500">*</span>
+            </label>
+            <Input
+              placeholder="Enter customer name"
+              value={newCustomer.name}
+              onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Phone Number <span className="text-red-500">*</span>
+            </label>
+            <Input
+              placeholder="Enter phone number"
+              value={newCustomer.phone}
+              onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Email
+            </label>
+            <Input
+              type="email"
+              placeholder="Enter email (optional)"
+              value={newCustomer.email}
+              onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Address
+            </label>
+            <Input
+              placeholder="Enter address (optional)"
+              value={newCustomer.address}
+              onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Customer Type
+              </label>
+              <Select
+                value={newCustomer.customerType}
+                onChange={(e) => setNewCustomer({ ...newCustomer, customerType: e.target.value })}
+                options={[
+                  { value: 'retail', label: 'Retail' },
+                  { value: 'wholesale', label: 'Wholesale' },
+                  { value: 'distributor', label: 'Distributor' },
+                ]}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Category
+              </label>
+              <Select
+                value={newCustomer.customerCategory}
+                onChange={(e) => setNewCustomer({ ...newCustomer, customerCategory: e.target.value })}
+                options={[
+                  { value: 'individual', label: 'Individual' },
+                  { value: 'company', label: 'Company' },
+                ]}
+              />
+            </div>
+          </div>
+
+          {newCustomer.customerCategory === 'company' && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Business Name
+                </label>
+                <Input
+                  placeholder="Enter business name"
+                  value={newCustomer.businessName}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, businessName: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  KRA PIN
+                </label>
+                <Input
+                  placeholder="Enter KRA PIN"
+                  value={newCustomer.kraPin}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, kraPin: e.target.value })}
+                />
+              </div>
+            </>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Credit Limit
+            </label>
+            <Input
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="Enter credit limit (optional)"
+              value={newCustomer.creditLimit}
+              onChange={(e) => setNewCustomer({ ...newCustomer, creditLimit: parseFloat(e.target.value) || 0 })}
+            />
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowAddCustomerModal(false);
+                setCustomerError('');
+              }}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={creatingCustomer || !newCustomer.name.trim() || !newCustomer.phone.trim()}
+              className="flex-1"
+            >
+              {creatingCustomer ? 'Creating...' : 'Create Customer'}
+            </Button>
+          </div>
+        </form>
       </Modal>
 
       {/* Payment Modal */}
