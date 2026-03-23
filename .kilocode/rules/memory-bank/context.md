@@ -301,6 +301,20 @@ Implemented keyboard navigation flow for POS:
     - Updated handleSubmit to use ref for units data
   - POS already supports unit prices from API (Product.units array with price field)
   - Product units are properly saved/loaded via products API
+- [x] Manual Quantity Editing in Cart Sections
+  - POS page cart items now have manually editable quantity input fields
+  - Create Invoice page cart items now have manually editable quantity input fields
+  - Users can type quantities directly instead of relying solely on +/- buttons
+  - Quantity changes reflect immediately in line totals
+- [x] Keyboard Navigation for Quantity Fields
+  - When product is selected via Enter key, quantity input is focused and text selected
+  - When Enter is pressed in quantity field, focus returns to product search
+  - Forward slash (/) key triggers checkout when cart has items
+  - In payment modal: Tab cycles through payment methods, Enter completes sale
+  - After sale complete: Enter key triggers print receipt
+- [x] Receipt Sale Return Label
+  - Modified receipt generator to display "SALE RETURN" instead of "RECEIPT" for refund transactions
+  - Distinguishes between regular sales and returns in printed receipts
 
 ## Current Structure
 
@@ -424,6 +438,7 @@ const result = await printEngine.print({
 | 2026-03-22 | Added super admin license bypass - super admins can access system regardless of license status |
 | 2026-03-22 | Implemented real-time license status synchronization with polling mechanism |
 | 2026-03-22 | Added license downgrade, suspend, and restore actions |
+| 2026-03-23 | Added manual quantity editing in cart sections with keyboard navigation |
 
 ## Notes
 
