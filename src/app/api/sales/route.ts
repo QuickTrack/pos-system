@@ -114,22 +114,46 @@ export async function POST(request: NextRequest) {
     
     const data = await request.json();
     
+    // Get settings
+    const settingsData = await Settings.findOne({}).lean();
+    const allowNegativeStock = settingsData?.allowNegativeStock || false;
+    
+    // Check stock availability if allowNegativeStock is false
+    if (!allowNegativeStock) {
+      for (const item of data.items || []) {
+        const product = await Product.findById(item.product).lean();
+        if (product) {
+          // Get effective stock (shopStock if available, otherwise stockQuantity)
+          const availableStock = product.shopStock !== undefined && product.shopStock > 0 
+            ? product.shopStock 
+            : (product.stockQuantity || 0);
+          
+          if (availableStock < item.baseQuantity) {
+            return NextResponse.json(
+              { error: `Insufficient stock for ${product.name}. Available: ${availableStock}, Requested: ${item.baseQuantity}` },
+              { status: 400 }
+            );
+          }
+        }
+      }
+    }
+    
     // Determine if this is a cash sale (cash, mpesa, card)
     const isCashSale = ['cash', 'mpesa', 'card'].includes(data.paymentMethod);
     
     // Get settings and check for financial year transition
-    const settings = await Settings.findOne({}).lean();
-    const invoicePrefix = settings?.invoicePrefix || 'INV';
-    const cashSalePrefix = settings?.cashSalePrefix || 'CSH';
-    const financialYearStartMonth = settings?.financialYearStartMonth || 7;
-    let currentFinancialYear = settings?.currentFinancialYear || getFinancialYear(new Date(), financialYearStartMonth);
+    // (settingsData already fetched above for allowNegativeStock check)
+    const invoicePrefix = settingsData?.invoicePrefix || 'INV';
+    const cashSalePrefix = settingsData?.cashSalePrefix || 'CSH';
+    const financialYearStartMonth = settingsData?.financialYearStartMonth || 7;
+    let currentFinancialYear = settingsData?.currentFinancialYear || getFinancialYear(new Date(), financialYearStartMonth);
     
     // Convert to plain object for invoiceNumbersByYear
-    const invoiceNumbersByYear: Record<string, number> = settings?.invoiceNumbersByYear 
-      ? settings.invoiceNumbersByYear as Record<string, number>
+    const invoiceNumbersByYear: Record<string, number> = settingsData?.invoiceNumbersByYear 
+      ? settingsData.invoiceNumbersByYear as Record<string, number>
       : {};
-    const cashSaleNumbersByYear: Record<string, number> = settings?.cashSaleNumbersByYear 
-      ? settings.cashSaleNumbersByYear as Record<string, number>
+    const cashSaleNumbersByYear: Record<string, number> = settingsData?.cashSaleNumbersByYear 
+      ? settingsData.cashSaleNumbersByYear as Record<string, number>
       : {};
     
     // Check if we've entered a new financial year
@@ -169,7 +193,7 @@ export async function POST(request: NextRequest) {
     let invoiceNumber: string;
     let updateFields: any = {
       currentFinancialYear,
-      lastYearTransitionDate: isNewYear ? today : settings?.lastYearTransitionDate
+      lastYearTransitionDate: isNewYear ? today : settingsData?.lastYearTransitionDate
     };
     
     if (isCashSale) {

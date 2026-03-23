@@ -99,7 +99,14 @@ export default function InventoryPage() {
   const [showProductModal, setShowProductModal] = useState(false);
   const [showUnitModal, setShowUnitModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showSupplierModal, setShowSupplierModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [supplierFormData, setSupplierFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+  });
   const [categoryFormData, setCategoryFormData] = useState({
     name: '',
     code: '',
@@ -294,13 +301,58 @@ export default function InventoryPage() {
       // Refresh categories
       const res = await fetch('/api/categories');
       const data = await res.json();
-      if (data.success) setCategories(data.categories);
+      if (data.success) {
+        setCategories(data.categories);
+        // If we just created a new category (not editing), find and select the newest one
+        if (!editingCategory && data.categories && data.categories.length > 0) {
+          // Find the most recently created category
+          const sorted = [...data.categories].sort((a: any, b: any) => 
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+          if (sorted[0]) {
+            setFormData({ ...formData, category: sorted[0]._id });
+          }
+        }
+      }
       
       setShowCategoryModal(false);
       setEditingCategory(null);
       setCategoryFormData({ name: '', code: '', description: '', parentCategory: '' });
     } catch (error) {
       console.error('Failed to save category:', error);
+    }
+  };
+
+  // Supplier CRUD functions
+  const handleSupplierSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await fetch('/api/suppliers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(supplierFormData),
+      });
+      
+      // Refresh suppliers
+      const res = await fetch('/api/suppliers');
+      const data = await res.json();
+      if (data.success) {
+        setSuppliers(data.suppliers);
+        // Auto-select the newly created supplier
+        if (data.suppliers && data.suppliers.length > 0) {
+          const sorted = [...data.suppliers].sort((a: any, b: any) => 
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+          if (sorted[0]) {
+            setSelectedSuppliers([...selectedSuppliers, sorted[0]._id]);
+          }
+        }
+      }
+      
+      setShowSupplierModal(false);
+      setSupplierFormData({ name: '', email: '', phone: '', address: '' });
+    } catch (error) {
+      console.error('Failed to save supplier:', error);
     }
   };
 
@@ -376,7 +428,8 @@ export default function InventoryPage() {
         fetchData();
       } else {
         const data = await response.json();
-        alert(data.error || 'Failed to save product');
+        console.error('Product save error response:', data);
+        alert(data.error || data.details || 'Failed to save product');
       }
     } catch (error) {
       console.error('Failed to save product:', error);
@@ -551,8 +604,8 @@ export default function InventoryPage() {
       key: 'stockQuantity',
       header: 'Stock',
       render: (item: Product) => {
-        // Use shopStock if available, otherwise fall back to stockQuantity (legacy data)
-        const effectiveShopStock = item.shopStock !== undefined ? item.shopStock : (item.stockQuantity || 0);
+        // Use shopStock only if it has been explicitly set (> 0), otherwise fall back to stockQuantity (legacy data)
+        const effectiveShopStock = (item.shopStock && item.shopStock > 0) ? item.shopStock : (item.stockQuantity || 0);
         const effectiveRemoteStock = item.remoteStock || 0;
         const effectiveThreshold = item.lowStockThresholdShop || item.lowStockThreshold || 10;
         const totalStock = effectiveShopStock + effectiveRemoteStock;
@@ -725,15 +778,30 @@ export default function InventoryPage() {
               value={formData.barcode}
               onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
             />
-            <Select
-              label="Category"
-              value={formData.category}
-              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-              options={[
-                { value: '', label: 'Select Category' },
-                ...categories.map((c) => ({ value: c._id, label: c.name })),
-              ]}
-            />
+            <div className="flex gap-2 items-end">
+              <div className="flex-1">
+                <Select
+                  label="Category"
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  options={[
+                    { value: '', label: 'Select Category' },
+                    ...categories.map((c) => ({ value: c._id, label: c.name })),
+                  ]}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowCategoryModal(true);
+                }}
+                className="mb-0"
+                title="Add New Category"
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-4">
@@ -830,9 +898,21 @@ export default function InventoryPage() {
 
           {/* Suppliers Section */}
           <div className="border-t pt-4 mt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Suppliers
-            </label>
+            <div className="flex justify-between items-center mb-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Suppliers
+              </label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowSupplierModal(true)}
+                className="text-emerald-600 hover:text-emerald-700 gap-1"
+              >
+                <Plus className="w-3 h-3" />
+                New Supplier
+              </Button>
+            </div>
             <div className="border border-gray-200 rounded-lg max-h-48 overflow-y-auto p-2 space-y-2">
               {/* Search */}
               <Input
@@ -1098,6 +1178,61 @@ export default function InventoryPage() {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Supplier Management Modal */}
+      <Modal
+        isOpen={showSupplierModal}
+        onClose={() => {
+          setShowSupplierModal(false);
+          setSupplierFormData({ name: '', email: '', phone: '', address: '' });
+        }}
+        title="Add New Supplier"
+        size="sm"
+      >
+        <form onSubmit={handleSupplierSubmit} className="space-y-4">
+          <Input
+            label="Supplier Name"
+            value={supplierFormData.name}
+            onChange={(e) => setSupplierFormData({ ...supplierFormData, name: e.target.value })}
+            placeholder="e.g., Kenya Electronics Ltd"
+            required
+          />
+          <Input
+            label="Email"
+            type="email"
+            value={supplierFormData.email}
+            onChange={(e) => setSupplierFormData({ ...supplierFormData, email: e.target.value })}
+            placeholder="e.g., info@supplier.com"
+          />
+          <Input
+            label="Phone"
+            value={supplierFormData.phone}
+            onChange={(e) => setSupplierFormData({ ...supplierFormData, phone: e.target.value })}
+            placeholder="e.g., 0722123456"
+          />
+          <Input
+            label="Address"
+            value={supplierFormData.address}
+            onChange={(e) => setSupplierFormData({ ...supplierFormData, address: e.target.value })}
+            placeholder="e.g., Nairobi, Kenya"
+          />
+          <div className="flex justify-end gap-3 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowSupplierModal(false);
+                setSupplierFormData({ name: '', email: '', phone: '', address: '' });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit">
+              Add Supplier
+            </Button>
+          </div>
+        </form>
       </Modal>
 
       {/* Bulk Stock Adjustment Modal */}

@@ -3,6 +3,7 @@ import dbConnect from '@/lib/db/mongodb';
 import CustomerInvoice from '@/models/CustomerInvoice';
 import Customer from '@/models/Customer';
 import Product from '@/models/Product';
+import Settings from '@/models/Settings';
 import { getAuthUser } from '@/lib/auth-server';
 import { hasPermission } from '@/lib/auth';
 
@@ -161,6 +162,30 @@ export async function POST(request: NextRequest) {
     const customer = await Customer.findById(data.customerId);
     if (!customer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 400 });
+    }
+    
+    // Get settings and check allowNegativeStock
+    const settings = await Settings.findOne({}).lean();
+    const allowNegativeStock = settings?.allowNegativeStock || false;
+    
+    // Check stock availability if allowNegativeStock is false
+    if (!allowNegativeStock) {
+      for (const item of data.items || []) {
+        const product = await Product.findById(item.product).lean();
+        if (product) {
+          // Get effective stock (shopStock if available, otherwise stockQuantity)
+          const availableStock = product.shopStock !== undefined && product.shopStock > 0 
+            ? product.shopStock 
+            : (product.stockQuantity || 0);
+          
+          if (availableStock < item.baseQuantity) {
+            return NextResponse.json(
+              { error: `Insufficient stock for ${product.name}. Available: ${availableStock}, Requested: ${item.baseQuantity}` },
+              { status: 400 }
+            );
+          }
+        }
+      }
     }
     
     // Credit limit validation for sale invoices (not credit invoices)

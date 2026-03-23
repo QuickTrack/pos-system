@@ -96,9 +96,9 @@ export default function PurchasesPage() {
   }, [showCreateModal]);
 
   useEffect(() => {
-    // Filter products based on search query
+    // Filter products based on search query - search ALL products regardless of supplier filter
     if (productSearchQuery) {
-      const filtered = selectedSupplierProducts.filter(product => 
+      const filtered = products.filter(product => 
         product.name.toLowerCase().includes(productSearchQuery.toLowerCase()) ||
         product.sku.toLowerCase().includes(productSearchQuery.toLowerCase())
       );
@@ -108,7 +108,7 @@ export default function PurchasesPage() {
       setFilteredProducts(selectedSupplierProducts);
       setShowProductDropdown(false);
     }
-  }, [productSearchQuery, selectedSupplierProducts]);
+  }, [productSearchQuery, selectedSupplierProducts, products]);
 
   // Initialize filteredProducts when supplier changes
   useEffect(() => {

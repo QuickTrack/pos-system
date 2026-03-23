@@ -2,18 +2,14 @@
 
 ## Current State
 
-**Template Status**: ✅ License Activation Auto-Populate from Onboarding
+**Template Status**: ✅ POS Keyboard Navigation Implementation
 
-Implemented automated license activation workflow:
-- Business info auto-populated from onboarding localStorage and Settings API
-- Trial plan bypasses license key field
-- Trial plan redirects to /login after activation
-- Added license upgrade functionality in license management page
-- Removed document-templates page (template designer UI)
-- Disabled template creation API (POST returns 403)
-- Removed individual template edit/delete API routes
-- Removed Templates menu item from sidebar navigation
-- Print functionality preserved (uses built-in templates)
+Implemented keyboard navigation flow for POS:
+- When product is selected via Enter key, quantity input is focused and text selected
+- When Enter is pressed in quantity field, focus returns to product search
+- Tab key triggers checkout (when cart has items)
+- In payment modal: Tab cycles through payment methods, Enter completes sale
+- After sale complete: Enter key triggers print receipt
 
 ## Recently Completed
 
@@ -422,6 +418,7 @@ const result = await printEngine.print({
 | 2026-03-20 | Enhanced invoice print with Subtotal/Tax/Total breakdown and Terms section |
 | 2026-03-21 | Implemented customer credit payment feature - auto-apply credit balance in POS and customer payments |
 | 2026-03-22 | POS cart fixed height CSS rule; Settings persistent storage with localStorage |
+| 2026-03-23 | Fixed receipt to always display Taxable Amount and VAT (16%) - removed conditional rendering |
 | 2026-03-22 | Implemented license activation auto-population from onboarding data |
 | 2026-03-22 | Added license upgrade functionality for trial licenses |
 | 2026-03-22 | Added super admin license bypass - super admins can access system regardless of license status |

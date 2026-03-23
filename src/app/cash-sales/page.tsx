@@ -36,6 +36,7 @@ interface Sale {
   cashierName: string;
   status: string;
   items: any[];
+  isRefund?: boolean;
 }
 
 export default function CashSalesPage() {

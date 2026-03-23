@@ -28,6 +28,7 @@ interface Settings {
     email: boolean;
     lowStock: boolean;
     dailySales: boolean;
+    allowNegativeStock: boolean;
   };
   appearance: {
     darkMode: boolean;
@@ -78,6 +79,7 @@ export default function SettingsPage() {
       email: true,
       lowStock: true,
       dailySales: false,
+      allowNegativeStock: false,
     },
     appearance: {
       darkMode: false,
@@ -150,6 +152,7 @@ export default function SettingsPage() {
               email: localData?.notifications?.email ?? true,
               lowStock: data.settings.lowStockAlert ?? localData?.notifications?.lowStock ?? true,
               dailySales: localData?.notifications?.dailySales ?? false,
+              allowNegativeStock: data.settings.allowNegativeStock ?? localData?.notifications?.allowNegativeStock ?? false,
             },
             appearance: {
               darkMode: localData?.appearance?.darkMode ?? false,
@@ -191,6 +194,7 @@ export default function SettingsPage() {
         includeInPrice: settings.tax.includeInPrice,
         taxName: 'VAT',
         lowStockAlert: settings.notifications.lowStock,
+        allowNegativeStock: settings.notifications.allowNegativeStock,
         invoiceTerms: settings.tax.invoiceTerms,
         // Financial Year settings
         financialYearStartMonth: settings.financialYear.startMonth,
@@ -587,6 +591,23 @@ export default function SettingsPage() {
                     >
                       <span className={`inline-block h-4 w-4 transform rounded-full bg-white ${
                         settings.notifications.dailySales ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div>
+                      <h3 className="font-medium text-gray-900">Allow Sale of Negative Stock</h3>
+                      <p className="text-sm text-gray-500">Allow sales even when product stock is 0 or negative</p>
+                    </div>
+                    <button
+                      onClick={() => updateNotificationField('allowNegativeStock', !settings.notifications.allowNegativeStock)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full ${
+                        settings.notifications.allowNegativeStock ? 'bg-emerald-600' : 'bg-gray-200'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white ${
+                        settings.notifications.allowNegativeStock ? 'translate-x-6' : 'translate-x-1'
                       }`} />
                     </button>
                   </div>

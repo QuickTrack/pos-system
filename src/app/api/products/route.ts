@@ -99,10 +99,12 @@ export async function POST(request: NextRequest) {
       success: true,
       product,
     }, { status: 201 });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Create product error:', error);
+    // Return more detailed error for debugging
+    const errorMessage = error.message || 'Failed to create product';
     return NextResponse.json(
-      { error: 'Failed to create product' },
+      { error: errorMessage, details: error.toString() },
       { status: 500 }
     );
   }

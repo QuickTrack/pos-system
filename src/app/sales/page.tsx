@@ -32,6 +32,7 @@ interface Sale {
   change: number;
   status: string;
   saleDate: string;
+  isRefund?: boolean;
 }
 
 export default function SalesPage() {

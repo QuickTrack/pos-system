@@ -49,6 +49,7 @@ export interface ReceiptData {
   change: number;
   cashierName: string;
   includeInPrice?: boolean;
+  isRefund?: boolean;
 }
 
 /**
@@ -153,14 +154,13 @@ function formatItemLine(item: ReceiptItem, maxNameLength: number = 22): string {
 export async function generateThermalReceiptHTML(data: ReceiptData): Promise<string> {
   const year = new Date().getFullYear();
   
-  // Calculate tax amounts
-  const total = data.total;
   const taxRate = data.taxRate || 16;
   // Check includeInPrice from data first, then from business settings
   const includeInPrice = data.includeInPrice ?? data.business.includeInPrice ?? false;
   
   let taxAmount: number;
   let taxableAmount: number;
+  const total = data.total;
   
   // Calculate VAT for each item and total VAT
   let totalVATFromItems = 0;
@@ -168,25 +168,38 @@ export async function generateThermalReceiptHTML(data: ReceiptData): Promise<str
   
   if (data.items && data.items.length > 0) {
     for (const item of data.items) {
-      // Calculate VAT from item amount (prices are stored as VAT-inclusive)
-      // VAT = amount - (amount / 1.16), Net = amount / 1.16
-      const itemNet = item.amount / (1 + taxRate / 100);
-      const itemVAT = item.amount - itemNet;
+      // Calculate VAT from item amount (prices may be VAT-inclusive or exclusive)
+      // For VAT-inclusive: VAT = amount - (amount / 1.16), Net = amount / 1.16
+      // For VAT-exclusive: VAT = amount * 0.16, Net = amount
+      let itemNet: number;
+      let itemVAT: number;
+      
+      if (includeInPrice) {
+        // Prices include VAT - extract the net and VAT portions
+        itemNet = item.amount / (1 + taxRate / 100);
+        itemVAT = item.amount - itemNet;
+      } else {
+        // Prices are VAT-exclusive
+        itemNet = item.amount;
+        itemVAT = item.amount * (taxRate / 100);
+      }
+      
       totalVATFromItems += itemVAT;
       totalNetFromItems += itemNet;
     }
   }
   
+  // Calculate totals based on whether prices include VAT
   if (includeInPrice) {
-    // Prices already include tax (VAT-inclusive)
-    // Use calculated VAT from items
+    // Prices are VAT-inclusive (total is the gross amount)
+    // taxableAmount is the net amount before VAT
+    // taxAmount is the VAT portion
     taxAmount = totalVATFromItems;
     taxableAmount = totalNetFromItems;
   } else {
-    // For VAT-exclusive, still use the same calculation from total
-    // since prices are stored as VAT-inclusive but should be displayed as VAT-exclusive
-    taxAmount = totalVATFromItems || (total / (1 + taxRate / 100) * taxRate / 100);
-    taxableAmount = totalNetFromItems || (total / (1 + taxRate / 100));
+    // Prices are VAT-exclusive
+    taxAmount = totalVATFromItems || ((data.subtotal - data.discount) * taxRate / 100);
+    taxableAmount = totalNetFromItems || (data.subtotal - data.discount);
   }
   
   // Generate KRA QR Code
@@ -413,7 +426,7 @@ export async function generateThermalReceiptHTML(data: ReceiptData): Promise<str
     
     <!-- Receipt Info -->
     <div class="text-center">
-      <div class="font-bold">RECEIPT</div>
+      <div class="font-bold">${data.isRefund ? 'SALE RETURN' : 'RECEIPT'}</div>
       <div>No: ${data.invoiceNumber}</div>
       <div>${formatDate(data.date)} ${formatTime(data.date)}</div>
     </div>
@@ -474,7 +487,6 @@ export async function generateThermalReceiptHTML(data: ReceiptData): Promise<str
     </div>
     ` : ''}
     
-    ${!includeInPrice ? `
     <div class="totals-row">
       <span>Taxable Amount:</span>
       <span>${formatCurrency(taxableAmount)}</span>
@@ -484,7 +496,6 @@ export async function generateThermalReceiptHTML(data: ReceiptData): Promise<str
       <span>VAT (${taxRate}%):</span>
       <span>${formatCurrency(taxAmount)}</span>
     </div>
-    ` : ''}
     
     <div class="totals-row grand-total">
       <span>TOTAL:</span>
@@ -510,7 +521,7 @@ export async function generateThermalReceiptHTML(data: ReceiptData): Promise<str
     
     <!-- Footer -->
     <div class="text-center">
-      <div class="footer-text">Prices inclusive of VAT where applicable</div>
+      <div class="footer-text">${includeInPrice ? 'Prices inclusive of VAT' : 'Prices exclusive of VAT'}</div>
       <div class="footer-text">Served by: ${data.cashierName}</div>
       <div class="footer-text">Goods once sold cannot be returned</div>
       <div class="footer-text">Powered by Quicktrack ERP ${year}</div>
@@ -595,7 +606,8 @@ export function createReceiptData(
     amountPaid: sale.amountPaid || 0,
     change: sale.change || 0,
     cashierName,
-    includeInPrice
+    includeInPrice,
+    isRefund: sale.isRefund || false
   };
 }
 

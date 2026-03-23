@@ -40,6 +40,11 @@ export async function POST(request: NextRequest) {
     
     const data = await request.json();
     
+    // Generate code if not provided
+    if (!data.code) {
+      data.code = 'SUP' + Date.now();
+    }
+    
     const supplier = await Supplier.create(data);
     
     return NextResponse.json({

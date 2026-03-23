@@ -343,9 +343,16 @@ export default function CreateInvoicePage() {
   };
 
   const updateItemQuantity = (productId: string, unitName: string, delta: number) => {
+    const item = invoiceItems.find(i => i.productId === productId && i.unitName === unitName);
+    if (item) {
+      setItemQuantity(productId, unitName, item.quantity + delta);
+    }
+  };
+
+  const setItemQuantity = (productId: string, unitName: string, quantity: number) => {
     const updatedItems = invoiceItems.map(item => {
       if (item.productId === productId && item.unitName === unitName) {
-        const newQty = Math.max(0, item.quantity + delta);
+        const newQty = Math.max(0, quantity);
         return { ...item, quantity: newQty, total: newQty * item.unitPrice };
       }
       return item;
@@ -695,7 +702,16 @@ export default function CreateInvoicePage() {
                             >
                               <Minus className="w-3 h-3" />
                             </button>
-                            <span className="w-8 text-center">{item.quantity}</span>
+                            <input
+                              type="number"
+                              min="1"
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value) || 1;
+                                setItemQuantity(item.productId, item.unitName, Math.max(1, val));
+                              }}
+                              className="w-12 text-center border border-gray-300 rounded px-1 py-0.5 focus:outline-none focus:border-blue-500"
+                            />
                             <button
                               onClick={() => updateItemQuantity(item.productId, item.unitName, 1)}
                               className="p-1 hover:bg-gray-100 rounded"

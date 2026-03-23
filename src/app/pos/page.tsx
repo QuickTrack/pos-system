@@ -88,7 +88,16 @@ export default function POSPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerSearch, setCustomerSearch] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [selectedPaymentMethodIndex, setSelectedPaymentMethodIndex] = useState(0);
   const [amountPaid, setAmountPaid] = useState('');
+
+  const PAYMENT_METHODS = [
+    { value: 'cash', label: 'Cash', icon: Banknote },
+    { value: 'mpesa', label: 'M-Pesa', icon: Smartphone },
+    { value: 'card', label: 'Card', icon: CreditCard },
+    { value: 'credit', label: 'Credit', icon: Wallet },
+    { value: 'account', label: 'Account', icon: Wallet },
+  ];
   const [creditApplied, setCreditApplied] = useState(0);
   const [processing, setProcessing] = useState(false);
   const [saleComplete, setSaleComplete] = useState(false);
@@ -108,6 +117,7 @@ export default function POSPage() {
   const [cartHeight] = useState(350);
   const [selectedProductIndex, setSelectedProductIndex] = useState(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const lastAddedItemRef = useRef<string | null>(null);
   
   const { 
     items, 
@@ -140,6 +150,67 @@ export default function POSPage() {
     }, 100);
     return () => clearTimeout(timer);
   }, []);
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input/textarea
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+
+      // When payment modal is open
+      if (showPaymentModal) {
+        // Tab to cycle through payment methods
+        if (e.key === 'Tab' && !isInput) {
+          e.preventDefault();
+          const nextIndex = (selectedPaymentMethodIndex + 1) % PAYMENT_METHODS.length;
+          setSelectedPaymentMethodIndex(nextIndex);
+          setPaymentMethod(PAYMENT_METHODS[nextIndex].value);
+          return;
+        }
+
+        // Enter to confirm payment method and complete sale
+        if (e.key === 'Enter' && !isInput) {
+          e.preventDefault();
+          // Trigger the complete payment action
+          handlePayment();
+          return;
+        }
+      }
+
+      // When sale is complete (saleComplete is true but lastSale still exists)
+      if (saleComplete && lastSale) {
+        // Enter to print receipt
+        if (e.key === 'Enter' && !isInput) {
+          e.preventDefault();
+          handlePrintReceipt();
+          return;
+        }
+      }
+
+      // Tab key to trigger checkout - only when not in an input and payment modal is closed
+      if (e.key === 'Tab' && !isInput && items.length > 0 && !showPaymentModal) {
+        e.preventDefault();
+        const { total: checkoutTotal } = calculateTotals();
+        setAmountPaid(checkoutTotal.toString());
+        setShowPaymentModal(true);
+        setSelectedPaymentMethodIndex(0);
+        setPaymentMethod(PAYMENT_METHODS[0].value);
+        return;
+      }
+
+      // Enter key to print receipt - only when not in an input and there's a lastSale
+      if (e.key === 'Enter' && !isInput && lastSale && !showPaymentModal && !saleComplete) {
+        e.preventDefault();
+        handlePrintReceipt();
+        return;
+      }
+    };
+
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [items, lastSale, showPaymentModal, selectedPaymentMethodIndex, saleComplete]);
 
   useEffect(() => {
     if (searchQuery || selectedCategory !== 'all') {
@@ -201,6 +272,22 @@ export default function POSPage() {
       setSelectedProductIndex(-1);
     }
   };
+
+  // Focus quantity input when product is added
+  useEffect(() => {
+    if (lastAddedItemRef.current) {
+      // Use setTimeout to ensure the DOM has updated with the new cart item
+      const timer = setTimeout(() => {
+        const quantityInput = document.querySelector(`#qty-input-${lastAddedItemRef.current}`) as HTMLInputElement;
+        if (quantityInput) {
+          quantityInput.focus();
+          quantityInput.select();
+        }
+        lastAddedItemRef.current = null;
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [items]);
 
   // Extract unique categories from products
   useEffect(() => {
@@ -354,9 +441,10 @@ export default function POSPage() {
         total: price,
       };
       addItem(cartItem);
+      lastAddedItemRef.current = product._id;
     }
     setSearchQuery('');
-    searchInputRef.current?.focus();
+    // Focus will be handled by useEffect when lastAddedItemRef changes
   };
 
   const handleUnitChange = (productId: string, unit: UnitOption) => {
@@ -999,9 +1087,23 @@ export default function POSPage() {
                           >
                             <Minus className="w-3 h-3" />
                           </button>
-                          <span className="w-8 text-center font-medium text-xs">
-                            {item.quantity}
-                          </span>
+                          <input
+                            id={`qty-input-${item.productId}`}
+                            type="number"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value) || 1;
+                              updateQuantity(item.productId, Math.max(1, val));
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                searchInputRef.current?.focus();
+                              }
+                            }}
+                            className="w-12 text-center font-medium text-xs border border-gray-300 rounded px-1 py-0.5 focus:outline-none focus:border-blue-500"
+                          />
                           <button
                             onClick={() => updateQuantity(item.productId, item.quantity + 1)}
                             className="p-1 hover:bg-gray-100 rounded border"
@@ -1325,7 +1427,7 @@ export default function POSPage() {
             </div>
           )}
 
-          <Button
+          <Button 
             className="w-full"
             size="lg"
             onClick={handlePayment}
