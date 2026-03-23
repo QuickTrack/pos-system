@@ -15,7 +15,7 @@ interface ModalProps {
   className?: string;
 }
 
-export function Modal({ isOpen, onClose, title, header, children, size = 'md', closeOnOverlayClick = true, className = '' }: ModalProps) {
+export function Modal({ isOpen, onClose, title, header, children, size = 'md', closeOnOverlayClick = false, className = '' }: ModalProps) {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';

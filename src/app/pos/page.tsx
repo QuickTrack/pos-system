@@ -1292,16 +1292,6 @@ export default function POSPage() {
               onChange={(e) => handleSearchCustomer(e.target.value)}
               className="flex-1"
             />
-            <Button
-              onClick={() => {
-                setShowCustomerModal(false);
-                setShowAddCustomerModal(true);
-              }}
-              className="flex items-center gap-1 whitespace-nowrap"
-            >
-              <UserPlus className="w-4 h-4" />
-              Add New
-            </Button>
           </div>
           <div className="max-h-64 overflow-y-auto space-y-2">
             {customers.length === 0 && customerSearch.length >= 2 ? (

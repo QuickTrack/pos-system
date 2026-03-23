@@ -315,6 +315,19 @@ Implemented keyboard navigation flow for POS:
 - [x] Receipt Sale Return Label
   - Modified receipt generator to display "SALE RETURN" instead of "RECEIPT" for refund transactions
   - Distinguishes between regular sales and returns in printed receipts
+- [x] POS Customer Creation
+  - Added "Create New Customer" button that appears when no customers found
+  - Created Add Customer modal with form (name, phone, email, address, type, category)
+  - Added business name and KRA PIN fields for company customers
+  - Added credit limit field
+  - Validates required fields (name, phone) before submission
+  - Auto-selects newly created customer after successful creation
+  - Error handling with user-friendly messages
+  - Reuses existing /api/customers POST endpoint
+- [x] Modal Close on Overlay Behavior
+  - Changed default closeOnOverlayClick to false
+  - Modals now stay open when clicking outside
+  - Users must explicitly close with X button or Cancel button
 
 ## Current Structure
 
