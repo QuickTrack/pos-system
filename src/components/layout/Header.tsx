@@ -31,6 +31,7 @@ export function Header({ title, subtitle }: HeaderProps) {
   const [financialYear, setFinancialYear] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
+  const [businessInfo, setBusinessInfo] = useState<{ name: string; logo: string }>({ name: '', logo: '' });
 
   // Update lastChecked when license is checked
   useEffect(() => {
@@ -75,6 +76,12 @@ export function Header({ title, subtitle }: HeaderProps) {
         if (data.settings?.currentFinancialYear) {
           setFinancialYear(data.settings.currentFinancialYear);
         }
+        if (data.settings?.businessName) {
+          setBusinessInfo({
+            name: data.settings.businessName,
+            logo: data.settings.logo || ''
+          });
+        }
       } catch (error) {
         console.error('Failed to load financial year:', error);
       }
@@ -112,16 +119,37 @@ export function Header({ title, subtitle }: HeaderProps) {
           </div>
         </div>
 
-        {/* Center - Search */}
+        {/* Center - Business Name/Logo Display */}
         <div className="hidden md:flex flex-1 max-w-md mx-8">
-          <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input 
-              type="text"
-              placeholder="Search products, customers, sales..."
-              className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-            />
-          </div>
+          {businessInfo.name ? (
+            <div className="flex items-center gap-3 w-full">
+              {businessInfo.logo ? (
+                <img 
+                  src={businessInfo.logo} 
+                  alt={businessInfo.name}
+                  className="h-10 w-auto object-contain"
+                />
+              ) : (
+                <div className="h-10 w-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                  <span className="text-emerald-600 font-bold text-lg">
+                    {businessInfo.name.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+              )}
+              <span className="text-lg font-semibold text-gray-900 truncate">
+                {businessInfo.name}
+              </span>
+            </div>
+          ) : (
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input 
+                type="text"
+                placeholder="Search products, customers, sales..."
+                className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              />
+            </div>
+          )}
         </div>
 
         {/* Right side */}

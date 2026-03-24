@@ -4,6 +4,7 @@ import CustomerInvoice from '@/models/CustomerInvoice';
 import Customer from '@/models/Customer';
 import { getAuthUser } from '@/lib/auth-server';
 import { hasPermission } from '@/lib/auth';
+import mongoose from 'mongoose';
 
 export async function GET(
   request: NextRequest,
@@ -54,6 +55,79 @@ export async function PUT(
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
     
+    // Handle full invoice edit (when editMode is true)
+    if (data.editMode) {
+      // Only allow editing draft invoices
+      if (invoice.status !== 'draft') {
+        return NextResponse.json(
+          { error: 'Only draft invoices can be edited' },
+          { status: 400 }
+        );
+      }
+      
+      // Update customer if changed
+      if (data.customerId && data.customerId !== invoice.customer.toString()) {
+        invoice.customer = new mongoose.Types.ObjectId(data.customerId);
+      }
+      
+      // Update invoice number if changed
+      if (data.invoiceNumber) {
+        invoice.invoiceNumber = data.invoiceNumber;
+      }
+      
+      // Update items
+      if (data.items && Array.isArray(data.items)) {
+        invoice.items = data.items.map((item: any) => ({
+          product: new mongoose.Types.ObjectId(item.productId),
+          productName: item.productName,
+          sku: item.sku,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          unitName: item.unitName,
+          discount: item.discount || 0,
+          discountType: item.discountType || 'fixed',
+          total: item.total,
+        }));
+      }
+      
+      // Update subtotal, tax, total
+      if (typeof data.subtotal === 'number') {
+        invoice.subtotal = data.subtotal;
+      }
+      if (typeof data.tax === 'number') {
+        invoice.tax = data.tax;
+      }
+      if (typeof data.total === 'number') {
+        invoice.total = data.total;
+      }
+      if (typeof data.taxRate === 'number') {
+        invoice.taxRate = data.taxRate;
+      }
+      
+      // Update date if changed
+      if (data.invoiceDate) {
+        invoice.invoiceDate = new Date(data.invoiceDate);
+      }
+      
+      // Update notes
+      if (data.notes !== undefined) {
+        invoice.notes = data.notes;
+      }
+      
+      // Update payment terms
+      if (typeof data.paymentTerms === 'number') {
+        invoice.paymentTerms = data.paymentTerms;
+      }
+      
+      await invoice.save();
+      
+      return NextResponse.json({
+        success: true,
+        invoice,
+        message: 'Invoice updated successfully',
+      });
+    }
+    
     // Handle status changes
     if (data.status) {
       // If marking as sent, update status
@@ -81,7 +155,7 @@ export async function PUT(
         method: payment.method,
         reference: payment.reference,
         notes: payment.notes,
-        recordedBy: new (await import('mongoose')).Types.ObjectId(user.userId),
+        recordedBy: new mongoose.Types.ObjectId(user.userId),
       });
       
       // Update amounts

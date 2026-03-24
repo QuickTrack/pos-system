@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongodb';
 import CustomerPayment from '@/models/CustomerPayment';
 import Customer from '@/models/Customer';
+import CustomerInvoice from '@/models/CustomerInvoice';
+import { getAuthUser } from '@/lib/auth-server';
+import mongoose from 'mongoose';
 
 export async function GET(request: Request) {
   try {
@@ -67,8 +70,17 @@ export async function POST(request: Request) {
   try {
     await connectDB();
     
+    // Get authenticated user
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+    
     const body = await request.json();
-    const { customerId, amount, paymentDate, paymentMethod, referenceNumber, invoiceNumbers, notes } = body;
+    const { customerId, amount, paymentDate, paymentMethod, referenceNumber, invoiceNumbers, notes, status: paymentStatus } = body;
 
     // Get customer details
     const customer = await Customer.findById(customerId);
@@ -77,6 +89,41 @@ export async function POST(request: Request) {
         { success: false, error: 'Customer not found' },
         { status: 404 }
       );
+    }
+
+    // Validate that invoices are not already fully paid
+    if (invoiceNumbers && invoiceNumbers.length > 0) {
+      const Sale = (await import('@/models/Sale')).default;
+      const paidInvoices: string[] = [];
+
+      for (const invoiceNumber of invoiceNumbers) {
+        // Check Sale invoices - cash/mpesa/card sales are always paid, account/credit need checking
+        const sale = await Sale.findOne({ invoiceNumber });
+        if (sale) {
+          // Sales with cash, mpesa, card, mixed are always paid
+          const paidMethods = ['cash', 'mpesa', 'card', 'mixed'];
+          if (paidMethods.includes(sale.paymentMethod) || sale.status === 'completed') {
+            paidInvoices.push(invoiceNumber);
+          }
+        }
+        // Check CustomerInvoice records
+        const customerInvoice = await CustomerInvoice.findOne({ invoiceNumber });
+        if (customerInvoice && customerInvoice.status === 'paid') {
+          if (!paidInvoices.includes(invoiceNumber)) {
+            paidInvoices.push(invoiceNumber);
+          }
+        }
+      }
+
+      if (paidInvoices.length > 0) {
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: `The following invoice(s) are already fully paid and cannot receive additional payments: ${paidInvoices.join(', ')}` 
+          },
+          { status: 400 }
+        );
+      }
     }
 
     // Create payment record
@@ -93,8 +140,9 @@ export async function POST(request: Request) {
       paymentMethod: paymentMethod || 'cash',
       referenceNumber,
       invoiceNumbers: invoiceNumbers || [],
-      status: 'pending',
+      status: paymentStatus || 'pending',
       notes,
+      recordedBy: user.userId,
     });
 
     await payment.save();
@@ -115,19 +163,55 @@ export async function POST(request: Request) {
       }
     }
 
-    // If invoices are specified, update their payment status
-    if (invoiceNumbers && invoiceNumbers.length > 0) {
+    // If invoices are specified and payment is completed/paid, update their payment status
+    if (invoiceNumbers && invoiceNumbers.length > 0 && (paymentStatus === 'completed' || paymentStatus === 'paid')) {
       const Sale = (await import('@/models/Sale')).default;
       
       for (const invoiceNumber of invoiceNumbers) {
+        // Update Sale invoices
         const sale = await Sale.findOne({ invoiceNumber });
         if (sale) {
           const newAmountPaid = sale.amountPaid + amount;
+          // Only mark as paid if total paid meets or exceeds the invoice total
           const newStatus = newAmountPaid >= sale.total ? 'paid' : 'partial';
           
           await Sale.findByIdAndUpdate(sale._id, {
             amountPaid: newAmountPaid,
             paymentStatus: newStatus,
+          });
+        }
+        
+        // Update CustomerInvoice records
+        const customerInvoice = await CustomerInvoice.findOne({ invoiceNumber });
+        if (customerInvoice) {
+          const newAmountPaid = customerInvoice.amountPaid + amount;
+          const newBalanceDue = Math.max(0, customerInvoice.total - newAmountPaid);
+          
+          // Only update to PAID if total paid amount meets or exceeds invoice total
+          let newStatus: 'draft' | 'sent' | 'partial' | 'paid' | 'overdue' | 'cancelled' = customerInvoice.status;
+          if (newBalanceDue <= 0 && newAmountPaid >= customerInvoice.total) {
+            newStatus = 'paid';
+          } else if (newAmountPaid > 0) {
+            newStatus = 'partial';
+          }
+          
+          // Add payment record to invoice
+          await CustomerInvoice.findByIdAndUpdate(customerInvoice._id, {
+            $push: {
+              payments: {
+                amount,
+                date: paymentDate || new Date(),
+                method: (paymentMethod || 'cash') as 'cash' | 'mpesa' | 'bank' | 'cheque' | 'other',
+                reference: referenceNumber,
+                notes,
+                recordedBy: new mongoose.Types.ObjectId(user.userId),
+              },
+            },
+            $set: {
+              amountPaid: newAmountPaid,
+              balanceDue: newBalanceDue,
+              status: newStatus,
+            },
           });
         }
       }

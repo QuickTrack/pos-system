@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
       Purchase.find(query)
         .populate('supplier', 'name phone')
         .populate('branch', 'name')
+        .populate('items.product', 'name baseUnit units')
         .sort({ orderDate: -1 })
         .skip(skip)
         .limit(limit),
@@ -86,8 +87,26 @@ export async function POST(request: NextRequest) {
       ? (subtotal * data.discount) / 100
       : (data.discount || 0);
     const taxableAmount = subtotal - discountAmount;
-    const tax = taxableAmount * 0.16;
-    const total = taxableAmount + tax;
+    
+    // Get settings to check if prices include tax
+    const Settings = (await import('@/models/Settings')).default;
+    const settings = await Settings.findOne().lean();
+    const includeInPrice = settings?.includeInPrice || false;
+    const taxRate = settings?.taxRate || 16;
+    
+    let tax = 0;
+    let total = 0;
+    
+    if (includeInPrice) {
+      // Prices already include VAT - reverse calculate tax for display
+      const netAmount = taxableAmount / (1 + taxRate / 100);
+      tax = taxableAmount - netAmount;
+      total = taxableAmount; // Total is the VAT-inclusive amount, no extra tax added
+    } else {
+      // Prices are VAT-exclusive - calculate and add tax
+      tax = taxableAmount * (taxRate / 100);
+      total = taxableAmount + tax;
+    }
     const balance = total - (data.amountPaid || 0);
     
     const purchaseData: any = {
@@ -108,6 +127,8 @@ export async function POST(request: NextRequest) {
       orderDate: new Date(),
       expectedDeliveryDate: data.expectedDeliveryDate,
       notes: data.notes,
+      taxRate,
+      includeInPrice,
     };
     
     // Only add branch if provided

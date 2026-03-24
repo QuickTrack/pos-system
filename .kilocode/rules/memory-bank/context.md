@@ -2,9 +2,16 @@
 
 ## Current State
 
-**Template Status**: ✅ POS Keyboard Navigation Implementation
+**Template Status**: ✅ Multi-User Authentication with Session Management
 
-Implemented keyboard navigation flow for POS:
+Implemented complete multi-user authentication system:
+- Session model for tracking active user sessions
+- Sessions API endpoint for viewing/managing sessions
+- Login API creates session records on successful authentication
+- Logout API cleans up sessions
+- Concurrent session limit (default: 3 devices per user)
+- Automatic activity logging for key actions (login, logout, sales, products)
+- Session management UI in Settings page
 - When product is selected via Enter key, quantity input is focused and text selected
 - When Enter is pressed in quantity field, focus returns to product search
 - Tab key triggers checkout (when cart has items)
@@ -19,6 +26,16 @@ Implemented keyboard navigation flow for POS:
 - [x] ESLint configuration
 - [x] Memory bank documentation
 - [x] Recipe system for common features
+- [x] Purchases Page Enhancements
+  - Fixed supplier selection to use correct state variable (newSupplierData)
+  - Made supplier field wider in the form
+  - Auto-select newly created supplier and focus product search
+  - Added Unit column to products section with proper unit selection from product's baseUnit and additional units
+  - Added Cheque payment option to payment method dropdown
+  - Added print functionality for purchase orders with PrintPreview component
+  - Added validation for required fields (supplier and products) before submission
+  - Fixed productDetails storage to preserve baseUnit and units for each item
+  - Added 'cheque' to Purchase model paymentMethod enum
 - [x] Receipt Printing Engine Implementation
   - ESC/POS command generator
   - Barcode/QR code generators
@@ -328,6 +345,35 @@ Implemented keyboard navigation flow for POS:
   - Changed default closeOnOverlayClick to false
   - Modals now stay open when clicking outside
   - Users must explicitly close with X button or Cancel button
+- [x] POS Credit Limit Error Display
+  - Added paymentError and creditLimitInfo state for tracking credit limit errors
+  - Added credit limit error display in payment modal with detailed breakdown
+  - Shows: Credit Limit, Current Debt, Sale Amount, Available Credit, Would Exceed By
+  - Professional error message with red styling and AlertTriangle icon
+  - Clears error when modal closes or payment method changes
+  - Simplified error message: "Credit limit Exceeded, use other payment mode"
+  - Fixed undefined variable bugs (customer → selectedCustomer in payment modal)
+  - Fixed button disabled condition for account payment to use selectedCustomer
+  - Fixed credit limit error detection to check error message case-insensitively
+- [x] Invoice and Delivery Note Unit Display
+  - Added unitName field to CustomerInvoice model and schema
+  - Create Invoice page passes unit to print documents (unit: item.unitName)
+  - PrintPreview already displays unit column for items
+  - Units (kg, pieces, liters, boxes, etc.) now appear in printed invoices and delivery notes
+- [x] TypeScript Fixes
+  - Added includeInPrice and paymentTerms to Invoice interface in create-invoice page
+  - Added includeInPrice to Invoice interface in sales-returns page
+  - Fixed paymentTerms type handling in setPaymentTerms call
+  - Fixed customer-payments route to use paymentMethod instead of non-existent paymentStatus
+- [x] Invoice Unit Display Fix
+  - Added unit transformation in handlePrintInvoice to convert unitName to unit for PrintPreview
+  - Added unit transformation after invoice creation to convert unitName to unit
+  - Added fallback: unit: (item as any).unitName || (item as any).unit || '-' in PrintPreview data mapping
+  - Units now properly display in printed invoices and delivery notes
+- [x] Onboarding Skip Option
+  - Added "Skip onboarding setup" link on login page
+  - Clicking sets localStorage onboarding-complete to true
+  - Redirects directly to dashboard bypassing onboarding wizard
 
 ## Current Structure
 
@@ -451,6 +497,7 @@ const result = await printEngine.print({
 | 2026-03-22 | Added super admin license bypass - super admins can access system regardless of license status |
 | 2026-03-22 | Implemented real-time license status synchronization with polling mechanism |
 | 2026-03-22 | Added license downgrade, suspend, and restore actions |
+| 2026-03-24 | Implemented multi-user authentication with session management - Session model, Sessions API, concurrent session limits, automatic activity logging for login/logout/sales/products, session management UI in Settings |
 | 2026-03-23 | Added manual quantity editing in cart sections with keyboard navigation |
 
 ## Notes

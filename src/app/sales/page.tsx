@@ -45,9 +45,25 @@ export default function SalesPage() {
   const [status, setStatus] = useState('');
   const [showPrintPreview, setShowPrintPreview] = useState(false);
 
+  // Settings state for print
+  const [businessSettings, setBusinessSettings] = useState<any>(null);
+
   useEffect(() => {
     fetchSales();
+    fetchSettings();
   }, [searchQuery, startDate, endDate, status]);
+
+  const fetchSettings = async () => {
+    try {
+      const response = await fetch('/api/settings');
+      if (response.ok) {
+        const data = await response.json();
+        setBusinessSettings(data);
+      }
+    } catch (error) {
+      console.error('Error fetching settings:', error);
+    }
+  };
 
   const fetchSales = async () => {
     try {
@@ -393,6 +409,7 @@ export default function SalesPage() {
         <PrintPreview
           documentType="receipt"
           document={{
+            includeInPrice: businessSettings?.includeInPrice || false,
             invoiceNumber: (selectedSale as any).receiptNumber || (selectedSale as any)._id,
             date: (selectedSale as any).createdAt,
             customer: {
@@ -401,6 +418,7 @@ export default function SalesPage() {
             },
             items: (selectedSale as any).items?.map((item: any) => ({
               name: item.productName,
+              unit: item.product?.baseUnit || '-',
               quantity: item.quantity,
               price: item.unitPrice,
               total: item.total

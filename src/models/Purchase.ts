@@ -38,7 +38,7 @@ export interface IPurchase extends Document {
   
   // Payment
   paymentStatus: 'unpaid' | 'partial' | 'paid';
-  paymentMethod?: 'cash' | 'mpesa' | 'card' | 'credit';
+  paymentMethod?: 'cash' | 'mpesa' | 'card' | 'credit' | 'cheque';
   
   // Dates
   orderDate: Date;
@@ -108,7 +108,7 @@ const PurchaseSchema = new Schema<IPurchase>(
     },
     paymentMethod: { 
       type: String, 
-      enum: ['cash', 'mpesa', 'card', 'credit'] 
+      enum: ['cash', 'mpesa', 'card', 'credit', 'cheque'] 
     },
     
     // Dates

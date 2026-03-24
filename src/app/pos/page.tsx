@@ -119,6 +119,14 @@ export default function POSPage() {
   const [creditApplied, setCreditApplied] = useState(0);
   const [processing, setProcessing] = useState(false);
   const [saleComplete, setSaleComplete] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
+  const [creditLimitInfo, setCreditLimitInfo] = useState<{
+    creditLimit: number;
+    currentDebt: number;
+    availableCredit: number;
+    saleAmount: number;
+    wouldExceedBy: number;
+  } | null>(null);
   const [lastSale, setLastSale] = useState<any>(null);
   const [openUnitSelector, setOpenUnitSelector] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState('POS');
@@ -581,7 +589,7 @@ export default function POSPage() {
           creditApplied: creditApplied,
           amountPaid: isCreditPayment ? creditApplied : paidAmount,
           change: isCreditPayment ? 0 : (paidAmount - total),
-          mpesaPhone: paymentMethod === 'mpesa' ? customer?.phone : undefined,
+          mpesaPhone: paymentMethod === 'mpesa' ? selectedCustomer?.phone : undefined,
           notes: isAccountPayment ? 'Charge to account' : isCreditPayment ? 'Paid with store credit' : undefined,
           includeInPrice: businessSettings.includeInPrice,
         }),
@@ -589,15 +597,40 @@ export default function POSPage() {
       
       const data = await response.json();
       
+      // For any non-2xx response, show error
+      if (!response.ok) {
+        const errorMsg = data.message || data.error || 'An error occurred';
+        alert('Error: ' + errorMsg); // Debug alert
+        
+        // Check for credit limit error (case insensitive)
+        if (errorMsg.toLowerCase().includes('credit limit')) {
+          setPaymentError('Credit limit Exceeded, use other payment mode');
+          setCreditLimitInfo({
+            creditLimit: data.creditLimit || 0,
+            currentDebt: data.currentDebt || 0,
+            availableCredit: data.availableCredit || 0,
+            saleAmount: data.saleAmount || 0,
+            wouldExceedBy: data.wouldExceedBy || 0
+          });
+        } else {
+          setPaymentError(errorMsg);
+        }
+        setProcessing(false);
+        return;
+      }
+      
+      setPaymentError('');
+      setCreditLimitInfo(null);
+      
       if (data.success) {
         // If account payment, create credit invoice
-        if (isAccountPayment && customer?.id) {
+        if (isAccountPayment && selectedCustomer?._id) {
           try {
             const creditInvoiceResponse = await fetch('/api/customer-invoices/credit', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                customerId: customer.id,
+                customerId: selectedCustomer._id,
                 amount: total,
                 referenceInvoiceId: data.sale?._id,
                 referenceInvoiceNumber: data.sale?.invoiceNumber,
@@ -1501,12 +1534,49 @@ export default function POSPage() {
       {/* Payment Modal */}
       <Modal
         isOpen={showPaymentModal}
-        onClose={() => setShowPaymentModal(false)}
+        onClose={() => { setShowPaymentModal(false); setPaymentError(''); setCreditLimitInfo(null); }}
         title="Payment"
         size="sm"
         closeOnOverlayClick={false}
       >
         <div className="space-y-3">
+          {/* Credit Limit Error Display */}
+          {paymentError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-red-800">Credit Limit Exceeded</p>
+                  <p className="text-xs text-red-700">Use a different payment method to complete this sale.</p>
+                  {creditLimitInfo && (
+                    <div className="mt-2 pt-2 border-t border-red-200 space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-red-600">Credit Limit:</span>
+                        <span className="font-medium text-red-800">{formatCurrency(creditLimitInfo.creditLimit)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-red-600">Current Debt:</span>
+                        <span className="font-medium text-red-800">{formatCurrency(creditLimitInfo.currentDebt)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-red-600">Sale Amount:</span>
+                        <span className="font-medium text-red-800">{formatCurrency(creditLimitInfo.saleAmount)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-red-600">Available Credit:</span>
+                        <span className="font-medium text-red-800">{formatCurrency(creditLimitInfo.availableCredit)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs mt-2 pt-2 border-t border-red-200">
+                        <span className="text-red-600">Would Exceed By:</span>
+                        <span className="font-bold text-red-800">{formatCurrency(creditLimitInfo.wouldExceedBy)}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="bg-gray-50 rounded-lg p-3 text-center">
             <p className="text-xs text-gray-500">Total Amount</p>
             <p className="text-2xl font-bold text-gray-900">{formatCurrency(total)}</p>
@@ -1675,16 +1745,16 @@ export default function POSPage() {
             )}
           </div>
 
-          {paymentMethod === 'account' && !customer && (
+          {paymentMethod === 'account' && !selectedCustomer && (
             <div className="bg-red-50 rounded-lg p-3 text-center">
               <p className="text-sm text-red-600">Please select a customer to charge to their account</p>
             </div>
           )}
 
-          {paymentMethod === 'account' && customer && (
+          {paymentMethod === 'account' && selectedCustomer && (
             <div className="bg-amber-50 rounded-lg p-3 border border-amber-200">
               <p className="text-sm text-amber-700">
-                {formatCurrency(total)} will be added to {customer.name}&apos;s account
+                {formatCurrency(total)} will be added to {selectedCustomer.name}&apos;s account
               </p>
               {selectedCustomer && selectedCustomer.creditLimit > 0 && (
                 <div className="mt-2 pt-2 border-t border-amber-300 text-xs text-amber-600">
@@ -1711,8 +1781,8 @@ export default function POSPage() {
             isLoading={processing}
             disabled={
               (paymentMethod === 'cash' && (!amountPaid || parseFloat(amountPaid) < total)) ||
-              (paymentMethod === 'account' && !customer) ||
-              (paymentMethod === 'credit' && (!customer || (selectedCustomer?.creditBalance || 0) <= 0))
+              (paymentMethod === 'account' && !selectedCustomer) ||
+              (paymentMethod === 'credit' && (!selectedCustomer || (selectedCustomer?.creditBalance || 0) <= 0))
             }
           >
             Complete Sale

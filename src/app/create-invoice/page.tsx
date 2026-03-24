@@ -85,6 +85,8 @@ interface Invoice {
   notes?: string;
   payments?: any[];
   invoiceType?: 'sale' | 'credit';
+  includeInPrice?: boolean;
+  paymentTerms?: string;
 }
 
 export default function CreateInvoicePage() {
@@ -107,6 +109,7 @@ export default function CreateInvoicePage() {
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [selectedProductIndex, setSelectedProductIndex] = useState(-1);
   const productSearchRef = useRef<HTMLInputElement>(null);
   
   // Customer modal state
@@ -121,10 +124,19 @@ export default function CreateInvoicePage() {
   // Invoice view state
   const [viewInvoice, setViewInvoice] = useState<Invoice | null>(null);
   
+  // Edit mode state
+  const [editMode, setEditMode] = useState(false);
+  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
+  
   // Print state
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [selectedInvoiceForPrint, setSelectedInvoiceForPrint] = useState<Invoice | null>(null);
+  const [printDocumentType, setPrintDocumentType] = useState<'invoice' | 'delivery-note'>('invoice');
   const [businessSettings, setBusinessSettings] = useState<any>(null);
+
+  // Alert modal state
+  const [showAlertModal, setShowAlertModal] = useState(false);
+  const [alertMessage, setAlertMessage] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -365,7 +377,16 @@ export default function CreateInvoicePage() {
   };
 
   const handleSubmitInvoice = async () => {
-    if (!selectedCustomer || invoiceItems.length === 0) return;
+    if (!selectedCustomer) {
+      setAlertMessage('Please select a customer before creating the invoice.');
+      setShowAlertModal(true);
+      return;
+    }
+    if (invoiceItems.length === 0) {
+      setAlertMessage('Please add at least one product to the invoice.');
+      setShowAlertModal(true);
+      return;
+    }
 
     try {
       const payload = {
@@ -374,42 +395,117 @@ export default function CreateInvoicePage() {
         items: invoiceItems,
         notes: invoiceNotes,
         taxRate: 16,
+        subtotal: calculateSubtotal(),
+        tax: calculateTax(calculateSubtotal()),
+        total: calculateTotal(),
+        invoiceDate: invoiceDate,
+        paymentTerms: paymentTerms,
+        ...(editMode && {
+          editMode: true,
+          editingInvoiceId: editingInvoiceId
+        })
       };
 
-      const response = await fetch('/api/customer-invoices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      const response = editMode 
+        ? await fetch(`/api/customer-invoices/${editingInvoiceId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+        : await fetch('/api/customer-invoices', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
 
       const data = await response.json();
+      
       if (data.success) {
-        const createdInvoice = {
-          ...data.invoice,
-          customer: {
-            _id: selectedCustomer._id,
-            name: selectedCustomer.name,
-            phone: selectedCustomer.phone || ''
-          }
-        };
-        
         // Close the modal and reset form
         setShowInvoiceModal(false);
         resetInvoiceForm();
+        
+        // Reset edit mode
+        setEditMode(false);
+        setEditingInvoiceId(null);
+        
         fetchData();
         
-        // Open print preview with the created invoice
-        setSelectedInvoiceForPrint(createdInvoice);
-        setShowPrintPreview(true);
+        if (!editMode) {
+          // Open print preview with the created invoice (only for new invoices)
+          const createdInvoice = {
+            ...data.invoice,
+            customer: {
+              _id: selectedCustomer._id,
+              name: selectedCustomer.name,
+              phone: selectedCustomer.phone || ''
+            },
+            // Transform unitName to unit for PrintPreview
+            items: data.invoice.items?.map((item: any) => ({
+              ...item,
+              unit: item.unitName || item.unit || '-'
+            })) || []
+          };
+          setSelectedInvoiceForPrint(createdInvoice);
+          setShowPrintPreview(true);
+        } else {
+          setAlertMessage('Invoice updated successfully!');
+          setShowAlertModal(true);
+        }
+      } else {
+        setAlertMessage(data.error || 'Failed to save invoice');
+        setShowAlertModal(true);
       }
     } catch (error) {
-      console.error('Failed to create invoice:', error);
+      console.error('Failed to save invoice:', error);
+      setAlertMessage('Failed to save invoice. Please try again.');
+      setShowAlertModal(true);
     }
   };
 
   // Action handlers for invoice row buttons
   const handleViewInvoice = (invoice: Invoice) => {
     setViewInvoice(invoice);
+  };
+
+  const handleEditInvoice = (invoice: Invoice) => {
+    if (invoice.status !== 'draft') {
+      setAlertMessage('Only draft invoices can be edited.');
+      setShowAlertModal(true);
+      return;
+    }
+    
+    // Set edit mode
+    setEditMode(true);
+    setEditingInvoiceId(invoice._id);
+    
+    // Load invoice data into form
+    setInvoiceNumber(invoice.invoiceNumber);
+    setInvoiceDate(new Date(invoice.invoiceDate).toISOString().split('T')[0]);
+    setPaymentTerms(typeof invoice.paymentTerms === 'number' ? invoice.paymentTerms : 30);
+    setInvoiceNotes(invoice.notes || '');
+    
+    // Load customer
+    if (invoice.customer) {
+      setSelectedCustomer(invoice.customer as unknown as Customer);
+    }
+    
+    // Load items
+    const items: InvoiceItem[] = (invoice.items || []).map((item: any) => ({
+      productId: item.product?._id || item.product || '',
+      productName: item.productName,
+      sku: item.sku,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      unitName: item.unitName,
+      discount: item.discount || 0,
+      discountType: item.discountType || 'fixed',
+      total: item.total,
+    }));
+    setInvoiceItems(items);
+    
+    // Open the create invoice modal
+    setShowInvoiceModal(true);
   };
 
   const handleSendInvoice = async (invoice: Invoice) => {
@@ -433,8 +529,17 @@ export default function CreateInvoicePage() {
     window.location.href = '/customer-payments';
   };
 
-  const handlePrintInvoice = (invoice: Invoice) => {
-    setSelectedInvoiceForPrint(invoice);
+  const handlePrintInvoice = (invoice: Invoice, docType: 'invoice' | 'delivery-note' = 'invoice') => {
+    setPrintDocumentType(docType);
+    // Transform unitName to unit for PrintPreview
+    const transformedInvoice = {
+      ...invoice,
+      items: invoice.items?.map((item: any) => ({
+        ...item,
+        unit: item.unitName || item.unit || '-'
+      })) || []
+    };
+    setSelectedInvoiceForPrint(transformedInvoice);
     setShowPrintPreview(true);
   };
 
@@ -446,6 +551,8 @@ export default function CreateInvoicePage() {
     setPaymentTerms(30);
     setProductSearchQuery('');
     setSelectedCategory('all');
+    setEditMode(false);
+    setEditingInvoiceId(null);
     // filteredProducts will be set by useEffect
   };
 
@@ -517,6 +624,11 @@ export default function CreateInvoicePage() {
       header: 'Actions',
       render: (item: Invoice) => (
         <div className="flex gap-1">
+          {item.status === 'draft' && (
+            <Button variant="ghost" size="sm" title="Edit Invoice" onClick={() => handleEditInvoice(item)}>
+              <Edit className="w-4 h-4 text-blue-600" />
+            </Button>
+          )}
           <Button variant="ghost" size="sm" title="View Invoice" onClick={() => handleViewInvoice(item)}>
             <Eye className="w-4 h-4" />
           </Button>
@@ -530,9 +642,25 @@ export default function CreateInvoicePage() {
               <DollarSign className="w-4 h-4" />
             </Button>
           )}
-          <Button variant="ghost" size="sm" title="Print Invoice" onClick={() => handlePrintInvoice(item)}>
-            <Printer className="w-4 h-4" />
-          </Button>
+          <div className="relative group">
+            <Button variant="ghost" size="sm" title="Print">
+              <Printer className="w-4 h-4" />
+            </Button>
+            <div className="absolute right-0 mt-1 w-40 bg-white border rounded-lg shadow-lg z-10 hidden group-hover:block">
+              <button
+                className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+                onClick={() => handlePrintInvoice(item, 'invoice')}
+              >
+                Print Invoice
+              </button>
+              <button
+                className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+                onClick={() => handlePrintInvoice(item, 'delivery-note')}
+              >
+                Print Delivery Note
+              </button>
+            </div>
+          </div>
         </div>
       ),
     },
@@ -615,58 +743,77 @@ export default function CreateInvoicePage() {
       >
         <div className="flex flex-col h-[calc(100vh-130px)] -m-4">
 
-          {/* Products Section - POS Style */}
-          <div className="flex-1 p-4 flex flex-col overflow-hidden bg-gray-50">
-            {/* Search Bar */}
-            <div className="flex gap-3 mb-3 flex-shrink-0">
+          {/* Search Bar - Standalone */}
+            <div className="flex gap-3 mb-0 flex-shrink-0 relative bg-white p-2 rounded-lg border border-gray-200">
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   ref={productSearchRef}
                   type="text"
-                  placeholder="Search products by name, SKU, or barcode..."
-                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  placeholder="Search products..."
+                  className="w-full pl-10 pr-4 py-1.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
                   value={productSearchQuery}
-                  onChange={(e) => {
-                    setProductSearchQuery(e.target.value);
-                    // Reset category to 'all' when user searches, so they can search across all products
-                    if (e.target.value && selectedCategory !== 'all') {
-                      setSelectedCategory('all');
+                  onChange={(e) => setProductSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setSelectedProductIndex(prev => Math.min(prev + 1, filteredProducts.length - 1));
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setSelectedProductIndex(prev => Math.max(prev - 1, 0));
+                    } else if (e.key === 'Enter' && selectedProductIndex >= 0) {
+                      e.preventDefault();
+                      addItem(filteredProducts[selectedProductIndex]);
+                      setProductSearchQuery('');
+                      setFilteredProducts([]);
+                      setSelectedProductIndex(-1);
+                    } else if (e.key === 'Escape') {
+                      setProductSearchQuery('');
+                      setFilteredProducts([]);
+                      setSelectedProductIndex(-1);
                     }
                   }}
                 />
               </div>
-            </div>
-
-            {/* Category Filter - Removed */}
-
-            {/* Products Grid - Horizontal Scroll */}
-            <div className="flex-1 overflow-x-auto overflow-y-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-              <div className="flex gap-2 p-1" style={{ width: 'calc(24px * 6)' }}>
-                {filteredProducts.length === 0 ? (
-                  <div className="text-gray-500 py-2 text-center w-full text-xs">
-                    No products found
-                  </div>
-                ) : (
-                  filteredProducts.slice(0, 5).map((product) => (
-                    <button
+              {/* Floating Product Dropdown */}
+              {productSearchQuery && filteredProducts.length > 0 && (
+                <div className="absolute top-full left-0 right-0 z-[9999] mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-80 overflow-auto">
+                  {filteredProducts.slice(0, 10).map((product, index) => (
+                    <div
                       key={product._id}
-                      onClick={() => addItem(product)}
-                      className="flex-shrink-0 w-20 bg-white p-1 rounded border border-gray-200 hover:border-emerald-400 hover:shadow-sm transition-all text-left h-16 overflow-hidden"
+                      onClick={() => {
+                        addItem(product);
+                        setProductSearchQuery('');
+                        setFilteredProducts([]);
+                        setSelectedProductIndex(-1);
+                      }}
+                      className={`flex items-center justify-between px-3 py-2 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors ${
+                        selectedProductIndex === index
+                          ? 'bg-emerald-50'
+                          : 'hover:bg-gray-50'
+                      }`}
                     >
-                      <div className="font-medium text-[10px] text-gray-900 truncate">{product.name}</div>
-                      <div className="text-[8px] text-gray-500">{product.sku}</div>
-                      <div className="font-semibold text-emerald-600 text-[10px]">{formatCurrency(product.retailPrice)}</div>
-                    </button>
-                  ))
-                )}
-              </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-gray-900 text-sm truncate">{product.name}</div>
+                        <div className="text-xs text-gray-500">
+                          {product.sku} • {product.category?.name}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 ml-3">
+                        <span className="text-emerald-600 font-bold text-sm">{formatCurrency(product.retailPrice)}</span>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="sticky bottom-0 bg-gray-100 px-3 py-1.5 text-xs text-gray-500 border-t border-gray-200">
+                    ↑↓ Navigate • Enter to select • Esc to close
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
 
           {/* Invoice Items Section - Bottom - POS Cart Style */}
           <div className="bg-white border-t border-gray-200 flex flex-col overflow-hidden flex-shrink-0" style={{ minHeight: '220px', maxHeight: '280px' }}>
-            {/* Invoice Items Table */}
+            {/* Invoice Items Table - Scrollable */}
             <div className="flex-1 overflow-auto p-3">
               {invoiceItems.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-gray-500">
@@ -681,6 +828,7 @@ export default function CreateInvoicePage() {
                   <thead className="bg-gray-50 sticky top-0">
                     <tr>
                       <th className="text-left py-2 px-2 font-medium text-gray-500">Product</th>
+                      <th className="text-center py-2 px-2 font-medium text-gray-500">Unit</th>
                       <th className="text-center py-2 px-2 font-medium text-gray-500">Qty</th>
                       <th className="text-right py-2 px-2 font-medium text-gray-500">Price</th>
                       <th className="text-right py-2 px-2 font-medium text-gray-500">Total</th>
@@ -692,7 +840,10 @@ export default function CreateInvoicePage() {
                       <tr key={`${item.productId}-${item.unitName}`} className="border-t border-gray-100">
                         <td className="py-2 px-2">
                           <div className="font-medium text-gray-900">{item.productName}</div>
-                          <div className="text-xs text-gray-500">{item.sku} • {item.unitName}</div>
+                          <div className="text-xs text-gray-500">{item.sku}</div>
+                        </td>
+                        <td className="text-center py-2 px-2 text-xs text-gray-600">
+                          {item.unitName}
                         </td>
                         <td className="text-center py-2 px-2">
                           <div className="flex items-center justify-center gap-1">
@@ -741,9 +892,9 @@ export default function CreateInvoicePage() {
               )}
             </div>
 
-            {/* Totals */}
+            {/* Totals - Fixed at bottom above invoice details */}
             {invoiceItems.length > 0 && (
-              <div className="border-t border-gray-200 p-3 flex items-center justify-between bg-gray-50">
+              <div className="border-t border-gray-200 p-3 flex items-center justify-between bg-gray-50 fixed bottom-12 left-0 right-0 z-10">
                 <div className="flex items-center gap-6">
                   <div className="text-sm">
                     <span className="text-gray-500">Subtotal: </span>
@@ -765,9 +916,9 @@ export default function CreateInvoicePage() {
             )}
           </div>
 
-          {/* Invoice Details Footer */}
+          {/* Invoice Details Footer - Fixed at bottom of screen */}
           {invoiceItems.length > 0 && (
-            <div className="border-t border-gray-200 p-3 bg-white flex-shrink-0">
+            <div className="border-t border-gray-200 p-3 bg-white flex-shrink-0 fixed bottom-0 left-0 right-0 z-10" style={{ marginTop: 'auto' }}>
               <div className="flex gap-3 items-center">
                 <div className="flex items-center gap-2">
                   <label className="text-xs font-medium text-gray-700">Invoice Date:</label>
@@ -805,13 +956,30 @@ export default function CreateInvoicePage() {
                   className="flex-1"
                   size="sm"
                   onClick={handleSubmitInvoice}
-                  disabled={!selectedCustomer || invoiceItems.length === 0}
                 >
-                  Create Invoice
+                  {editMode ? 'Update Invoice' : 'Create Invoice'}
                 </Button>
               </div>
             </div>
           )}
+        </div>
+      </Modal>
+
+      {/* Alert Modal */}
+      <Modal
+        isOpen={showAlertModal}
+        onClose={() => setShowAlertModal(false)}
+        title="Validation Error"
+        size="sm"
+      >
+        <div className="p-4">
+          <div className="flex items-center gap-3 text-amber-600 mb-4">
+            <AlertTriangle className="w-6 h-6" />
+            <span className="font-medium">{alertMessage}</span>
+          </div>
+          <Button onClick={() => setShowAlertModal(false)} className="w-full">
+            OK
+          </Button>
         </div>
       </Modal>
 
@@ -921,7 +1089,7 @@ export default function CreateInvoicePage() {
       {/* Print Preview Modal */}
       {showPrintPreview && selectedInvoiceForPrint && (
         <PrintPreview
-          documentType="invoice"
+          documentType={printDocumentType}
           document={{
             logo: businessSettings?.logo || '',
             businessName: businessSettings?.businessName || '',
@@ -937,6 +1105,7 @@ export default function CreateInvoicePage() {
             kraPin: businessSettings?.kraPin || '',
             invoiceNumber: selectedInvoiceForPrint.invoiceNumber,
             date: selectedInvoiceForPrint.invoiceDate,
+            includeInPrice: selectedInvoiceForPrint.includeInPrice ?? businessSettings?.includeInPrice ?? false,
             customer: {
               name: selectedInvoiceForPrint.customer?.name || selectedInvoiceForPrint.customerName || 'N/A',
               phone: selectedInvoiceForPrint.customer?.phone || ''
@@ -944,7 +1113,7 @@ export default function CreateInvoicePage() {
             items: selectedInvoiceForPrint.items?.map((item) => ({
               name: item.productName,
               quantity: item.quantity,
-              unit: item.unitName,
+              unit: (item as any).unitName || (item as any).unit || '-',
               price: item.unitPrice,
               discount: item.discount,
               discountType: item.discountType,
@@ -957,7 +1126,9 @@ export default function CreateInvoicePage() {
             dueDate: selectedInvoiceForPrint.dueDate,
             notes: selectedInvoiceForPrint.notes,
             status: selectedInvoiceForPrint.status,
-            balanceDue: selectedInvoiceForPrint.total - (selectedInvoiceForPrint.payments?.reduce((sum: number, p: any) => sum + p.amount, 0) || 0)
+            balanceDue: selectedInvoiceForPrint.total - (selectedInvoiceForPrint.payments?.reduce((sum: number, p: any) => sum + p.amount, 0) || 0),
+            deliveryDate: printDocumentType === 'delivery-note' ? new Date().toISOString().split('T')[0] : undefined,
+            deliveryAddress: ''
           }}
           onClose={() => {
             setShowPrintPreview(false);

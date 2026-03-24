@@ -8,7 +8,8 @@ import { Input, Select } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { DataTable } from '@/components/ui/DataTable';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { Plus, Search, RefreshCw, Eye, Truck, Package, CheckCircle, Clock, XCircle, X } from 'lucide-react';
+import { Plus, Search, RefreshCw, Eye, Truck, Package, CheckCircle, Clock, XCircle, X, Printer } from 'lucide-react';
+import PrintPreview from '@/components/print/PrintPreview';
 
 interface PurchaseItem {
   productId: string;
@@ -32,6 +33,13 @@ interface Product {
   sku: string;
   costPrice: number;
   stockQuantity: number;
+  baseUnit: string;
+  units?: {
+    name: string;
+    abbreviation: string;
+    conversionToBase: number;
+    price: number;
+  }[];
 }
 
 interface Purchase {
@@ -79,10 +87,58 @@ export default function PurchasesPage() {
     amountPaid: 0,
     expectedDeliveryDate: '',
   });
+  
+  // Supplier search functionality
+  const [supplierSearchQuery, setSupplierSearchQuery] = useState('');
+  const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
+  const [showNewSupplierModal, setShowNewSupplierModal] = useState(false);
+  const [newSupplierData, setNewSupplierData] = useState({
+    name: '',
+    contactPerson: '',
+    phone: '',
+    email: '',
+    address: '',
+  });
+  const supplierInputRef = useRef<HTMLInputElement>(null);
+  const [isCreatingSupplier, setIsCreatingSupplier] = useState(false);
+  const [printData, setPrintData] = useState<any>(null);
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [businessSettings, setBusinessSettings] = useState<any>({
+    businessName: '',
+    businessTagline: '',
+    phone: '',
+    email: '',
+    address: '',
+    vatNumber: '',
+    logo: ''
+  });
 
   useEffect(() => {
     fetchPurchases();
+    fetchSettings();
   }, [status, paymentStatus]);
+
+  // Fetch settings for print functionality
+  const fetchSettings = async () => {
+    try {
+      const response = await fetch('/api/settings');
+      const data = await response.json();
+      if (data.settings) {
+        const settings = data.settings;
+        setBusinessSettings({
+          businessName: settings.businessName || 'My Shop',
+          businessTagline: settings.businessTagline || '',
+          businessPhone: settings.phone || '',
+          businessEmail: settings.email || '',
+          businessAddress: settings.address || '',
+          vatNumber: settings.vatNumber || '',
+          logo: settings.logo || ''
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch settings:', error);
+    }
+  };
 
   // Auto-focus supplier select when modal opens
   useEffect(() => {
@@ -122,6 +178,8 @@ export default function PurchasesPage() {
     if (showCreateModal) {
       const timer = setTimeout(() => {
         productSearchRef.current?.focus();
+        // Show supplier dropdown by default when modal opens
+        setShowSupplierDropdown(true);
       }, 100);
       return () => clearTimeout(timer);
     }
@@ -134,6 +192,85 @@ export default function PurchasesPage() {
       if (data.success) setSuppliers(data.suppliers);
     } catch (error) {
       console.error('Failed to fetch suppliers:', error);
+    }
+  };
+
+  // Filter suppliers based on search query
+  const filteredSuppliers = supplierSearchQuery
+    ? suppliers.filter(s => 
+        s.name.toLowerCase().includes(supplierSearchQuery.toLowerCase()) ||
+        (s.email && s.email.toLowerCase().includes(supplierSearchQuery.toLowerCase())) ||
+        (s.phone && s.phone.includes(supplierSearchQuery))
+      )
+    : suppliers;
+
+  // Handle selecting a supplier from dropdown
+  const handleSelectSupplier = (supplier: Supplier) => {
+    setFormData({
+      ...formData,
+      supplierId: supplier._id,
+      supplierName: supplier.name,
+      items: []
+    });
+    setSupplierSearchQuery(supplier.name);
+    setShowSupplierDropdown(false);
+    // Filter products by supplier
+    const supplierProducts = products.filter(p => (p as any).supplier?._id === supplier._id || (p as any).supplier === supplier._id);
+    setSelectedSupplierProducts(supplierProducts);
+  };
+
+  // Handle creating a new supplier
+  const handleCreateSupplier = async () => {
+    if (!newSupplierData.name.trim() || !newSupplierData.phone.trim()) {
+      alert('Supplier name and phone are required');
+      return;
+    }
+    
+    setIsCreatingSupplier(true);
+    try {
+      const response = await fetch('/api/suppliers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newSupplierData),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Add new supplier to the list
+        const newSupplier = data.supplier;
+        setSuppliers(prev => [...prev, newSupplier]);
+        
+        // Select the newly created supplier
+        handleSelectSupplier(newSupplier);
+        
+        // Focus product search after selecting supplier
+        setTimeout(() => {
+          productSearchRef.current?.focus();
+        }, 100);
+        
+        // Close the modal and reset form
+        setShowNewSupplierModal(false);
+        setNewSupplierData({
+          name: '',
+          contactPerson: '',
+          phone: '',
+          email: '',
+          address: '',
+        });
+        
+        // Focus product search after supplier is created
+        setTimeout(() => {
+          productSearchRef.current?.focus();
+        }, 100);
+      } else {
+        alert(data.error || 'Failed to create supplier');
+      }
+    } catch (error) {
+      console.error('Failed to create supplier:', error);
+      alert('Failed to create supplier. Please try again.');
+    } finally {
+      setIsCreatingSupplier(false);
     }
   };
 
@@ -178,9 +315,11 @@ export default function PurchasesPage() {
           productId: product._id,
           productName: product.name,
           quantity: 1,
+          unit: product.baseUnit || 'pcs',
           unitCost: product.costPrice || 0,
           total: product.costPrice || 0,
           receivedQuantity: 0,
+          productDetails: product, // Store full product for unit access
         }]
       });
     }
@@ -203,6 +342,17 @@ export default function PurchasesPage() {
       items: formData.items.map((item: any) => 
         item.productId === productId 
           ? { ...item, unitCost, total: item.quantity * unitCost }
+          : item
+      )
+    });
+  };
+
+  const updateItemUnit = (productId: string, unit: string) => {
+    setFormData({
+      ...formData,
+      items: formData.items.map((item: any) => 
+        item.productId === productId 
+          ? { ...item, unit }
           : item
       )
     });
@@ -278,15 +428,8 @@ export default function PurchasesPage() {
       ),
     },
     {
-      key: 'total',
-      header: 'Total',
-      render: (item: Purchase) => (
-        <span className="font-medium">{formatCurrency(item.total)}</span>
-      ),
-    },
-    {
       key: 'balance',
-      header: 'Balance',
+      header: 'Amount',
       render: (item: Purchase) => (
         <span className={item.balance > 0 ? 'text-red-600' : 'text-gray-600'}>
           {formatCurrency(item.balance)}
@@ -325,9 +468,35 @@ export default function PurchasesPage() {
       key: 'actions',
       header: 'Actions',
       render: (item: Purchase) => (
-        <Button variant="ghost" size="sm" onClick={() => setSelectedPurchase(item)}>
-          <Eye className="w-4 h-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            title="Print"
+            onClick={() => {
+              // Transform items to include proper name and unit for print preview
+              const transformedItems = item.items?.map((i: any) => ({
+                name: i.productName || i.product?.name,
+                unit: i.product?.baseUnit || '-',
+                price: i.unitCost,
+                quantity: i.quantity,
+                total: i.total,
+              })) || [];
+              setPrintData({
+                ...item,
+                ...businessSettings,
+                supplier: item.supplier,
+                items: transformedItems
+              });
+              setShowPrintModal(true);
+            }}
+          >
+            <Printer className="w-4 h-4" />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setSelectedPurchase(item)}>
+            <Eye className="w-4 h-4" />
+          </Button>
+        </div>
       ),
     },
   ];
@@ -413,14 +582,10 @@ export default function PurchasesPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card>
             <p className="text-sm text-gray-500">Total Orders</p>
             <p className="text-2xl font-bold">{purchases.length}</p>
-          </Card>
-          <Card>
-            <p className="text-sm text-gray-500">Total Value</p>
-            <p className="text-2xl font-bold text-blue-600">{formatCurrency(totalValue)}</p>
           </Card>
           <Card>
             <p className="text-sm text-gray-500">Total Paid</p>
@@ -458,12 +623,37 @@ export default function PurchasesPage() {
                   <h2 className="text-xl font-bold">Order #{selectedPurchase.orderNumber}</h2>
                   <p className="text-sm text-gray-500">{formatDate(selectedPurchase.orderDate)}</p>
                 </div>
-                <button
-                  onClick={() => setSelectedPurchase(null)}
-                  className="text-gray-400 hover:text-gray-600 text-2xl"
-                >
-                  ×
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      // Transform items to include proper name and unit for print preview
+                      const transformedItems = selectedPurchase.items?.map((i: any) => ({
+                        name: i.productName || i.product?.name,
+                        unit: i.product?.baseUnit || '-',
+                        price: i.unitCost,
+                        quantity: i.quantity,
+                        total: i.total,
+                      })) || [];
+                      setPrintData({
+                        ...selectedPurchase,
+                        ...businessSettings,
+                        supplier: selectedPurchase.supplier,
+                        items: transformedItems
+                      });
+                      setShowPrintModal(true);
+                    }}
+                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    title="Print Purchase Order"
+                  >
+                    <Printer className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => setSelectedPurchase(null)}
+                    className="text-gray-400 hover:text-gray-600 text-2xl"
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
             </div>
             
@@ -540,10 +730,6 @@ export default function PurchasesPage() {
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">Tax</span>
                   <span>{formatCurrency(selectedPurchase.tax)}</span>
-                </div>
-                <div className="flex justify-between text-lg font-bold pt-2 border-t">
-                  <span>Total</span>
-                  <span className="text-blue-600">{formatCurrency(selectedPurchase.total)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">Paid</span>
@@ -632,17 +818,17 @@ export default function PurchasesPage() {
           <div className="h-full flex flex-col max-w-7xl mx-auto bg-white">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b bg-white flex-shrink-0 gap-4">
-              <div className="flex items-center gap-6 flex-1">
+              <div className="flex items-center gap-4">
                 <div>
                   <h2 className="text-xl font-bold text-gray-900">Create Purchase Order</h2>
                   <p className="text-sm text-gray-500">Add new supplier order</p>
                 </div>
-                <div className="max-w-40">
+                <div className="w-28">
                   <div className="flex items-center">
                     <span className="px-3 py-2 bg-gray-100 text-gray-600 border border-r-0 border-gray-200 rounded-l-lg text-sm">PO-</span>
                     <input
                       type="text"
-                      className="flex-1 px-3 py-2 border border-gray-200 rounded-r-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-r-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                       value={orderNumberSuffix}
                       onChange={(e) => {
                         const val = e.target.value.replace(/[^0-9]/g, '');
@@ -653,37 +839,104 @@ export default function PurchasesPage() {
                     />
                   </div>
                 </div>
-                <div className="flex-1 max-w-sm">
-                  <select
-                    ref={supplierSelectRef}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    value={formData.supplierId}
-                    onChange={(e) => handleSupplierChange(e.target.value)}
-                    required
-                  >
-                    <option value="">Select a supplier</option>
-                    {suppliers.map(supplier => (
-                      <option key={supplier._id} value={supplier._id}>
-                        {supplier.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
               </div>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
+              <div className="w-64 relative">
+                  <div className="relative">
+                    <input
+                      ref={supplierInputRef}
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      placeholder={formData.supplierId ? formData.supplierName : "Search or select supplier..."}
+                      value={supplierSearchQuery}
+                      onChange={(e) => {
+                        setSupplierSearchQuery(e.target.value);
+                        // Only clear supplier if user types - they want to search/select different supplier
+                        if (formData.supplierId && e.target.value !== formData.supplierName) {
+                          setFormData({ ...formData, supplierId: '', supplierName: '' });
+                        }
+                        setShowSupplierDropdown(true);
+                      }}
+                      onFocus={() => setShowSupplierDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowSupplierDropdown(false), 200)}
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+                      onClick={() => {
+                        setShowNewSupplierModal(true);
+                        setSupplierSearchQuery('');
+                      }}
+                      title="Add new supplier"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                    
+                    {/* Supplier Dropdown */}
+                    {showSupplierDropdown && filteredSuppliers.length > 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
+                        {filteredSuppliers.slice(0, 10).map(supplier => (
+                          <button
+                            key={supplier._id}
+                            type="button"
+                            className="w-full px-4 py-2 text-left hover:bg-gray-50 flex flex-col"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => handleSelectSupplier(supplier)}
+                          >
+                            <span className="font-medium text-gray-900">{supplier.name}</span>
+                            <span className="text-xs text-gray-500">
+                              {supplier.phone || 'No phone'} {supplier.email && `• ${supplier.email}`}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* No results - Add new option */}
+                    {showSupplierDropdown && supplierSearchQuery && filteredSuppliers.length === 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
+                        <button
+                          type="button"
+                          className="w-full px-4 py-3 text-left hover:bg-emerald-50 flex items-center gap-2 text-emerald-600"
+                          onClick={() => {
+                            setNewSupplierData({
+                              ...newSupplierData,
+                              name: supplierSearchQuery,
+                            });
+                            setShowNewSupplierModal(true);
+                            setShowSupplierDropdown(false);
+                          }}
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Add "{supplierSearchQuery}" as new supplier</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-            {/* Form Content - Scrollable */}
-            <div className="flex-1 overflow-auto p-6">
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Form Content - Scrollable */}
+              <div className="flex-1 overflow-auto p-6">
               <form onSubmit={async (e) => {
                 e.preventDefault();
-                // Close modal immediately on button click
-                setShowCreateModal(false);
+                
+                // Validate required fields
+                if (!formData.supplierId) {
+                  alert('Please select a supplier');
+                  return;
+                }
+                if (formData.items.length === 0) {
+                  alert('Please add at least one product');
+                  return;
+                }
+                
                 try {
                   const response = await fetch('/api/purchases', {
                     method: 'POST',
@@ -691,10 +944,32 @@ export default function PurchasesPage() {
                     body: JSON.stringify({ ...formData, orderNumber }),
                   });
                   if (response.ok) {
+                    const purchase = await response.json();
                     fetchPurchases();
+                    // Set print data for the new purchase - transform items from formData
+                    const transformedItems = formData.items.map((i: any) => ({
+                      name: i.productName,
+                      unit: i.unit || i.productDetails?.baseUnit || '-',
+                      price: i.unitCost,
+                      quantity: i.quantity,
+                      total: i.total,
+                    }));
+                    setPrintData({
+                      ...purchase.purchase,
+                      ...businessSettings,
+                      supplier: purchase.purchase.supplier,
+                      items: transformedItems
+                    });
+                    setShowPrintModal(true);
+                    // Close modal after successful save
+                    setShowCreateModal(false);
+                  } else {
+                    const error = await response.json();
+                    alert('Failed to create purchase: ' + error.error);
                   }
                 } catch (error) {
                   console.error('Failed to create purchase:', error);
+                  alert('Failed to create purchase');
                 }
               }} className="space-y-6">
                 {/* Product Search Section */}
@@ -749,6 +1024,7 @@ export default function PurchasesPage() {
                           <tr>
                             <th className="text-left px-4 py-2 font-medium">Product</th>
                             <th className="text-right px-4 py-2 font-medium">Qty</th>
+                            <th className="text-center px-4 py-2 font-medium">Unit</th>
                             <th className="text-right px-4 py-2 font-medium">Unit Cost</th>
                             <th className="text-right px-4 py-2 font-medium">Total</th>
                             <th className="px-4 py-2"></th>
@@ -766,6 +1042,18 @@ export default function PurchasesPage() {
                                   value={item.quantity}
                                   onChange={(e) => updateItemQuantity(item.productId, parseInt(e.target.value) || 1)}
                                 />
+                              </td>
+                              <td className="px-4 py-2">
+                                <select
+                                  className="px-2 py-1 border border-gray-200 rounded text-sm"
+                                  value={item.unit}
+                                  onChange={(e) => updateItemUnit(item.productId, e.target.value)}
+                                >
+                                  <option value={item.productDetails?.baseUnit || 'pcs'}>{item.productDetails?.baseUnit || 'pcs'}</option>
+                                  {item.productDetails?.units?.map((u: any) => (
+                                    <option key={u.name} value={u.name}>{u.name}</option>
+                                  ))}
+                                </select>
                               </td>
                               <td className="px-4 py-2">
                                 <input
@@ -792,7 +1080,7 @@ export default function PurchasesPage() {
                         </tbody>
                         <tfoot className="bg-gray-100">
                           <tr>
-                            <td colSpan={3} className="px-4 py-2 text-right font-medium">Total:</td>
+                            <td colSpan={4} className="px-4 py-2 text-right font-medium">Total:</td>
                             <td className="px-4 py-2 text-right font-bold">{formatCurrency(calculateTotal())}</td>
                             <td></td>
                           </tr>
@@ -835,6 +1123,7 @@ export default function PurchasesPage() {
                         <option value="cash">Cash</option>
                         <option value="mpesa">M-Pesa</option>
                         <option value="card">Card</option>
+                        <option value="cheque">Cheque</option>
                         <option value="credit">Credit</option>
                       </select>
                     </div>
@@ -865,6 +1154,96 @@ export default function PurchasesPage() {
             </div>
           </div>
         </div>
+        )}
+
+      {/* New Supplier Modal */}
+      {showNewSupplierModal && (
+        <div className="fixed inset-0 z-50 bg-gray-900/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="text-lg font-semibold">Add New Supplier</h3>
+              <button onClick={() => setShowNewSupplierModal(false)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={handleCreateSupplier} className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Supplier Name *</label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  value={newSupplierData.name}
+                  onChange={(e) => setNewSupplierData({ ...newSupplierData, name: e.target.value })}
+                  placeholder="Enter supplier name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  value={newSupplierData.contactPerson}
+                  onChange={(e) => setNewSupplierData({ ...newSupplierData, contactPerson: e.target.value })}
+                  placeholder="Contact person name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
+                <input
+                  type="tel"
+                  required
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  value={newSupplierData.phone}
+                  onChange={(e) => setNewSupplierData({ ...newSupplierData, phone: e.target.value })}
+                  placeholder="Phone number"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  value={newSupplierData.email}
+                  onChange={(e) => setNewSupplierData({ ...newSupplierData, email: e.target.value })}
+                  placeholder="email@example.com"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                <textarea
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  value={newSupplierData.address}
+                  onChange={(e) => setNewSupplierData({ ...newSupplierData, address: e.target.value })}
+                  placeholder="Address"
+                  rows={2}
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-4 border-t">
+                <Button type="button" variant="outline" onClick={() => setShowNewSupplierModal(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit">
+                  Create Supplier
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Print Preview Modal */}
+      {printData && (
+        <PrintPreview
+          document={printData}
+          documentType="purchase-order"
+          onClose={() => {
+            setShowPrintModal(false);
+            setPrintData(null);
+          }}
+        />
       )}
     </div>
   );

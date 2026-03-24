@@ -32,11 +32,20 @@ export default function PrintPreview({
       // Only generate QR if we have KRA PIN and invoice number
       if (doc.kraPin && doc.invoiceNumber) {
         try {
-          // Calculate taxable amount and VAT
+          // Use stored tax values from the document
+          // If includeInPrice is true, the stored tax is already correctly calculated
           const total = doc.total || 0;
           const vatRate = doc.taxRate || 16;
-          const vatAmount = calculateVAT(total, vatRate);
-          const taxableAmount = calculateTaxableAmount(total, vatRate);
+          
+          // For KRA QR, use stored tax values or calculate based on includeInPrice
+          let vatAmount = doc.tax || 0;
+          let taxableAmount = doc.subtotal || 0;
+          
+          // If prices were tax-exclusive, recalculate from total
+          if (!doc.includeInPrice && total > 0) {
+            vatAmount = calculateVAT(total, vatRate);
+            taxableAmount = calculateTaxableAmount(total, vatRate);
+          }
           
           const kraData = {
             sellerPin: doc.kraPin || '',
@@ -185,25 +194,26 @@ export default function PrintPreview({
                   </div>
                 </div>
                 <div className="text-right">
-                  <h2 className="text-2xl font-bold text-gray-900">{documentType === 'receipt' ? 'RECEIPT' : 'INVOICE'}</h2>
-                  <p className="text-lg text-gray-600 mt-1">#{doc.invoiceNumber || '-'}</p>
-                  <p className="text-sm text-gray-500 mt-2">Date: {formatDate(doc.date)}</p>
+                  <h2 className="text-2xl font-bold text-gray-900">{documentType === 'receipt' ? 'RECEIPT' : documentType === 'purchase-order' ? 'PURCHASE ORDER' : documentType === 'delivery-note' ? 'DELIVERY NOTE' : 'INVOICE'}</h2>
+                  <p className="text-lg text-gray-600 mt-1">#{doc.orderNumber || doc.invoiceNumber || '-'}</p>
+                  <p className="text-sm text-gray-500 mt-2">Order Date: {formatDate(doc.orderDate || doc.date)}</p>
                   {doc.dueDate && <p className="text-sm text-amber-600 mt-1">Due: {formatDate(doc.dueDate)}</p>}
+                  {documentType === 'delivery-note' && doc.deliveryDate && <p className="text-sm text-blue-600 mt-1">Delivery Date: {formatDate(doc.deliveryDate)}</p>}
                 </div>
               </div>
 
-              {/* Customer */}
+              {/* Customer / Supplier */}
               <div className="grid grid-cols-2 gap-8 mb-8">
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Bill To</p>
-                  <p className="font-semibold text-gray-900 text-lg">{doc.customer?.name || 'Customer Name'}</p>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{documentType === 'purchase-order' ? 'Supplier' : documentType === 'delivery-note' ? 'Delivery To' : 'Bill To'}</p>
+                  <p className="font-semibold text-gray-900 text-lg">{doc.supplier?.name || doc.customer?.name || 'Name'}</p>
                   <div className="mt-2 text-sm text-gray-600 space-y-1">
-                    {doc.customer?.phone && <div>📞 {doc.customer.phone}</div>}
-                    {doc.customer?.email && <div>✉️ {doc.customer.email}</div>}
+                    {(doc.supplier?.phone || doc.customer?.phone) && <div>📞 {doc.supplier?.phone || doc.customer?.phone}</div>}
+                    {(doc.supplier?.email || doc.customer?.email) && <div>✉️ {doc.supplier?.email || doc.customer?.email}</div>}
                   </div>
                 </div>
                 <div className="bg-emerald-50 p-3 rounded-lg">
-                  <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wide mb-1">Invoice Summary</p>
+                  <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wide mb-1">{documentType === 'purchase-order' ? 'Order Summary' : documentType === 'delivery-note' ? 'Delivery Details' : 'Invoice Summary'}</p>
                   <div className="grid grid-cols-2 gap-2 mt-1">
                     <div><p className="text-[11px] text-gray-500">Subtotal</p><p className="font-semibold text-gray-900 text-[11px]">{formatCurrency(doc.subtotal)}</p></div>
                     <div><p className="text-[11px] text-gray-500">VAT ({doc.taxRate || 16}%)</p><p className="font-semibold text-gray-900 text-[11px]">{formatCurrency(doc.tax)}</p></div>
@@ -215,23 +225,33 @@ export default function PrintPreview({
                 </div>
               </div>
 
+              {/* Delivery Address - Only for delivery notes */}
+              {documentType === 'delivery-note' && doc.deliveryAddress && (
+                <div className="bg-blue-50 p-4 rounded-lg mb-6">
+                  <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-2">Delivery Address</p>
+                  <p className="text-sm text-gray-700">{doc.deliveryAddress}</p>
+                </div>
+              )}
+
               {/* Items */}
               <div className="mb-6">
                 <h3 className="text-xs font-semibold text-gray-700 mb-2">Item Details</h3>
                 <table className="w-full">
                   <thead>
                     <tr className="bg-gray-100">
-                      <th className="text-left p-2 text-[11px] font-semibold text-gray-600 uppercase">Item/Qty</th>
-                      <th className="text-center p-2 text-[11px] font-semibold text-gray-600 uppercase">Units</th>
-                      <th className="text-right p-2 text-[11px] font-semibold text-gray-600 uppercase">Rate</th>
-                      <th className="text-right p-2 text-[11px] font-semibold text-gray-600 uppercase">Amount</th>
+                      <th className="text-left p-2 text-[11px] font-semibold text-gray-600 uppercase">ITEM</th>
+                      <th className="text-center p-2 text-[11px] font-semibold text-gray-600 uppercase">UNIT</th>
+                      <th className="text-center p-2 text-[11px] font-semibold text-gray-600 uppercase">QTY</th>
+                      <th className="text-right p-2 text-[11px] font-semibold text-gray-600 uppercase">{documentType === 'purchase-order' ? 'COST' : 'RATE'}</th>
+                      <th className="text-right p-2 text-[11px] font-semibold text-gray-600 uppercase">AMOUNT</th>
                     </tr>
                   </thead>
                   <tbody>
                     {doc.items?.map((item: any, idx: number) => (
                       <tr key={idx} className="border-b border-gray-100">
-                        <td className="p-2 text-[11px] text-gray-900">{item.name} x {item.quantity}</td>
+                        <td className="p-2 text-[11px] text-gray-900">{item.name}</td>
                         <td className="p-2 text-[11px] text-gray-600 text-center">{item.unit || '-'}</td>
+                        <td className="p-2 text-[11px] text-gray-600 text-center">{item.quantity}</td>
                         <td className="p-2 text-[11px] text-gray-600 text-right">{formatCurrency(item.price)}</td>
                         <td className="p-2 text-[11px] text-gray-900 text-right font-medium">{formatCurrency(item.total)}</td>
                       </tr>
@@ -241,7 +261,7 @@ export default function PrintPreview({
               </div>
 
               {/* Payment */}
-              {doc.payment && (
+              {doc.payment && documentType !== 'delivery-note' && (
                 <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-3">
                   <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide mb-2">Payment Details</p>
                   <div className="grid grid-cols-3 gap-4">

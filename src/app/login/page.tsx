@@ -83,6 +83,11 @@ export default function LoginPage() {
     }
   };
 
+  const handleSkipOnboarding = () => {
+    localStorage.setItem('onboarding-complete', 'true');
+    router.push('/dashboard');
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-gray-100 p-4">
       <div className="w-full max-w-md">
@@ -149,6 +154,11 @@ export default function LoginPage() {
 
         <p className="text-center text-sm text-gray-500 mt-6">
           <a href="/register" className="text-emerald-600 hover:underline">Create an account</a>
+        </p>
+        <p className="text-center text-sm text-gray-400 mt-3">
+          <button type="button" onClick={handleSkipOnboarding} className="text-gray-500 hover:text-gray-700 hover:underline">
+            Skip onboarding setup
+          </button>
         </p>
         <p className="text-center text-sm text-gray-500 mt-2">
           Cloud POS System for Kenyan Businesses

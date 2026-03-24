@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/mongodb';
 import Product from '@/models/Product';
 import Category from '@/models/Category';
+import ActivityLog from '@/models/ActivityLog';
+import { getAuthUser } from '@/lib/auth-server';
+import { hasPermission, Role } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
@@ -77,6 +80,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    
+    if (!hasPermission(user.role as any, 'manage_inventory')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    
     await dbConnect();
     
     const data = await request.json();
@@ -95,6 +107,25 @@ export async function POST(request: NextRequest) {
     
     const product = await Product.create(data);
     
+    // Log product creation
+    try {
+      await ActivityLog.create({
+        user: user.userId as any,
+        userName: user.name || 'Unknown',
+        action: 'product_create',
+        module: 'products',
+        description: `Product created: ${product.name} (SKU: ${product.sku})`,
+        metadata: {
+          productId: product._id,
+          productName: product.name,
+          sku: product.sku,
+          retailPrice: product.retailPrice,
+        },
+      });
+    } catch (logError) {
+      console.error('Failed to log product creation:', logError);
+    }
+    
     return NextResponse.json({
       success: true,
       product,
@@ -112,6 +143,15 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    
+    if (!hasPermission(user.role as any, 'manage_inventory')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    
     await dbConnect();
     
     const { searchParams } = new URL(request.url);
@@ -123,6 +163,9 @@ export async function PUT(request: NextRequest) {
         { status: 400 }
       );
     }
+    
+    // Get old product for logging
+    const oldProduct = await Product.findById(productId);
     
     const data = await request.json();
     
@@ -137,6 +180,25 @@ export async function PUT(request: NextRequest) {
         { error: 'Product not found' },
         { status: 404 }
       );
+    }
+    
+    // Log product update
+    try {
+      await ActivityLog.create({
+        user: user.userId as any,
+        userName: user.name || 'Unknown',
+        action: 'product_update',
+        module: 'products',
+        description: `Product updated: ${product.name} (SKU: ${product.sku})`,
+        metadata: {
+          productId: product._id,
+          productName: product.name,
+          sku: product.sku,
+          changes: data,
+        },
+      });
+    } catch (logError) {
+      console.error('Failed to log product update:', logError);
     }
     
     return NextResponse.json({

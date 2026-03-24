@@ -5,7 +5,8 @@ import { Header } from '@/components/layout/Header';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Save, Building2, Receipt, Bell, Shield, Palette, Calendar } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
+import { Save, Building2, Receipt, Bell, Shield, Palette, Calendar, Monitor, Smartphone, Globe, X, Trash2, RefreshCw } from 'lucide-react';
 
 interface Settings {
   business: {
@@ -58,6 +59,13 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  
+  // Session management state
+  const [sessionsModalOpen, setSessionsModalOpen] = useState(false);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionsError, setSessionsError] = useState('');
+  
   const [settings, setSettings] = useState<Settings>({
     business: {
       name: '',
@@ -226,6 +234,60 @@ export default function SettingsPage() {
       setMessage({ type: 'error', text: 'Failed to save settings' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Session management functions
+  const fetchSessions = async () => {
+    setSessionsLoading(true);
+    setSessionsError('');
+    try {
+      const response = await fetch('/api/sessions');
+      const data = await response.json();
+      if (data.success) {
+        setSessions(data.sessions || []);
+      } else {
+        setSessionsError(data.error || 'Failed to fetch sessions');
+      }
+    } catch (error) {
+      setSessionsError('Failed to connect to server');
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
+
+  const handleRevokeSession = async (sessionId: string) => {
+    try {
+      const response = await fetch('/api/sessions', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'revoke', sessionId }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        fetchSessions();
+      }
+    } catch (error) {
+      console.error('Failed to revoke session:', error);
+    }
+  };
+
+  const handleRevokeAllSessions = async () => {
+    if (!confirm('Are you sure you want to revoke all your sessions? You will be logged out everywhere except this device.')) {
+      return;
+    }
+    try {
+      const response = await fetch('/api/sessions', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'revokeAll' }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        fetchSessions();
+      }
+    } catch (error) {
+      console.error('Failed to revoke all sessions:', error);
     }
   };
 
@@ -675,7 +737,7 @@ export default function SettingsPage() {
                   <div className="p-4 bg-gray-50 rounded-lg">
                     <h3 className="font-medium text-gray-900 mb-2">Active Sessions</h3>
                     <p className="text-sm text-gray-500 mb-4">Manage your active login sessions</p>
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" onClick={() => { fetchSessions(); setSessionsModalOpen(true); }}>
                       View Sessions
                     </Button>
                   </div>
@@ -767,6 +829,69 @@ export default function SettingsPage() {
           </Card>
         </div>
       </div>
+
+      {/* Sessions Modal */}
+      <Modal isOpen={sessionsModalOpen} onClose={() => setSessionsModalOpen(false)} title="Active Sessions" size="lg">
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-gray-500">
+              {sessions.filter(s => s.isActive).length} active session(s)
+            </p>
+            <Button variant="outline" size="sm" onClick={handleRevokeAllSessions} className="text-red-600 border-red-300 hover:bg-red-50">
+              <Trash2 className="w-4 h-4 mr-1" />
+              Revoke All
+            </Button>
+          </div>
+
+          {sessionsLoading ? (
+            <div className="flex justify-center py-8">
+              <div className="spinner" />
+            </div>
+          ) : sessionsError ? (
+            <div className="text-center py-8 text-red-600">
+              {sessionsError}
+            </div>
+          ) : sessions.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              No sessions found
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              {sessions.map((session: any) => (
+                <div key={session._id} className={`p-3 rounded-lg border ${session.isActive ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50'}`}>
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        {session.deviceInfo?.includes('Mobile') || session.userAgent?.includes('Mobile') ? (
+                          <Smartphone className="w-4 h-4 text-gray-400" />
+                        ) : (
+                          <Monitor className="w-4 h-4 text-gray-400" />
+                        )}
+                        <span className="font-medium text-sm">{session.userName}</span>
+                        {!session.isActive && (
+                          <span className="text-xs text-gray-400">(Revoked)</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">{session.deviceInfo || session.userAgent?.substring(0, 50) || 'Unknown device'}</p>
+                      <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
+                        <Globe className="w-3 h-3" />
+                        <span>{session.ipAddress || 'Unknown IP'}</span>
+                        <span>•</span>
+                        <span>Last active: {new Date(session.lastActivity).toLocaleString()}</span>
+                      </div>
+                    </div>
+                    {session.isActive && (
+                      <Button variant="outline" size="sm" onClick={() => handleRevokeSession(session._id)} className="text-red-600 hover:bg-red-50">
+                        <X className="w-3 h-3" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

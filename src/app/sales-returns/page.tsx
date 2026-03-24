@@ -100,6 +100,7 @@ interface Invoice {
   status: 'draft' | 'sent' | 'partial' | 'paid' | 'overdue' | 'cancelled';
   paymentTerms: number;
   notes?: string;
+  includeInPrice?: boolean;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -161,6 +162,9 @@ export default function BackofficeInvoicesPage() {
   // Customer modal
   const [showCustomerModal, setShowCustomerModal] = useState(false);
 
+  // Settings for print
+  const [businessSettings, setBusinessSettings] = useState<any>(null);
+
   // Filter products based on search and category
   useEffect(() => {
     let filtered = products;
@@ -211,7 +215,20 @@ export default function BackofficeInvoicesPage() {
   // Fetch data on initial load and when filters change
   useEffect(() => {
     fetchData();
+    fetchSettings();
   }, [statusFilter]);
+
+  const fetchSettings = async () => {
+    try {
+      const response = await fetch('/api/settings');
+      if (response.ok) {
+        const data = await response.json();
+        setBusinessSettings(data);
+      }
+    } catch (error) {
+      console.error('Error fetching settings:', error);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -1397,7 +1414,22 @@ export default function BackofficeInvoicesPage() {
         {selectedInvoice && (
           <PrintPreview
             documentType={selectedInvoice.invoiceType === 'credit' ? 'creditInvoice' : 'invoice'}
-            document={selectedInvoice}
+            document={{
+              ...selectedInvoice,
+              includeInPrice: selectedInvoice.includeInPrice ?? businessSettings?.includeInPrice ?? false,
+              logo: businessSettings?.logo || '',
+              businessName: businessSettings?.businessName || '',
+              businessTagline: businessSettings?.businessTagline || '',
+              businessAddress: businessSettings?.address || '',
+              businessPhone: businessSettings?.phone || '',
+              businessEmail: businessSettings?.email || '',
+              vatNumber: businessSettings?.vatNumber || '',
+              bankName: businessSettings?.bankName || '',
+              bankAccount: businessSettings?.bankAccount || '',
+              bankBranch: businessSettings?.bankBranch || '',
+              terms: businessSettings?.invoiceTerms || '',
+              kraPin: businessSettings?.kraPin || '',
+            }}
             onPrint={() => {
               // Close both modals after printing and reset form
               setShowPrintPreview(false);

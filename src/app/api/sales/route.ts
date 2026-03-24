@@ -73,6 +73,7 @@ export async function GET(request: NextRequest) {
         .populate('customer', 'name phone')
         .populate('cashier', 'name')
         .populate('branch', 'name')
+        .populate('items.product', 'name baseUnit units')
         .sort({ saleDate: -1 })
         .skip(skip)
         .limit(limit),
@@ -405,6 +406,28 @@ export async function POST(request: NextRequest) {
       // creditLimit is used to validate account payment eligibility
       
       await Customer.findByIdAndUpdate(data.customerId, updateData);
+    }
+    
+    // Log the sale activity
+    try {
+      await ActivityLog.create({
+        user: user.userId as any,
+        userName: user.name || 'Unknown',
+        action: 'sale_create',
+        module: 'sales',
+        description: `Sale created: ${invoiceNumber}, Total: ${orderTotal.toLocaleString()}`,
+        metadata: {
+          saleId: sale._id,
+          invoiceNumber,
+          paymentMethod: data.paymentMethod,
+          customerId: data.customerId,
+          total: orderTotal
+        },
+        ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
+        userAgent: request.headers.get('user-agent'),
+      });
+    } catch (logError) {
+      console.error('Failed to log sale activity:', logError);
     }
     
     return NextResponse.json({

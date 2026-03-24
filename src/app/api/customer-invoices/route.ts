@@ -104,6 +104,7 @@ export async function GET(request: NextRequest) {
     const [invoices, total] = await Promise.all([
       CustomerInvoice.find(query)
         .populate('customer', 'name phone creditLimit creditBalance')
+        .populate('items.product', 'name baseUnit units')
         .sort({ invoiceDate: -1 })
         .skip(skip)
         .limit(limit),
@@ -167,6 +168,7 @@ export async function POST(request: NextRequest) {
     // Get settings and check allowNegativeStock
     const settings = await Settings.findOne({}).lean();
     const allowNegativeStock = settings?.allowNegativeStock || false;
+    const includeInPrice = settings?.includeInPrice || false;
     
     // Check stock availability if allowNegativeStock is false
     if (!allowNegativeStock) {
@@ -244,14 +246,27 @@ export async function POST(request: NextRequest) {
     let subtotal = 0;
     let totalDiscount = 0;
     let totalTax = 0;
+    const taxRate = data.taxRate || 16;
     
     const items = data.items.map((item: any) => {
       const itemSubtotal = item.unitPrice * item.quantity;
       const itemDiscount = item.discountType === 'percentage'
         ? (itemSubtotal * item.discount) / 100
         : item.discount;
-      const itemTax = (itemSubtotal - itemDiscount) * (data.taxRate || 16) / 100;
-      const itemTotal = itemSubtotal - itemDiscount + itemTax;
+      
+      let itemTax = 0;
+      let itemTotal = 0;
+      
+      if (includeInPrice) {
+        // Prices already include VAT - reverse calculate tax for display
+        const netAmount = itemSubtotal / (1 + taxRate / 100);
+        itemTax = itemSubtotal - netAmount;
+        itemTotal = itemSubtotal; // No extra tax added
+      } else {
+        // Prices are VAT-exclusive - calculate and add tax
+        itemTax = (itemSubtotal - itemDiscount) * taxRate / 100;
+        itemTotal = itemSubtotal - itemDiscount + itemTax;
+      }
       
       subtotal += itemSubtotal;
       totalDiscount += itemDiscount;
@@ -262,6 +277,7 @@ export async function POST(request: NextRequest) {
         productName: item.productName,
         sku: item.sku,
         quantity: item.quantity,
+        unitName: item.unitName,
         unitPrice: item.unitPrice,
         discount: item.discount,
         discountType: item.discountType,
@@ -275,9 +291,19 @@ export async function POST(request: NextRequest) {
       : (data.discount || 0);
     
     const taxableAmount = subtotal - orderDiscountAmount;
-    const taxRate = data.taxRate || 16;
-    const orderTax = taxableAmount * taxRate / 100;
-    const total = taxableAmount + orderTax;
+    let orderTax = 0;
+    let total = 0;
+    
+    if (includeInPrice) {
+      // Prices already include VAT - reverse calculate tax for display
+      const netTaxableAmount = taxableAmount / (1 + taxRate / 100);
+      orderTax = taxableAmount - netTaxableAmount;
+      total = taxableAmount; // No extra tax added
+    } else {
+      // Prices are VAT-exclusive - calculate and add tax
+      orderTax = taxableAmount * taxRate / 100;
+      total = taxableAmount + orderTax;
+    }
     
     // Validate credit limit for sale invoices
     if (data.invoiceType === 'sale' && data._currentDebt !== undefined && data._creditLimit) {
@@ -347,6 +373,7 @@ export async function POST(request: NextRequest) {
       notes: data.notes,
       payments: [],
       terms: data.terms,
+      includeInPrice,
     });
 
     // Note: Do NOT update creditBalance here

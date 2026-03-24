@@ -5,6 +5,7 @@ export interface IInvoiceItem {
   productName: string;
   sku: string;
   quantity: number;
+  unitName: string;
   unitPrice: number;
   discount: number;
   discountType?: 'percentage' | 'fixed';
@@ -49,6 +50,7 @@ export interface ICustomerInvoice extends Document {
   discountAmount: number;
   tax: number;
   taxRate: number;
+  includeInPrice: boolean;
   total: number;
   
   // Status
@@ -81,6 +83,7 @@ const InvoiceItemSchema = new Schema<IInvoiceItem>({
   productName: { type: String, required: true },
   sku: { type: String, required: true },
   quantity: { type: Number, required: true },
+  unitName: { type: String, required: true },
   unitPrice: { type: Number, required: true },
   discount: { type: Number, default: 0 },
   discountType: { type: String, enum: ['percentage', 'fixed'] },
@@ -129,6 +132,7 @@ const CustomerInvoiceSchema = new Schema<ICustomerInvoice>({
   discountAmount: { type: Number, default: 0 },
   tax: { type: Number, default: 0 },
   taxRate: { type: Number, default: 16 },
+  includeInPrice: { type: Boolean, default: false },
   total: { type: Number, required: true },
   
   // Status
