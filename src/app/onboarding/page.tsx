@@ -773,20 +773,15 @@ export default function OnboardingPage() {
               </div>
               
               <div className="flex items-center gap-3">
-                <Button variant="outline" onClick={handleBack}>
-                  <ChevronLeft className="w-4 h-4 mr-2" />
-                  Back
-                </Button>
+                {currentStep > 0 && (
+                  <Button variant="outline" onClick={handleBack}>
+                    <ChevronLeft className="w-4 h-4 mr-2" />
+                    Back
+                  </Button>
+                )}
                 
-                {/* Always show skip button - Skip for optional steps, Skip All for required steps after step 0 */}
-                {currentStep === 0 ? (
-                  !STEPS[currentStep].required ? (
-                    <Button variant="outline" onClick={handleSkip}>
-                      <SkipForward className="w-4 h-4 mr-2" />
-                      Skip
-                    </Button>
-                  ) : null
-                ) : (
+                {/* Skip All - visible on all steps after step 0 */}
+                {currentStep > 0 && (
                   <Button variant="ghost" onClick={handleSkip} className="text-gray-500 hover:text-gray-700">
                     Skip All
                   </Button>

@@ -372,6 +372,8 @@ Implemented complete multi-user authentication system:
   - Units now properly display in printed invoices and delivery notes
 - [x] Onboarding Skip Option
   - Added "Skip onboarding setup" link on login page
+  - Added Skip All button on onboarding page after step 0
+  - Added Back button always visible
   - Clicking sets localStorage onboarding-complete to true
   - Redirects directly to dashboard bypassing onboarding wizard
 
