@@ -780,12 +780,10 @@ export default function OnboardingPage() {
                   </Button>
                 )}
                 
-                {/* Skip All - visible on all steps after step 0 */}
-                {currentStep > 0 && (
-                  <Button variant="ghost" onClick={handleSkip} className="text-gray-500 hover:text-gray-700">
-                    Skip All
-                  </Button>
-                )}
+                {/* Always show Skip All - allows users to skip entire onboarding */}
+                <Button variant="ghost" onClick={handleSkip} className="text-gray-500 hover:text-gray-700">
+                  Skip All
+                </Button>
                 
                 {currentStep < STEPS.length - 1 ? (
                   <Button 
