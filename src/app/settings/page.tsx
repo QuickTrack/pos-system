@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
-import { Save, Building2, Receipt, Bell, Shield, Palette, Calendar, Monitor, Smartphone, Globe, X, Trash2, RefreshCw } from 'lucide-react';
+import { Save, Building2, Receipt, Bell, Shield, Palette, Calendar, Monitor, Smartphone, Globe, X, Trash2, RefreshCw, Settings2 } from 'lucide-react';
 
 interface Settings {
   business: {
@@ -55,6 +56,7 @@ const TABS = [
 ];
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState('business');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -289,6 +291,11 @@ export default function SettingsPage() {
     } catch (error) {
       console.error('Failed to revoke all sessions:', error);
     }
+  };
+
+  const handleRunOnboarding = () => {
+    localStorage.removeItem('onboarding-complete');
+    router.push('/onboarding');
   };
 
   const updateBusinessField = (field: string, value: string) => {
@@ -739,6 +746,15 @@ export default function SettingsPage() {
                     <p className="text-sm text-gray-500 mb-4">Manage your active login sessions</p>
                     <Button variant="outline" size="sm" onClick={() => { fetchSessions(); setSessionsModalOpen(true); }}>
                       View Sessions
+                    </Button>
+                  </div>
+
+                  <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <h3 className="font-medium text-gray-900 mb-2">Setup Wizard</h3>
+                    <p className="text-sm text-gray-500 mb-4">Re-run the business setup wizard</p>
+                    <Button variant="outline" size="sm" onClick={handleRunOnboarding}>
+                      <Settings2 className="w-4 h-4 mr-1" />
+                      Run Setup Wizard
                     </Button>
                   </div>
                 </div>
