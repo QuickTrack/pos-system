@@ -8,14 +8,12 @@ export async function GET(req: NextRequest) {
   try {
     await dbConnect();
     
+    // Try to get authenticated user, but don't require it for license validation
     const authUser = await getAuthUser();
-    if (!authUser) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
+    
     // Super admins can access regardless of license status
     // This bypass only affects authentication - license info is still returned for display
-    const isSuperAdmin = authUser.role === 'super_admin';
+    const isSuperAdmin = authUser?.role === 'super_admin';
 
     // Get license key from header or query
     const licenseKey = req.headers.get('x-license-key') || 

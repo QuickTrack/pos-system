@@ -1021,7 +1021,7 @@ export default function SettingsPage() {
               <div className="p-4 bg-red-50 rounded-lg border border-red-200">
                 <h3 className="font-medium text-red-900 mb-2">Final Confirmation Required</h3>
                 <p className="text-sm text-red-700">
-                  To confirm this action, please type <strong>"DELETE ALL DATA"</strong> below:
+                  To confirm this action, please type <strong>&quot;DELETE ALL DATA&quot;</strong> below:
                 </p>
                 <Input
                   value={clearDataConfirmation}

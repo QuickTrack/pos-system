@@ -3,59 +3,107 @@
 import { Menu, Bell, Search, Moon, Sun, Home, Calendar, AlertTriangle, Shield, RefreshCw } from 'lucide-react';
 import { useUIStore } from '@/lib/store';
 import { useLicense } from '@/lib/license-context';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
+import { ModeToggle } from '@/components/ui/ModeToggle';
 
 interface HeaderProps {
   title: string;
   subtitle?: string;
 }
 
+// Helper to safely load license from localStorage
+function loadLicenseFromStorage(): any | null {
+  try {
+    const stored = localStorage.getItem('pos-license');
+    if (!stored) return null;
+    const parsed = JSON.parse(stored);
+    // Validate basic structure
+    if (parsed && typeof parsed === 'object' && parsed.licenseKey) {
+      return parsed;
+    }
+    return null;
+  } catch {
+    // Corrupted data - clear it
+    try { localStorage.removeItem('pos-license'); } catch {}
+    return null;
+  }
+}
+
+// Helper to check if license context is available
+function useLicenseSafe() {
+  try {
+    return useLicense();
+  } catch {
+    // Not inside LicenseProvider
+    return null;
+  }
+}
+
 export function Header({ title, subtitle }: HeaderProps) {
   const { sidebarOpen, setSidebarOpen, darkMode, toggleDarkMode } = useUIStore();
   
-  // License context - may not be available in all layouts
-  let licenseContext: any = null;
-  let license: any = null;
-  let checkLicense: any = null;
+  // License context - safely check if available
+  const licenseContext = useLicenseSafe();
   
-  try {
-    licenseContext = useLicense();
-    license = licenseContext.license;
-    checkLicense = licenseContext.checkLicense;
-  } catch (e) {
-    // License context not available - will use localStorage fallback
-  }
+  // Initialize localLicense from localStorage immediately (lazy initialization)
+  // This prevents stale null render on initial mount
+  const [localLicense, setLocalLicense] = useState<any>(() => loadLicenseFromStorage());
   
+  // Track if we've synced from context at least once
+  const hasSyncedFromContext = useRef(false);
+
   const [currentTime, setCurrentTime] = useState('');
   const [financialYear, setFinancialYear] = useState('');
   const [showSettings, setShowSettings] = useState(false);
-  const [lastChecked, setLastChecked] = useState<Date | null>(null);
   const [businessInfo, setBusinessInfo] = useState<{ name: string; logo: string }>({ name: '', logo: '' });
 
-  // Update lastChecked when license is checked
+  // Sync context license to local state whenever it changes
+  // This is the primary source of truth when context is available
   useEffect(() => {
-    if (license) {
-      setLastChecked(new Date());
+    if (licenseContext) {
+      hasSyncedFromContext.current = true;
+      setLocalLicense(licenseContext.license);
     }
-  }, [license]);
+  }, [licenseContext, licenseContext?.license]);
 
-  // Fallback to localStorage if license context not available
+  // Listen for localStorage changes (cross-tab sync) only when context is NOT available
   useEffect(() => {
-    if (!license) {
-      try {
-        const storedLicense = localStorage.getItem('pos-license');
-        if (storedLicense) {
-          license = JSON.parse(storedLicense);
+    if (licenseContext) return; // Context handles sync when available
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'pos-license') {
+        if (e.newValue) {
+          try {
+            const parsed = JSON.parse(e.newValue);
+            if (parsed && typeof parsed === 'object' && parsed.licenseKey) {
+              setLocalLicense(parsed);
+            }
+          } catch {
+            // Corrupted data - ignore
+          }
+        } else {
+          setLocalLicense(null);
         }
-      } catch (e) {
-        // ignore
       }
-    }
-  }, [license]);
+    };
 
-  const licenseDaysRemaining = license?.daysRemaining ?? null;
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [licenseContext]);
 
+  // Determine effective license: context takes priority when available
+  const effectiveLicense = licenseContext?.license ?? localLicense;
+  
+  // Memoize daysRemaining to avoid recalculation
+  const licenseDaysRemaining = useMemo(() => {
+    return effectiveLicense?.daysRemaining ?? null;
+  }, [effectiveLicense?.daysRemaining]);
+
+  // Use lastChecked from context if available, otherwise null (don't create new Date on every render)
+  const lastChecked = licenseContext?.lastChecked ?? null;
+
+  // Clock timer
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
@@ -88,10 +136,6 @@ export function Header({ title, subtitle }: HeaderProps) {
     };
     loadFinancialYear();
   }, []);
-
-  // Load license info
-  // License is now managed by LicenseProvider - no local storage needed
-  // Real-time updates happen automatically through polling
 
   return (
     <header className="sticky top-0 z-30 bg-white border-b border-gray-200">
@@ -155,7 +199,7 @@ export function Header({ title, subtitle }: HeaderProps) {
         {/* Right side */}
         <div className="flex items-center gap-2">
           {/* Real-time License Status - Clickable to upgrade/renew */}
-          {license && (
+          {effectiveLicense && (
             <div className="relative">
               <Link 
                 href="/license/activate"
@@ -166,7 +210,7 @@ export function Header({ title, subtitle }: HeaderProps) {
                       ? 'bg-amber-50 text-amber-700'
                       : 'bg-green-50 text-green-700'
                 }`}
-                title={`License: ${license?.plan || 'Unknown'} - Click to upgrade or renew`}
+                title={`License: ${effectiveLicense?.licenseType || 'Unknown'} - Click to upgrade or renew`}
               >
                 {licenseDaysRemaining !== null && licenseDaysRemaining < 0 ? (
                   <>
@@ -185,10 +229,10 @@ export function Header({ title, subtitle }: HeaderProps) {
                   </>
                 )}
               </Link>
-              {/* Sync indicator */}
-              {checkLicense && (
+              {/* Sync indicator - only show when context is available */}
+              {licenseContext?.checkLicense && (
                 <button
-                  onClick={() => checkLicense()}
+                  onClick={() => licenseContext.checkLicense()}
                   className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center"
                   title="Click to sync now"
                 >
@@ -197,7 +241,7 @@ export function Header({ title, subtitle }: HeaderProps) {
               )}
             </div>
           )}
-          {/* License sync settings */}
+          {/* License sync settings - dev only */}
           {process.env.NODE_ENV === 'development' && (
             <button
               onClick={() => setShowSettings(!showSettings)}
@@ -231,6 +275,8 @@ export function Header({ title, subtitle }: HeaderProps) {
             <Bell className="w-5 h-5 text-gray-600" />
             <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
           </button>
+          
+          <ModeToggle />
         </div>
       </div>
     </header>

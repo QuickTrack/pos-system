@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
+import { useAuth } from '@/lib/auth-context';
 import { 
   Key, 
   CheckCircle, 
@@ -77,10 +78,14 @@ interface OnboardingData {
 function ActivateLicenseContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user, loading: authLoading } = useAuth();
   
   // Get plan from query parameter
   const plan = searchParams.get('plan');
   const isTrial = plan === 'trial';
+  
+  // Super admin bypass state
+  const [superAdminBypass, setSuperAdminBypass] = useState(false);
   
   const [licenseKey, setLicenseKey] = useState('');
   const [businessName, setBusinessName] = useState('');
@@ -168,6 +173,98 @@ function ActivateLicenseContent() {
     loadBusinessInfo();
   }, []);
 
+  // Super admin bypass and license check - redirect super admins or users with valid license to dashboard
+  useEffect(() => {
+    const handleBypassAndLicenseCheck = async () => {
+      // Wait for auth to finish loading
+      if (authLoading) return;
+      
+      // Check if user is authenticated
+      if (user) {
+        try {
+          // Validate session is still active
+          const sessionResponse = await fetch('/api/auth/me', {
+            method: 'GET',
+            credentials: 'include',
+          });
+          
+          if (!sessionResponse.ok) {
+            // Session expired or invalid - don't redirect
+            console.log('Session invalid, allowing user to stay on license page');
+            return;
+          }
+          
+          const sessionData = await sessionResponse.json();
+          
+          // Check if user is super admin
+          if (sessionData.user && sessionData.user.role === 'super_admin') {
+            // Log the bypass event for audit purposes
+            try {
+              await fetch('/api/activity-logs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                  action: 'license_bypass',
+                  module: 'license',
+                  description: 'Super admin bypassed license activation page',
+                  metadata: {
+                    userId: user.userId,
+                    email: user.email,
+                    name: user.name,
+                    redirectedTo: '/dashboard',
+                    timestamp: new Date().toISOString(),
+                  },
+                }),
+              });
+            } catch (logError) {
+              // Log error but don't block redirect
+              console.error('Failed to log license bypass event:', logError);
+            }
+            
+            // Set bypass state and redirect to dashboard
+            setSuperAdminBypass(true);
+            router.push('/dashboard');
+            return;
+          }
+          
+          // Check if user has a valid license (only if authenticated)
+          const storedLicense = localStorage.getItem('pos-license');
+          if (storedLicense) {
+            try {
+              const licenseData = JSON.parse(storedLicense);
+              
+              // Validate license with server (only if authenticated)
+              const licenseResponse = await fetch(`/api/licenses/validate?licenseKey=${encodeURIComponent(licenseData.licenseKey)}`, {
+                method: 'GET',
+                credentials: 'include',
+              });
+              
+              if (licenseResponse.ok) {
+                const licenseResult = await licenseResponse.json();
+                
+                if (licenseResult.valid) {
+                  // License is valid, redirect to dashboard
+                  setSuperAdminBypass(true);
+                  router.push('/dashboard');
+                  return;
+                }
+              }
+            } catch (licenseError) {
+              // License validation failed, continue to license activation
+              console.log('License validation failed:', licenseError);
+            }
+          }
+        } catch (error) {
+          // Network error or other issue - don't redirect
+          console.error('Bypass/license check failed:', error);
+        }
+      }
+    };
+    
+    handleBypassAndLicenseCheck();
+  }, [user, authLoading, router]);
+
   // Validate required fields
   const validateFields = (): boolean => {
     const errors: string[] = [];
@@ -245,25 +342,18 @@ function ActivateLicenseContent() {
           setErrorCode(data.code || '');
         }
       } else {
-        // Regular license activation
-        const response = await fetch('/api/licenses/activate', {
+        // Regular license activation with hardware binding
+        const response = await fetch('/api/licenses/validate-hardware', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             licenseKey,
-            businessName,
-            email,
-            phone,
-            address,
-            taxNumber,
-            industry,
-            contactPerson,
           }),
         });
 
         const data = await response.json();
 
-        if (response.ok) {
+        if (response.ok && data.success) {
           setSuccess(true);
           setLicenseInfo(data.license);
           
@@ -328,12 +418,14 @@ function ActivateLicenseContent() {
 
   const isRenewal = licenseKey.startsWith('REN-');
 
-  if (initialLoading) {
+  if (initialLoading || superAdminBypass) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
         <div className="text-center">
           <Loader2 className="w-8 h-8 text-emerald-500 animate-spin mx-auto mb-4" />
-          <p className="text-slate-400">Loading business information...</p>
+          <p className="text-slate-400">
+            {superAdminBypass ? 'Redirecting to dashboard...' : 'Loading business information...'}
+          </p>
         </div>
       </div>
     );
@@ -633,7 +725,7 @@ function ActivateLicenseContent() {
                 {/* Help Text */}
                 {!isTrial && (
                   <p className="text-center text-sm text-gray-500 mt-4">
-                    Don't have a license key?{' '}
+                    Don&apos;t have a license key?{' '}
                     <a href="/pricing" className="text-emerald-600 hover:underline font-medium">
                       Get one here
                     </a>
@@ -655,13 +747,20 @@ function ActivateLicenseContent() {
         </Card>
 
         {/* Back to Dashboard Button */}
-        <div className="mt-6 text-center">
+        <div className="mt-6 text-center flex flex-col sm:flex-row items-center justify-center gap-4">
           <button
             onClick={() => router.push('/dashboard')}
             className="inline-flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Dashboard
+          </button>
+          <button
+            onClick={() => router.push('/login')}
+            className="inline-flex items-center gap-2 text-emerald-400 hover:text-emerald-300 transition-colors text-sm font-medium"
+          >
+            <User className="w-4 h-4" />
+            Switch User
           </button>
         </div>
 

@@ -260,7 +260,7 @@ export default function OnboardingPage() {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900">Welcome to Your POS System</h1>
-                <p className="text-sm text-gray-500">Let's get your business set up</p>
+                <p className="text-sm text-gray-500">Let&apos;s get your business set up</p>
               </div>
             </div>
             <div className="text-right">
@@ -442,7 +442,7 @@ export default function OnboardingPage() {
                     onChange={(e) => updateData({ taxRate: parseFloat(e.target.value) || 0 })}
                     placeholder="16"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Kenya uses 16% VAT. Enter 0 if you don't charge tax.</p>
+                  <p className="text-xs text-gray-500 mt-1">Kenya uses 16% VAT. Enter 0 if you don&apos;t charge tax.</p>
                 </div>
                 
                 <div>

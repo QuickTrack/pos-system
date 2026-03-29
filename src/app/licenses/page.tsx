@@ -71,6 +71,23 @@ export default function LicensesPage() {
   // Restore state
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  
+  // Regeneration state
+  const [showRegenerateModal, setShowRegenerateModal] = useState(false);
+  const [showBulkRegenerateModal, setShowBulkRegenerateModal] = useState(false);
+  const [showRegenerationHistoryModal, setShowRegenerationHistoryModal] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [selectedLicenses, setSelectedLicenses] = useState<string[]>([]);
+  const [regenerateForm, setRegenerateForm] = useState({
+    reason: '',
+    newExpirationDate: '',
+    features: [] as string[],
+    maxUsers: 0,
+    maxBranches: 0,
+    notifyUsers: false,
+  });
+  const [regenerationHistory, setRegenerationHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   const handleDowngradeClick = (license: License) => {
     setSelectedLicense(license);
@@ -192,6 +209,136 @@ export default function LicensesPage() {
       setRestoring(false);
     }
   };
+
+  const handleRegenerateClick = (license: License) => {
+    setSelectedLicense(license);
+    setRegenerateForm({
+      reason: '',
+      newExpirationDate: '',
+      features: license.features,
+      maxUsers: license.maxUsers,
+      maxBranches: license.maxBranches,
+      notifyUsers: false,
+    });
+    setShowRegenerateModal(true);
+  };
+
+  const handleRegenerate = async () => {
+    if (!selectedLicense) return;
+    setRegenerating(true);
+
+    try {
+      const response = await fetch('/api/licenses/regenerate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          licenseIds: [selectedLicense._id],
+          ...regenerateForm,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.results.success.length > 0) {
+        const result = data.results.success[0];
+        await navigator.clipboard.writeText(result.newKey);
+        alert(`License regenerated successfully!\n\nNew License Key: ${result.newKey}\nPrevious Key: ${result.previousKey}\n\nNew key copied to clipboard!`);
+        setShowRegenerateModal(false);
+        fetchLicenses();
+      } else {
+        const errorMsg = data.results?.failed?.[0]?.error || data.error || 'Failed to regenerate license';
+        alert(errorMsg);
+      }
+    } catch (error) {
+      alert('Failed to regenerate license');
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  const handleBulkRegenerateClick = () => {
+    if (selectedLicenses.length === 0) {
+      alert('Please select at least one license to regenerate');
+      return;
+    }
+    setRegenerateForm({
+      reason: '',
+      newExpirationDate: '',
+      features: [],
+      maxUsers: 0,
+      maxBranches: 0,
+      notifyUsers: false,
+    });
+    setShowBulkRegenerateModal(true);
+  };
+
+  const handleBulkRegenerate = async () => {
+    if (selectedLicenses.length === 0) return;
+    setRegenerating(true);
+
+    try {
+      const response = await fetch('/api/licenses/regenerate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          licenseIds: selectedLicenses,
+          ...regenerateForm,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert(`${data.message}\n\nSuccess: ${data.results.success.length}\nFailed: ${data.results.failed.length}`);
+        setShowBulkRegenerateModal(false);
+        setSelectedLicenses([]);
+        fetchLicenses();
+      } else {
+        alert(data.error || 'Failed to regenerate licenses');
+      }
+    } catch (error) {
+      alert('Failed to regenerate licenses');
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  const handleViewRegenerationHistory = async (license: License) => {
+    setSelectedLicense(license);
+    setLoadingHistory(true);
+    setShowRegenerationHistoryModal(true);
+
+    try {
+      const response = await fetch(`/api/licenses/regenerate?licenseId=${license._id}`);
+      const data = await response.json();
+      
+      if (response.ok) {
+        setRegenerationHistory(data.regenerationHistory || []);
+      } else {
+        alert(data.error || 'Failed to fetch regeneration history');
+      }
+    } catch (error) {
+      alert('Failed to fetch regeneration history');
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const toggleLicenseSelection = (licenseId: string) => {
+    setSelectedLicenses(prev => 
+      prev.includes(licenseId) 
+        ? prev.filter(id => id !== licenseId)
+        : [...prev, licenseId]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedLicenses.length === filteredLicenses.length) {
+      setSelectedLicenses([]);
+    } else {
+      setSelectedLicenses(filteredLicenses.map(l => l._id));
+    }
+  };
   const [formData, setFormData] = useState({
     businessName: '',
     email: '',
@@ -266,6 +413,42 @@ export default function LicensesPage() {
 
   const copyToClipboard = async (text: string) => {
     await navigator.clipboard.writeText(text);
+  };
+
+  const handleDownloadLicenseFile = (license: License) => {
+    const licenseContent = [
+      '=========================================',
+      '           LICENSE FILE',
+      '=========================================',
+      '',
+      `License Key: ${license.licenseKey}`,
+      `Business Name: ${license.businessName}`,
+      `Email: ${license.email}`,
+      `Phone: ${license.phone || 'N/A'}`,
+      `License Type: ${license.licenseType}`,
+      `Status: ${license.status}`,
+      `Activation Date: ${license.activationDate ? new Date(license.activationDate).toLocaleDateString() : 'Not activated'}`,
+      `Expiration Date: ${license.expirationDate ? new Date(license.expirationDate).toLocaleDateString() : 'N/A'}`,
+      `Max Users: ${license.maxUsers}`,
+      `Max Branches: ${license.maxBranches}`,
+      `Features: ${license.features.join(', ') || 'None'}`,
+      `Created: ${new Date(license.createdAt).toLocaleDateString()}`,
+      '',
+      '=========================================',
+      'This license file was generated by the POS System.',
+      'Please keep this file secure and do not share it.',
+      '=========================================',
+    ].join('\n');
+
+    const blob = new Blob([licenseContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'license.txt';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const handleUpgradeClick = (license: License) => {
@@ -345,10 +528,18 @@ export default function LicensesPage() {
           <h1 className="text-2xl font-bold text-gray-900">License Management</h1>
           <p className="text-gray-500">Generate and manage customer licenses</p>
         </div>
-        <Button onClick={() => setShowModal(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Generate License
-        </Button>
+        <div className="flex gap-3">
+          {selectedLicenses.length > 0 && (
+            <Button variant="outline" onClick={handleBulkRegenerateClick}>
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Regenerate Selected ({selectedLicenses.length})
+            </Button>
+          )}
+          <Button onClick={() => setShowModal(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Generate License
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -397,6 +588,14 @@ export default function LicensesPage() {
               <table className="w-full">
                 <thead className="bg-gray-50 border-b">
                   <tr>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">
+                      <input
+                        type="checkbox"
+                        checked={selectedLicenses.length === filteredLicenses.length && filteredLicenses.length > 0}
+                        onChange={toggleSelectAll}
+                        className="rounded border-gray-300"
+                      />
+                    </th>
                     <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">License Key</th>
                     <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">Business</th>
                     <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">Email</th>
@@ -415,6 +614,14 @@ export default function LicensesPage() {
                     
                     return (
                       <tr key={license._id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedLicenses.includes(license._id)}
+                            onChange={() => toggleLicenseSelection(license._id)}
+                            className="rounded border-gray-300"
+                          />
+                        </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono">
@@ -509,6 +716,29 @@ export default function LicensesPage() {
                                 <PauseCircle className="w-4 h-4" />
                               </button>
                             )}
+                            <button
+                              onClick={() => handleRegenerateClick(license)}
+                              className="p-1 text-blue-600 hover:text-blue-800"
+                              title="Regenerate license key"
+                            >
+                              <RefreshCw className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleViewRegenerationHistory(license)}
+                              className="p-1 text-gray-600 hover:text-gray-800"
+                              title="View regeneration history"
+                            >
+                              <Clock className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDownloadLicenseFile(license)}
+                              className="p-1 text-emerald-600 hover:text-emerald-800"
+                              title="Download license file"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -900,6 +1130,239 @@ export default function LicensesPage() {
                     Restore License
                   </>
                 )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Regenerate License Modal */}
+      {showRegenerateModal && selectedLicense && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full mx-4">
+            <div className="p-6 border-b">
+              <h2 className="text-xl font-bold text-blue-600">Regenerate License Key</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Regenerating: {selectedLicense.businessName}
+              </p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Reason for Regeneration (optional)
+                </label>
+                <textarea
+                  value={regenerateForm.reason}
+                  onChange={(e) => setRegenerateForm({ ...regenerateForm, reason: e.target.value })}
+                  placeholder="Enter reason for regeneration..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  rows={2}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  New Expiration Date (optional)
+                </label>
+                <Input
+                  type="date"
+                  value={regenerateForm.newExpirationDate}
+                  onChange={(e) => setRegenerateForm({ ...regenerateForm, newExpirationDate: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Max Users
+                  </label>
+                  <Input
+                    type="number"
+                    value={regenerateForm.maxUsers}
+                    onChange={(e) => setRegenerateForm({ ...regenerateForm, maxUsers: parseInt(e.target.value) })}
+                    min={1}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Max Branches
+                  </label>
+                  <Input
+                    type="number"
+                    value={regenerateForm.maxBranches}
+                    onChange={(e) => setRegenerateForm({ ...regenerateForm, maxBranches: parseInt(e.target.value) })}
+                    min={1}
+                  />
+                </div>
+              </div>
+
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="font-medium text-blue-900">Regeneration Summary</h3>
+                <p className="text-sm text-blue-700 mt-1">
+                  Current Key: {selectedLicense.licenseKey.slice(0, 8)}...<br />
+                  Type: {selectedLicense.licenseType}<br />
+                  Status: {selectedLicense.status}
+                </p>
+              </div>
+            </div>
+            
+            <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3 rounded-b-xl">
+              <Button type="button" variant="outline" onClick={() => setShowRegenerateModal(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleRegenerate} 
+                disabled={regenerating}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {regenerating ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Regenerating...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Regenerate License
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Regenerate Modal */}
+      {showBulkRegenerateModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full mx-4">
+            <div className="p-6 border-b">
+              <h2 className="text-xl font-bold text-blue-600">Bulk Regenerate License Keys</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Regenerating {selectedLicenses.length} license(s)
+              </p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Reason for Regeneration (optional)
+                </label>
+                <textarea
+                  value={regenerateForm.reason}
+                  onChange={(e) => setRegenerateForm({ ...regenerateForm, reason: e.target.value })}
+                  placeholder="Enter reason for regeneration..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  rows={2}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  New Expiration Date (optional)
+                </label>
+                <Input
+                  type="date"
+                  value={regenerateForm.newExpirationDate}
+                  onChange={(e) => setRegenerateForm({ ...regenerateForm, newExpirationDate: e.target.value })}
+                />
+              </div>
+
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="font-medium text-blue-900">Bulk Regeneration</h3>
+                <p className="text-sm text-blue-700 mt-1">
+                  This will regenerate license keys for all selected licenses. Each license will receive a new unique key.
+                </p>
+              </div>
+            </div>
+            
+            <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3 rounded-b-xl">
+              <Button type="button" variant="outline" onClick={() => setShowBulkRegenerateModal(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleBulkRegenerate} 
+                disabled={regenerating}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {regenerating ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Regenerating...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Regenerate {selectedLicenses.length} License(s)
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Regeneration History Modal */}
+      {showRegenerationHistoryModal && selectedLicense && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="p-6 border-b">
+              <h2 className="text-xl font-bold">Regeneration History</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                {selectedLicense.businessName} - {selectedLicense.licenseKey.slice(0, 8)}...
+              </p>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1">
+              {loadingHistory ? (
+                <div className="text-center py-8">
+                  <RefreshCw className="w-8 h-8 animate-spin mx-auto text-gray-400" />
+                  <p className="text-gray-500 mt-2">Loading history...</p>
+                </div>
+              ) : regenerationHistory.length === 0 ? (
+                <div className="text-center py-8">
+                  <Key className="w-12 h-12 mx-auto text-gray-300" />
+                  <p className="text-gray-500 mt-2">No regeneration history found</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {regenerationHistory.map((entry, index) => (
+                    <div key={index} className="border rounded-lg p-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-sm text-gray-500">
+                            {new Date(entry.date).toLocaleString()}
+                          </p>
+                          <p className="font-medium mt-1">{entry.reason || 'No reason provided'}</p>
+                          <p className="text-sm text-gray-600 mt-1">By: {entry.performedBy}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-gray-500">Previous Key</p>
+                          <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono">
+                            {entry.previousKey.slice(0, 8)}...
+                          </code>
+                        </div>
+                      </div>
+                      <div className="mt-3 pt-3 border-t">
+                        <p className="text-xs text-gray-500">New Key</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <code className="text-xs bg-green-100 px-2 py-1 rounded font-mono text-green-700">
+                            {entry.newKey.slice(0, 8)}...
+                          </code>
+                          <button
+                            onClick={() => navigator.clipboard.writeText(entry.newKey)}
+                            className="text-gray-400 hover:text-gray-600"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-4 bg-gray-50 flex justify-end rounded-b-xl">
+              <Button variant="outline" onClick={() => setShowRegenerationHistoryModal(false)}>
+                Close
               </Button>
             </div>
           </div>

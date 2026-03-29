@@ -20,6 +20,12 @@ Implemented complete multi-user authentication system:
 
 ## Recently Completed
 
+- [x] License File Download Feature
+  - Added download license file functionality to license management modal
+  - Generates license.txt file with all license details (key, business name, email, type, status, dates, limits, features)
+  - Download button added to actions column in license table
+  - Professional formatted text file with clear sections and security notice
+
 - [x] Production-Ready Installer Package
   - Created Windows installer script (install.ps1) with automated dependency detection and installation
   - Created Linux/Mac installer script (install.sh) with automated dependency detection and installation
@@ -492,6 +498,18 @@ Implemented complete multi-user authentication system:
 - [x] Disable Edit for Paid Invoices
   - Added disabled prop to edit button when invoice status is 'paid'
   - Prevents editing of invoices that have been fully paid
+- [x] Root Page Redirect to License Activation
+  - Modified src/app/page.tsx to redirect to /license/activate on app launch
+  - Replaced welcome/landing page with automatic redirect
+  - Shows loading spinner during redirect
+  - Ensures license activation is the first page users see
+  - Added conditional logic to check authentication and license status
+  - Super admins redirect to dashboard directly
+  - Users with valid license redirect to dashboard
+  - Users without valid license redirect to license activation
+  - Updated license activation page to check for valid license and redirect to dashboard
+  - Fixed license validation to only call API when user is authenticated
+  - Added proper error handling for license validation failures
 - [x] Sidebar Menu Reorganization
   - Grouped related functions into collapsible categories
   - Sales: POS, Cash Sales, Invoices, Payments, Returns
@@ -510,6 +528,60 @@ Implemented complete multi-user authentication system:
   - Requires typing 'DELETE ALL DATA' to confirm
   - Preserves User, Branch, Settings, License, and Session models
   - Forces full application reload on success
+- [x] Training Mode System
+  - Created comprehensive training mode with isolated demo database
+  - Mode toggle system (Live Mode / Training Mode) with visual indicator banner
+  - Pre-loaded realistic dummy data: products, customers, suppliers, sales, purchases, invoices
+  - Guided learning experience with step-by-step interactive tutorials
+  - Tutorials for: Creating a sale, Adding inventory, Generating invoices, Recording payments, Viewing reports
+  - Reset & replay functionality to restore demo data to default state
+  - Restricted actions in training mode: real payments, email/SMS sending, printing official documents
+  - Activity simulation engine generating daily sales trends, stock movements, customer interactions
+  - Role-based training flows for Admin, Cashier, and Store Manager roles
+  - UI/UX improvements: Practice Mode badges, Help assistant chatbot
+  - Analytics & progress tracking: completed tutorials, user engagement, completion certificates
+  - Training mode context provider with localStorage persistence
+  - Training banner component showing mode status and progress
+  - Tutorial engine with step-by-step guidance and element highlighting
+  - Simulation engine for generating realistic business activity
+  - Role-based permissions and training content filtering
+  - Help assistant with contextual guidance and FAQ
+  - Progress dashboard with completion metrics and achievements
+- [x] License Key Validation in License Management Modal
+  - Added validation logic to POST endpoint in /api/licenses/route.ts for new license generation
+  - Added validation logic to PATCH endpoint for license upgrades and downgrades
+  - Validates license key format using validateLicenseKeyFormat()
+  - Validates license type from key matches requested type using getLicenseTypeFromKey()
+  - Checks for duplicate license key in database before saving
+  - Returns clear error messages if validation fails
+- [x] Header Component License Status Synchronization Enhancement
+  - Fixed React hooks rules violation - removed try/catch around useLicense() hook
+  - Implemented lazy localStorage initialization to prevent stale null render on mount
+  - Added corrupted data handling with automatic cleanup of invalid localStorage entries
+  - Eliminated race conditions between context sync and localStorage loading effects
+  - Fixed lastChecked to not create new Date on every render (prevents unnecessary re-renders)
+  - Added useLicenseSafe() helper for graceful handling when LicenseProvider is not available
+  - Added loadLicenseFromStorage() helper with data validation and error recovery
+  - Used useRef to track context sync state and prevent overwriting loaded data
+  - TypeScript typecheck passed with no errors
+
+- [x] License Key Regeneration System
+  - Created secure and auditable license key regeneration feature
+  - Added regenerationHistory, previousLicenseKey, regeneratedAt, regeneratedBy fields to License model
+  - Created /api/licenses/regenerate API endpoint for individual and bulk regeneration
+  - Supports setting new expiration dates during regeneration
+  - Supports modifying feature entitlements (features, maxUsers, maxBranches)
+  - Automatically invalidates previous keys upon activation of new ones
+  - Comprehensive audit logging via ActivityLog model for compliance
+  - Regeneration history tracked in license document for full audit trail
+  - Added regeneration UI to licenses management page:
+    - Individual regenerate button for each license
+    - Bulk regeneration with checkbox selection
+    - Regeneration history modal showing all past regenerations
+    - Copy new license key to clipboard functionality
+  - Regeneration preserves license type and business information
+  - Reactivates expired licenses when new expiration date is set
+  - All regeneration actions logged with admin user, timestamp, reason, and previous/new keys
 
 ## Current Structure
 
@@ -613,6 +685,7 @@ const result = await printEngine.print({
 
 | Date | Changes |
 |------|---------|
+| 2026-03-29 | Implemented license key regeneration system with individual and bulk regeneration support, audit logging, and regeneration history tracking |
 | Initial | Template created with base setup |
 | 2026-03-14 | Implemented comprehensive receipt printing engine |
 | 2026-03-14 | Added template selection to PrintPreview, integrated in backoffice-invoices and sales pages |
@@ -642,6 +715,9 @@ const result = await printEngine.print({
 | 2026-03-29 | Disabled edit button for paid invoices in supplier-invoices page |
 | 2026-03-29 | Reorganized sidebar menu with logical categories (Sales, Purchases, Inventory, Parties, Reports, Administration) |
 | 2026-03-29 | Added Clear All System Data button for super admins with multi-step confirmation |
+| 2026-03-29 | Added license key validation in License Management modal - validates format, type, and uniqueness before saving |
+| 2026-03-29 | Enhanced Header component license status synchronization - fixed hooks rules violation, implemented lazy localStorage initialization, added corrupted data handling, eliminated stale renders |
+| 2026-03-29 | Implemented stock validation in POS sales interface - prevents adding out-of-stock products to cart, displays error modal with admin password override for admin/super_admin users |
 
 ## Notes
 

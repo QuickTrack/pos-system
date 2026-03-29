@@ -91,6 +91,23 @@ export async function POST(req: NextRequest) {
     // Generate license key
     const licenseKey = generateLicenseKey(licenseType, businessName);
     
+    // Validate generated license key against system-wide validation logic
+    if (!validateLicenseKeyFormat(licenseKey)) {
+      return NextResponse.json({ error: 'Generated license key has invalid format' }, { status: 500 });
+    }
+    
+    // Validate license type from key matches requested type
+    const keyType = getLicenseTypeFromKey(licenseKey);
+    if (keyType !== licenseType) {
+      return NextResponse.json({ error: 'Generated license key type does not match requested type' }, { status: 500 });
+    }
+    
+    // Check for duplicate license key in database
+    const existingLicense = await License.findOne({ licenseKey });
+    if (existingLicense) {
+      return NextResponse.json({ error: 'Generated license key already exists. Please try again.' }, { status: 500 });
+    }
+    
     // Calculate expiration date
     let expirationDate: Date;
     if (customExpiration) {
@@ -211,6 +228,23 @@ async function handleLicenseAction(licenseId: string, action: string, data: any,
       const newLicenseKey = generateLicenseKey(newLicenseType || 'annual');
       const newExpirationDate = calculateExpirationDate(newLicenseType || 'annual');
 
+      // Validate generated license key against system-wide validation logic
+      if (!validateLicenseKeyFormat(newLicenseKey)) {
+        return NextResponse.json({ error: 'Generated license key has invalid format' }, { status: 500 });
+      }
+      
+      // Validate license type from key matches requested type
+      const keyType = getLicenseTypeFromKey(newLicenseKey);
+      if (keyType !== (newLicenseType || 'annual')) {
+        return NextResponse.json({ error: 'Generated license key type does not match requested type' }, { status: 500 });
+      }
+      
+      // Check for duplicate license key in database
+      const existingLicense = await License.findOne({ licenseKey: newLicenseKey });
+      if (existingLicense) {
+        return NextResponse.json({ error: 'Generated license key already exists. Please try again.' }, { status: 500 });
+      }
+
       license.licenseKey = newLicenseKey;
       license.licenseType = newLicenseType || 'annual';
       license.expirationDate = newExpirationDate;
@@ -248,6 +282,23 @@ async function handleLicenseAction(licenseId: string, action: string, data: any,
 
       const downgradeKey = generateLicenseKey(newLicenseType);
       const downgradeExpirationDate = calculateExpirationDate(newLicenseType);
+
+      // Validate generated license key against system-wide validation logic
+      if (!validateLicenseKeyFormat(downgradeKey)) {
+        return NextResponse.json({ error: 'Generated license key has invalid format' }, { status: 500 });
+      }
+      
+      // Validate license type from key matches requested type
+      const downgradeKeyType = getLicenseTypeFromKey(downgradeKey);
+      if (downgradeKeyType !== newLicenseType) {
+        return NextResponse.json({ error: 'Generated license key type does not match requested type' }, { status: 500 });
+      }
+      
+      // Check for duplicate license key in database
+      const existingDowngradeLicense = await License.findOne({ licenseKey: downgradeKey });
+      if (existingDowngradeLicense) {
+        return NextResponse.json({ error: 'Generated license key already exists. Please try again.' }, { status: 500 });
+      }
 
       license.licenseKey = downgradeKey;
       license.licenseType = newLicenseType;

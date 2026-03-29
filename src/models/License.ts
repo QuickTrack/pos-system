@@ -25,6 +25,20 @@ export interface ILicense extends Document {
     newExpiration: Date;
     renewalKey: string;
   }[];
+  regenerationHistory: {
+    date: Date;
+    previousKey: string;
+    newKey: string;
+    reason?: string;
+    performedBy: string;
+    expirationDate?: Date;
+    features?: string[];
+    maxUsers?: number;
+    maxBranches?: number;
+  }[];
+  previousLicenseKey?: string;
+  regeneratedAt?: Date;
+  regeneratedBy?: string;
 }
 
 const LicenseSchema = new Schema<ILicense>(
@@ -100,6 +114,28 @@ const LicenseSchema = new Schema<ILicense>(
         renewalKey: String,
       },
     ],
+    regenerationHistory: [
+      {
+        date: Date,
+        previousKey: String,
+        newKey: String,
+        reason: String,
+        performedBy: String,
+        expirationDate: Date,
+        features: [String],
+        maxUsers: Number,
+        maxBranches: Number,
+      },
+    ],
+    previousLicenseKey: {
+      type: String,
+    },
+    regeneratedAt: {
+      type: Date,
+    },
+    regeneratedBy: {
+      type: String,
+    },
   },
   {
     timestamps: true,

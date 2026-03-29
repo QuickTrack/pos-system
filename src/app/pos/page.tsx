@@ -9,6 +9,7 @@ import { Modal } from '@/components/ui/Modal';
 import { useCartStore, useHeldSalesStore, CartItem, HeldSale } from '@/lib/store';
 import { formatCurrency, formatDateTime } from '@/lib/utils';
 import { generateThermalReceiptHTML, createReceiptData, ReceiptBusiness, printReceipt } from '@/lib/receipt-generator';
+import { useAuth } from '@/lib/auth-context';
 import { 
   Search, 
   Plus, 
@@ -29,7 +30,8 @@ import {
   RotateCcw,
   FileText,
   AlertTriangle,
-  UserPlus
+  UserPlus,
+  Lock
 } from 'lucide-react';
 
 interface Product {
@@ -144,6 +146,17 @@ export default function POSPage() {
   const [selectedProductIndex, setSelectedProductIndex] = useState(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const lastAddedItemRef = useRef<string | null>(null);
+  const [recalledHeldSaleId, setRecalledHeldSaleId] = useState<string | null>(null);
+  
+  // Out of stock modal state
+  const [showOutOfStockModal, setShowOutOfStockModal] = useState(false);
+  const [outOfStockProduct, setOutOfStockProduct] = useState<Product | null>(null);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminPasswordError, setAdminPasswordError] = useState('');
+  const [verifyingAdmin, setVerifyingAdmin] = useState(false);
+  const [pendingProductToAdd, setPendingProductToAdd] = useState<{product: Product, unit?: UnitOption} | null>(null);
+  
+  const { user } = useAuth();
   
   const { 
     items, 
@@ -438,7 +451,17 @@ export default function POSPage() {
     }
   };
 
-  const handleAddToCart = (product: Product, selectedUnit?: UnitOption) => {
+  const handleAddToCart = (product: Product, selectedUnit?: UnitOption, skipStockCheck = false) => {
+    // Check stock before adding (unless skipped for admin override)
+    if (!skipStockCheck && product.stockQuantity <= 0) {
+      setOutOfStockProduct(product);
+      setPendingProductToAdd({ product, unit: selectedUnit });
+      setShowOutOfStockModal(true);
+      setAdminPassword('');
+      setAdminPasswordError('');
+      return;
+    }
+
     const unitToUse = selectedUnit || null;
     const existingItem = items.find((item) => 
       item.productId === product._id && 
@@ -649,6 +672,12 @@ export default function POSPage() {
           }
         }
         
+        // Remove recalled held sale from storage after successful transaction
+        if (recalledHeldSaleId) {
+          removeHeldSale(recalledHeldSaleId);
+          setRecalledHeldSaleId(null);
+        }
+        
         setLastSale(data.sale);
         setSaleComplete(true);
         clearCart();
@@ -656,6 +685,8 @@ export default function POSPage() {
         setShowPaymentModal(false);
         setAmountPaid('');
         setCreditApplied(0);
+        // Return focus to search input for next transaction
+        searchInputRef.current?.focus();
       }
     } catch (error) {
       console.error('Payment failed:', error);
@@ -713,6 +744,8 @@ export default function POSPage() {
         setShowPaymentModal(false);
         setAmountPaid('');
         alert('Payment recorded successfully! Please confirm payment from customer.');
+        // Return focus to search input for next transaction
+        searchInputRef.current?.focus();
       }
     } catch (error) {
       console.error('M-Pesa Till payment failed:', error);
@@ -771,6 +804,8 @@ export default function POSPage() {
         setShowPaymentModal(false);
         setAmountPaid('');
         alert('Payment recorded successfully! Please confirm payment from customer.');
+        // Return focus to search input for next transaction
+        searchInputRef.current?.focus();
       }
     } catch (error) {
       console.error('M-Pesa Wallet payment failed:', error);
@@ -899,6 +934,7 @@ export default function POSPage() {
     if (heldSale.customer) {
       setCustomer(heldSale.customer);
     }
+    setRecalledHeldSaleId(heldSale.id);
     setShowHeldSalesModal(false);
   };
 
@@ -915,20 +951,97 @@ export default function POSPage() {
     // Generate thermal receipt HTML
     const receiptHTML = await generateThermalReceiptHTML(receiptData);
     
-    // Print using the receipt generator
-    printReceipt(receiptHTML);
+    // Print using the receipt generator and wait for completion
+    await printReceipt(receiptHTML);
     
     // Reset states after print
-    setTimeout(() => {
-      setSaleComplete(false);
-      setLastSale(null);
-    }, 500);
+    setSaleComplete(false);
+    setLastSale(null);
+    // Return focus to search input for next transaction
+    searchInputRef.current?.focus();
+  };
+
+  const handlePrintHeldSale = async (heldSale: HeldSale) => {
+    if (!heldSale || heldSale.items.length === 0) return;
+    
+    // Create a mock sale object from the held sale data
+    const mockSale = {
+      invoiceNumber: heldSale.id,
+      saleDate: new Date(heldSale.createdAt).toISOString(),
+      items: heldSale.items.map(item => ({
+        productName: item.productName,
+        unitAbbreviation: item.unitAbbreviation || item.unitName || 'pcs',
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })),
+      customerName: heldSale.customer?.name,
+      customerPhone: heldSale.customer?.phone,
+      paymentMethod: 'pending',
+      amountPaid: 0,
+      change: 0,
+      discountAmount: 0,
+    };
+    
+    // Create receipt data
+    const receiptData = createReceiptData(
+      mockSale,
+      businessSettings,
+      user?.name || 'Cashier'
+    );
+    
+    // Generate thermal receipt HTML without totals
+    const receiptHTML = await generateThermalReceiptHTML(receiptData, false);
+    
+    // Print using the receipt generator and wait for completion
+    await printReceipt(receiptHTML);
+    
+    // Return focus to search input after print
+    searchInputRef.current?.focus();
   };
 
   const handleNewSale = () => {
     setSaleComplete(false);
     setLastSale(null);
+    setRecalledHeldSaleId(null);
     fetchProducts();
+    // Return focus to search input for next transaction
+    searchInputRef.current?.focus();
+  };
+
+  const handleAdminOverride = async () => {
+    if (!pendingProductToAdd) return;
+    
+    setVerifyingAdmin(true);
+    setAdminPasswordError('');
+    
+    try {
+      // Verify admin password by attempting to login with current user's email and provided password
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: user?.email,
+          password: adminPassword,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        // Password verified - add the product to cart
+        handleAddToCart(pendingProductToAdd.product, pendingProductToAdd.unit, true);
+        setShowOutOfStockModal(false);
+        setPendingProductToAdd(null);
+        setAdminPassword('');
+      } else {
+        setAdminPasswordError('Incorrect password. Please try again.');
+      }
+    } catch (error) {
+      console.error('Admin verification error:', error);
+      setAdminPasswordError('Verification failed. Please try again.');
+    } finally {
+      setVerifyingAdmin(false);
+    }
   };
 
 
@@ -1873,6 +1986,14 @@ export default function POSPage() {
                   <Button 
                     variant="outline" 
                     size="sm"
+                    onClick={() => handlePrintHeldSale(sale)}
+                  >
+                    <Printer className="w-4 h-4" />
+                    Print
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
                     onClick={() => handleRecallSale(sale)}
                   >
                     <RotateCcw className="w-4 h-4" />
@@ -2002,6 +2123,120 @@ export default function POSPage() {
             <p>Unable to load customer debt information</p>
           </div>
         )}
+      </Modal>
+
+      {/* Out of Stock Modal with Admin Override */}
+      <Modal
+        isOpen={showOutOfStockModal}
+        onClose={() => {
+          setShowOutOfStockModal(false);
+          setOutOfStockProduct(null);
+          setPendingProductToAdd(null);
+          setAdminPassword('');
+          setAdminPasswordError('');
+        }}
+        title="Out of Stock"
+        size="sm"
+        closeOnOverlayClick={false}
+      >
+        <div className="space-y-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-red-800">Product Out of Stock</p>
+                {outOfStockProduct && (
+                  <>
+                    <p className="text-sm text-red-700 mt-1">
+                      <span className="font-medium">{outOfStockProduct.name}</span> is currently out of stock.
+                    </p>
+                    <p className="text-xs text-red-600 mt-2">
+                      Current stock: {outOfStockProduct.stockQuantity} units
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {user?.role === 'admin' || user?.role === 'super_admin' ? (
+            <div className="space-y-3">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-xs text-amber-700">
+                  <span className="font-medium">Admin Override Available:</span> Enter your password to add this item to the cart despite stock shortage.
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <Lock className="w-3 h-3 inline mr-1" />
+                  Admin Password
+                </label>
+                <Input
+                  type="password"
+                  placeholder="Enter your password"
+                  value={adminPassword}
+                  onChange={(e) => {
+                    setAdminPassword(e.target.value);
+                    setAdminPasswordError('');
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && adminPassword) {
+                      handleAdminOverride();
+                    }
+                  }}
+                  autoFocus
+                />
+                {adminPasswordError && (
+                  <p className="text-xs text-red-600 mt-1">{adminPasswordError}</p>
+                )}
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setShowOutOfStockModal(false);
+                    setOutOfStockProduct(null);
+                    setPendingProductToAdd(null);
+                    setAdminPassword('');
+                    setAdminPasswordError('');
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={handleAdminOverride}
+                  disabled={!adminPassword || verifyingAdmin}
+                  isLoading={verifyingAdmin}
+                >
+                  Override & Add
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <p className="text-xs text-gray-600">
+                  Please contact an administrator to override this stock restriction.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setShowOutOfStockModal(false);
+                  setOutOfStockProduct(null);
+                  setPendingProductToAdd(null);
+                }}
+              >
+                Close
+              </Button>
+            </div>
+          )}
+        </div>
       </Modal>
     </div>
   );

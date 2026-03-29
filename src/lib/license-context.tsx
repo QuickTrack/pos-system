@@ -100,10 +100,10 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
         isSuperAdminUser = userData.user?.role === 'super_admin';
       }
 
-      // Validate license
+      // Validate license with hardware binding
       const validateUrl = licenseKey 
-        ? `/api/licenses/validate?licenseKey=${encodeURIComponent(licenseKey)}`
-        : '/api/licenses/validate';
+        ? `/api/licenses/validate-hardware?licenseKey=${encodeURIComponent(licenseKey)}`
+        : '/api/licenses/validate-hardware';
       
       const validateResponse = await fetch(validateUrl, {
         credentials: 'include',

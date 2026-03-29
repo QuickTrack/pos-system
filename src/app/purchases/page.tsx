@@ -913,7 +913,7 @@ export default function PurchasesPage() {
                           }}
                         >
                           <Plus className="w-4 h-4" />
-                          <span>Add "{supplierSearchQuery}" as new supplier</span>
+                          <span>Add &quot;{supplierSearchQuery}&quot; as new supplier</span>
                         </button>
                       </div>
                     )}

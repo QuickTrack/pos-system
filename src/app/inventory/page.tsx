@@ -1090,7 +1090,7 @@ export default function InventoryPage() {
             )}
             
             {productUnits.length === 0 && (
-              <p className="text-sm text-gray-500 italic">No additional units configured. Click "Add Unit" to sell this product in different units (e.g., pack, box).</p>
+              <p className="text-sm text-gray-500 italic">No additional units configured. Click &quot;Add Unit&quot; to sell this product in different units (e.g., pack, box).</p>
             )}
           </div>
 

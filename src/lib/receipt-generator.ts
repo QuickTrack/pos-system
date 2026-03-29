@@ -151,7 +151,7 @@ function formatItemLine(item: ReceiptItem, maxNameLength: number = 22): string {
 /**
  * Generate receipt HTML styled for 80mm thermal printer
  */
-export async function generateThermalReceiptHTML(data: ReceiptData): Promise<string> {
+export async function generateThermalReceiptHTML(data: ReceiptData, showTotals: boolean = true): Promise<string> {
   const year = new Date().getFullYear();
   
   const taxRate = data.taxRate || 16;
@@ -472,6 +472,7 @@ export async function generateThermalReceiptHTML(data: ReceiptData): Promise<str
       `;}).join('')}
     </div>
     
+    ${showTotals ? `
     <!-- Totals -->
     <div class="divider"></div>
     
@@ -515,6 +516,7 @@ export async function generateThermalReceiptHTML(data: ReceiptData): Promise<str
       <span>Change:</span>
       <span>${formatCurrency(data.change)}</span>
     </div>
+    ` : ''}
     ` : ''}
     
     <div class="divider"></div>
@@ -614,15 +616,22 @@ export function createReceiptData(
 /**
  * Open print dialog for receipt
  */
-export function printReceipt(html: string): void {
-  const printWindow = window.open('', '_blank', 'width=400,height=600');
-  if (printWindow) {
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => {
+export function printReceipt(html: string): Promise<void> {
+  return new Promise((resolve) => {
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+      // Call print() directly - it blocks until print dialog closes
       printWindow.print();
-      printWindow.close();
-    }, 300);
-  }
+      // Add a small delay to ensure print dialog is fully closed before closing window
+      setTimeout(() => {
+        printWindow.close();
+        resolve();
+      }, 100);
+    } else {
+      resolve();
+    }
+  });
 }

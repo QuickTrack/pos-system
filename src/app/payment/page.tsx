@@ -117,7 +117,7 @@ export default function PaymentPage() {
                 <h4 className="font-semibold text-blue-900 mb-2">How to Pay:</h4>
                 <ol className="text-sm text-blue-800 space-y-1">
                   <li>1. Go to your M-Pesa menu on your phone</li>
-                  <li>2. Select "Pay Bill"</li>
+                  <li>2. Select &quot;Pay Bill&quot;</li>
                   <li>3. Enter Business Number: <strong>649469</strong></li>
                   <li>4. Enter Account Number: <strong>0720086614</strong></li>
                   <li>5. Enter Amount: <strong>KSH {currentPlan.price.toLocaleString()}</strong></li>

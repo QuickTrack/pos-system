@@ -1,5 +1,11 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { TrainingProvider } from '@/lib/training-context';
+import { TutorialProvider } from '@/lib/tutorial-context';
+import { AuthProvider } from '@/lib/auth-context';
+import { TrainingBanner } from '@/components/ui/TrainingBanner';
+import { TutorialOverlay } from '@/components/tutorial/TutorialOverlay';
+import { RestrictedActionModal } from '@/components/training/RestrictedActionModal';
 
 export const metadata: Metadata = {
   title: 'NairobiPOS - Cloud POS System for Kenyan Businesses',
@@ -15,7 +21,16 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen bg-gray-50">
-        {children}
+        <AuthProvider>
+          <TrainingProvider>
+            <TutorialProvider>
+              <TrainingBanner />
+              {children}
+              <TutorialOverlay />
+              <RestrictedActionModal />
+            </TutorialProvider>
+          </TrainingProvider>
+        </AuthProvider>
       </body>
     </html>
   );
