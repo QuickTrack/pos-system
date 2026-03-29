@@ -18,6 +18,9 @@ interface PurchaseItem {
   unitCost: number;
   total: number;
   receivedQuantity: number;
+  unit?: string;
+  unitName?: string;
+  unitAbbreviation?: string;
 }
 
 interface Supplier {
@@ -678,6 +681,7 @@ export default function PurchasesPage() {
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="text-left px-4 py-2">Product</th>
+                        <th className="text-right px-4 py-2">Unit</th>
                         <th className="text-right px-4 py-2">Qty</th>
                         <th className="text-right px-4 py-2">Cost</th>
                         <th className="text-right px-4 py-2">Total</th>
@@ -687,6 +691,7 @@ export default function PurchasesPage() {
                       {selectedPurchase.items?.map((item, idx) => (
                         <tr key={idx} className="border-t border-gray-100">
                           <td className="px-4 py-2">{item.productName}</td>
+                          <td className="px-4 py-2 text-right text-gray-500">{item.unitAbbreviation || item.unitName || '-'}</td>
                           <td className="px-4 py-2 text-right">
                             <input
                               type="number"
@@ -897,6 +902,7 @@ export default function PurchasesPage() {
                         <button
                           type="button"
                           className="w-full px-4 py-3 text-left hover:bg-emerald-50 flex items-center gap-2 text-emerald-600"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             setNewSupplierData({
                               ...newSupplierData,
@@ -985,16 +991,18 @@ export default function PurchasesPage() {
                         className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         value={productSearchQuery}
                         onChange={(e) => setProductSearchQuery(e.target.value)}
+                        onBlur={() => setTimeout(() => setShowProductDropdown(false), 200)}
                       />
                     </div>
                   </div>
                   
-                  {filteredProducts.length > 0 && (
+                  {showProductDropdown && filteredProducts.length > 0 && (
                     <div className="border border-gray-200 rounded-lg max-h-64 overflow-auto">
                       {filteredProducts.map((product) => (
                         <button
                           key={product._id}
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => addItem(product)}
                           className="w-full px-4 py-2 text-left hover:bg-emerald-50 border-b border-gray-100 last:border-b-0 flex items-center justify-between"
                         >

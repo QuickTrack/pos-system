@@ -151,8 +151,8 @@ export async function GET(request: NextRequest) {
       .sort({ saleDate: -1 })
       .limit(10);
     
-    // Total counts
-    const [totalProducts, totalCustomers, totalSuppliers, totalPurchases] = await Promise.all([
+    // Total counts and supplier debt
+    const [totalProducts, totalCustomers, totalSuppliers, totalPurchases, supplierDebt] = await Promise.all([
       Product.countDocuments({ isActive: true }),
       Customer.countDocuments({ isActive: true }),
       Supplier.countDocuments({ isActive: true }),
@@ -160,6 +160,21 @@ export async function GET(request: NextRequest) {
         ...branchQuery,
         status: { $in: ['pending', 'ordered', 'partial'] },
       }),
+      // Total amount owed to suppliers (sum of all unpaid purchase balances)
+      Purchase.aggregate([
+        {
+          $match: {
+            paymentStatus: { $in: ['unpaid', 'partial'] },
+            status: { $in: ['received', 'partial', 'ordered'] },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalDebt: { $sum: '$balance' },
+          },
+        },
+      ]),
     ]);
     
     // Calculate changes
@@ -209,6 +224,7 @@ export async function GET(request: NextRequest) {
         totalCustomers,
         totalSuppliers,
         pendingPurchases: totalPurchases,
+        supplierDebt: supplierDebt[0]?.totalDebt || 0,
       },
       bestSellers,
       lowStockProducts,

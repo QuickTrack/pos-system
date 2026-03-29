@@ -379,8 +379,12 @@ export async function POST(request: NextRequest) {
     
     // Update product stock using base unit quantity
     for (const item of items) {
-      await Product.findByIdAndUpdate(item.product, {
-        $inc: { stockQuantity: -item.baseQuantity },
+      const productId = item.product;
+      const baseQty = item.baseQuantity;
+      
+      // Deduct from shopStock (primary location)
+      await Product.findByIdAndUpdate(productId, {
+        $inc: { stockQuantity: -baseQty, shopStock: -baseQty },
       });
     }
     

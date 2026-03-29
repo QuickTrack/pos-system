@@ -20,6 +20,17 @@ Implemented complete multi-user authentication system:
 
 ## Recently Completed
 
+- [x] Production-Ready Installer Package
+  - Created Windows installer script (install.ps1) with automated dependency detection and installation
+  - Created Linux/Mac installer script (install.sh) with automated dependency detection and installation
+  - Created comprehensive installation guide (INSTALL.md) with step-by-step instructions
+  - Created verification scripts (verify.ps1, verify.sh) for post-installation validation
+  - Installers detect and install: Node.js, Bun, MongoDB, project dependencies
+  - Automated environment configuration (.env.local creation)
+  - Database seeding option
+  - Startup script generation (start-dev.ps1/sh, start-prod.ps1/sh)
+  - System prerequisite checks (disk space, RAM, OS version)
+  - Cross-platform support (Windows, macOS, Linux)
 - [x] Base Next.js 16 setup with App Router
 - [x] TypeScript configuration with strict mode
 - [x] Tailwind CSS 4 integration
@@ -332,6 +343,22 @@ Implemented complete multi-user authentication system:
 - [x] Receipt Sale Return Label
   - Modified receipt generator to display "SALE RETURN" instead of "RECEIPT" for refund transactions
   - Distinguishes between regular sales and returns in printed receipts
+- [x] Unit Conversion Logic for Stock Deduction
+  - Fixed stock deduction to use base unit quantity based on conversion rate
+  - When selling products with multiple units (e.g., Pack, Carton), system now calculates correct stock deduction
+  - Example: If 1 Carton = 50 Packs, selling 1 Carton deducts 50 Packs from stock, not 1
+  - Added unitAbbreviation and conversionToBase fields to POS and Create Invoice requests
+  - Sales API calculates baseQuantity = quantity * conversionToBase
+  - Customer Invoice API calculates baseQuantity similarly
+  - Both APIs now deduct from stockQuantity and shopStock fields
+  - Updated CustomerInvoice model with baseQuantity, unitAbbreviation, and conversionToBase fields
+- [x] Supplier Invoice Reception with Unit Conversion
+  - Added unit conversion support to Purchase model (unitName, unitAbbreviation, conversionToBase)
+  - Purchase receive API now calculates baseQuantity = receivedQuantity * conversionToBase
+  - Stock is updated using base unit quantity for accurate inventory tracking
+  - Supplier totalPurchases updated when receiving invoices (accumulates invoice total)
+  - Supplier balance updated when payments are recorded
+  - Added supplierDebt to dashboard API for "Total Amount Owed to Suppliers" statistic
 - [x] POS Customer Creation
   - Added "Create New Customer" button that appears when no customers found
   - Created Add Customer modal with form (name, phone, email, address, type, category)
@@ -374,8 +401,90 @@ Implemented complete multi-user authentication system:
   - Added "Skip onboarding setup" link on login page
   - Added Skip All button on onboarding page after step 0
   - Added Back button always visible
+  - Added onboarding link in Settings page Security tab
   - Clicking sets localStorage onboarding-complete to true
   - Redirects directly to dashboard bypassing onboarding wizard
+- [x] Receive Order Modal Unit Column
+  - Added dedicated "Unit" column to items table in receive order modal
+  - Displays measurement unit for each item (e.g., pcs, kg, liters)
+  - Added unitName and unitAbbreviation fields to PurchaseItem interface
+  - Unit information automatically populated from purchase order data
+  - Improves clarity and inventory tracking for received items
+- [x] Supplier Invoices Management Module
+  - Created SupplierInvoice model with full schema (items, payments, status tracking)
+  - Created supplier invoices API routes (GET, POST, payment recording)
+  - Created supplier invoices page with comprehensive UI
+  - Features: invoice creation, payment tracking, status management, print support
+  - Added Supplier Invoices to sidebar navigation
+  - Supports multiple payment methods (cash, bank transfer, M-Pesa, cheque, card)
+  - Invoice statuses: draft, pending approval, approved, partially paid, paid, overdue
+  - Integrated with inventory and supplier management
+- [x] Supplier Invoices Bug Fix - Existing Supplier Recognition
+  - Fixed issue where loading a pending order showed "Add new supplier" for existing suppliers
+  - Added fetchSuppliers() call in handleSelectPurchaseOrder before opening modal
+  - Ensures suppliers list is loaded before supplier name matching occurs
+- [x] Focus-Based Dropdown Closure for Search Components
+  - Added onBlur handlers to all search inputs in supplier-invoices and purchases pages
+  - Product search inputs now close dropdown on blur with 200ms delay
+  - Purchase order search input now closes dropdown on blur with 200ms delay
+  - Added onMouseDown={(e) => e.preventDefault()} to all dropdown items
+  - Prevents blur event from firing before click event on dropdown items
+  - Updated dropdown rendering to use showProductDropdown and showPoDropdown states
+  - Consistent behavior across supplier search, product search, and purchase order search
+- [x] Create Supplier Invoice Layout Reorganization
+  - Moved Invoice Details section above the items table on the right side
+  - Created side-by-side grid layout for Product Search (left) and Invoice Details (right)
+  - Uses responsive grid: single column on mobile, two columns on large screens (lg:grid-cols-2)
+  - Items table now appears below the top section
+- [x] Auto-Set Due Date for Supplier Invoices
+  - Added useEffect to automatically set due date to 30 days after invoice date
+  - When invoice date changes, due date is automatically calculated and updated
+  - Uses formData.invoiceDate as dependency to trigger updates
+- [x] Supplier Invoices Bug Fix - Existing Supplier Recognition
+  - Fixed issue where loading a pending order showed "Add new supplier" for existing suppliers
+  - Root cause: handleSelectPurchaseOrder was not awaiting fetchSuppliers() before opening modal
+  - Suppliers list was not loaded when modal opened, causing supplier name matching to fail
+  - Fixed by making handleSelectPurchaseOrder async and awaiting fetchSuppliers() call
+  - Modal now opens only after suppliers list is fully loaded
+  - Supplier name matching now works correctly for existing suppliers
+- [x] Supplier Payments Invoice Selection Modal Bug Fix
+  - Fixed function name mismatch in InvoiceSelectionModal component integration
+  - Changed `handleInvoiceSelect` to `handleInvoiceSelection` in supplier-payments page
+  - Modal now correctly calls the invoice selection handler when invoices are selected
+  - Fixed API endpoint mismatch - modal was fetching from `/api/supplier-invoices` but should use `/api/purchases/supplier-invoices`
+  - Added data transformation to convert purchase order data to Invoice interface format
+  - TypeScript typecheck passed with no errors
+- [x] Supplier Payment Modal Enhancements
+  - Set default payment date to today's date
+  - Added 'Cheque' as new payment mode option
+  - Made 'Cheque' the pre-selected default payment mode when modal loads
+  - Added conditional input fields for Cheque payment mode (cheque number, bank name, bank branch)
+  - Added conditional input field for M-Pesa payment mode (M-Pesa transaction ID)
+  - Updated SupplierPayment model with new fields: chequeNumber, bankName, bankBranch, mpesaTransactionId
+  - Updated supplier-payments API to handle new fields
+  - Updated supplier-invoices API to automatically update invoice status to 'paid' when payment is recorded
+  - Supplier balance is automatically recalculated and updated when payment is recorded
+- [x] Invoice Selection Modal Data Fix
+  - Fixed InvoiceSelectionModal to fetch from `/api/supplier-invoices` instead of `/api/purchases/supplier-invoices`
+  - Invoice details (including items) now match what's shown in main Supplier Invoices modal
+  - Added status filter to only show unpaid/partially paid invoices
+  - Invoice data transformation now properly includes items array
+- [x] Supplier Invoice Status Default Fix
+  - Changed default status from 'draft' to 'unpaid' when creating new supplier invoices
+  - Ensures invoices are properly marked as unpaid until payment is recorded
+  - Added 'unpaid' to SupplierInvoice model status enum
+  - Fixed frontend SupplierInvoice interface to include 'unpaid' in status type
+  - Added 'unpaid' status to getStatusBadge function with orange styling
+  - Added 'Unpaid' option to status filter dropdown
+  - Fixed unescaped entities lint error in supplier-invoices page
+  - Fixed InvoiceSelectionModal to include 'unpaid' in status filter
+  - Added 'unpaid' option to status filter dropdown in InvoiceSelectionModal
+  - Added 'unpaid' to getStatusBadge function in InvoiceSelectionModal
+- [x] Invoice Selection Modal API Fix
+  - Fixed InvoiceSelectionModal to fetch from correct API endpoint
+  - API now handles comma-separated status values using MongoDB $in operator
+  - Modal sends status filter: 'unpaid,pending_approval,approved,partially_paid,overdue'
+  - API correctly parses comma-separated values and queries database
 
 ## Current Structure
 
@@ -501,6 +610,9 @@ const result = await printEngine.print({
 | 2026-03-22 | Added license downgrade, suspend, and restore actions |
 | 2026-03-24 | Implemented multi-user authentication with session management - Session model, Sessions API, concurrent session limits, automatic activity logging for login/logout/sales/products, session management UI in Settings |
 | 2026-03-23 | Added manual quantity editing in cart sections with keyboard navigation |
+| 2026-03-28 | Fixed supplier invoices API to use user-entered invoice number instead of auto-generating one |
+| 2026-03-28 | Implemented full editing functionality for Supplier Invoices - PUT API endpoint, edit button, modal repurposing, pre-filled data |
+| 2026-03-29 | Fixed InvoiceSelectionModal API - added comma-separated status filter support using MongoDB $in operator |
 
 ## Notes
 

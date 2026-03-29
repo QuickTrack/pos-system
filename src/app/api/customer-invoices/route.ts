@@ -278,11 +278,15 @@ export async function POST(request: NextRequest) {
         sku: item.sku,
         quantity: item.quantity,
         unitName: item.unitName,
+        unitAbbreviation: item.unitAbbreviation,
+        conversionToBase: item.conversionToBase || 1,
         unitPrice: item.unitPrice,
         discount: item.discount,
         discountType: item.discountType,
         tax: itemTax,
         total: itemTotal,
+        // Base unit quantity for inventory tracking
+        baseQuantity: item.quantity * (item.conversionToBase || 1),
       };
     });
     
@@ -375,6 +379,18 @@ export async function POST(request: NextRequest) {
       terms: data.terms,
       includeInPrice,
     });
+
+    // Update product stock using base unit quantity
+    for (const item of items) {
+      const productId = item.product;
+      const baseQty = item.baseQuantity;
+      if (baseQty && baseQty > 0) {
+        // Deduct from shopStock (primary location)
+        await Product.findByIdAndUpdate(productId, {
+          $inc: { stockQuantity: -baseQty, shopStock: -baseQty },
+        });
+      }
+    }
 
     // Note: Do NOT update creditBalance here
     // Invoice represents debt (money customer owes), not store credit

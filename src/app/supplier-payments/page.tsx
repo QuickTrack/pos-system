@@ -9,6 +9,7 @@ import { Modal } from '@/components/ui/Modal';
 import { DataTable } from '@/components/ui/DataTable';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Plus, Search, RefreshCw, Eye, DollarSign, FileText, CheckCircle } from 'lucide-react';
+import { InvoiceSelectionModal } from '@/components/supplier/InvoiceSelectionModal';
 
 interface Supplier {
   _id: string;
@@ -55,17 +56,25 @@ export default function SupplierPaymentsPage() {
   const [endDate, setEndDate] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showInvoiceSelectionModal, setShowInvoiceSelectionModal] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<SupplierPayment | null>(null);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [supplierInvoices, setSupplierInvoices] = useState<SupplierInvoices[]>([]);
   const [selectedInvoices, setSelectedInvoices] = useState<string[]>([]);
+  const [selectedInvoiceDetails, setSelectedInvoiceDetails] = useState<any[]>([]);
   
   const [formData, setFormData] = useState({
     supplierId: '',
     amount: 0,
-    paymentDate: '',
-    paymentMethod: 'cash',
+    paymentDate: new Date().toISOString().split('T')[0],
+    paymentMethod: 'cheque',
     notes: '',
+    // Cheque fields
+    chequeNumber: '',
+    bankName: '',
+    bankBranch: '',
+    // M-Pesa fields
+    mpesaTransactionId: '',
   });
 
   useEffect(() => {
@@ -119,6 +128,12 @@ export default function SupplierPaymentsPage() {
     setSelectedInvoices(supplierData?.invoices.map(i => i.orderNumber) || []);
   };
 
+  const handleInvoiceSelection = (invoices: any[], totalAmount: number) => {
+    setSelectedInvoiceDetails(invoices);
+    setSelectedInvoices(invoices.map(inv => inv.invoiceNumber));
+    setFormData({ ...formData, amount: totalAmount });
+  };
+
   const toggleInvoice = (orderNumber: string) => {
     setSelectedInvoices(prev => 
       prev.includes(orderNumber) 
@@ -146,9 +161,13 @@ export default function SupplierPaymentsPage() {
         setFormData({
           supplierId: '',
           amount: 0,
-          paymentDate: '',
-          paymentMethod: 'cash',
+          paymentDate: new Date().toISOString().split('T')[0],
+          paymentMethod: 'cheque',
           notes: '',
+          chequeNumber: '',
+          bankName: '',
+          bankBranch: '',
+          mpesaTransactionId: '',
         });
       }
     } catch (error) {
@@ -422,6 +441,7 @@ export default function SupplierPaymentsPage() {
                 value={formData.paymentMethod}
                 onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
                 options={[
+                  { value: 'cheque', label: 'Cheque' },
                   { value: 'cash', label: 'Cash' },
                   { value: 'mpesa', label: 'M-Pesa' },
                   { value: 'card', label: 'Card' },
@@ -432,39 +452,103 @@ export default function SupplierPaymentsPage() {
             </div>
           </div>
 
-          {/* Pending Invoices Selection */}
-          {selectedSupplierData && selectedSupplierData.invoices.length > 0 && (
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <h3 className="font-medium text-gray-900 mb-2">Pending Invoices</h3>
-              <p className="text-sm text-gray-500 mb-3">
-                Outstanding: {formatCurrency(selectedSupplierData.totalOutstanding)}
-              </p>
-              <div className="space-y-2 max-h-48 overflow-auto">
-                {selectedSupplierData.invoices.map((invoice) => (
-                  <label
-                    key={invoice.orderNumber}
-                    className="flex items-center justify-between p-2 bg-white rounded border border-gray-200 cursor-pointer hover:border-emerald-500"
-                  >
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={selectedInvoices.includes(invoice.orderNumber)}
-                        onChange={() => toggleInvoice(invoice.orderNumber)}
-                        className="rounded text-emerald-600"
-                      />
-                      <span className="text-sm font-medium">{invoice.orderNumber}</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-sm font-medium">{formatCurrency(invoice.balance)}</span>
-                      <span className={`text-xs ml-2 capitalize ${invoice.paymentStatus === 'unpaid' ? 'text-red-500' : 'text-amber-500'}`}>
-                        {invoice.paymentStatus}
-                      </span>
-                    </div>
-                  </label>
-                ))}
+          {/* Cheque Fields */}
+          {formData.paymentMethod === 'cheque' && (
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Input
+                  label="Cheque Number"
+                  value={formData.chequeNumber}
+                  onChange={(e) => setFormData({ ...formData, chequeNumber: e.target.value })}
+                  placeholder="Enter cheque number"
+                  required
+                />
+              </div>
+              <div>
+                <Input
+                  label="Bank Name"
+                  value={formData.bankName}
+                  onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
+                  placeholder="Enter bank name"
+                  required
+                />
+              </div>
+              <div>
+                <Input
+                  label="Bank Branch"
+                  value={formData.bankBranch}
+                  onChange={(e) => setFormData({ ...formData, bankBranch: e.target.value })}
+                  placeholder="Enter bank branch"
+                  required
+                />
               </div>
             </div>
           )}
+
+          {/* M-Pesa Fields */}
+          {formData.paymentMethod === 'mpesa' && (
+            <div>
+              <Input
+                label="M-Pesa Transaction ID"
+                value={formData.mpesaTransactionId}
+                onChange={(e) => setFormData({ ...formData, mpesaTransactionId: e.target.value })}
+                placeholder="Enter M-Pesa transaction ID"
+                required
+              />
+            </div>
+          )}
+
+          {/* Invoice Selection */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-medium text-gray-900">Invoices for Payment</h3>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowInvoiceSelectionModal(true)}
+                disabled={!formData.supplierId}
+              >
+                Select Invoices
+              </Button>
+            </div>
+            
+            {selectedInvoiceDetails.length > 0 ? (
+              <div className="space-y-2">
+                {selectedInvoiceDetails.map((invoice) => (
+                  <div
+                    key={invoice._id}
+                    className="flex items-center justify-between p-3 bg-white rounded border border-gray-200"
+                  >
+                    <div>
+                      <p className="font-medium">{invoice.invoiceNumber}</p>
+                      <p className="text-sm text-gray-500">
+                        {formatDate(invoice.invoiceDate)} • Due: {formatDate(invoice.dueDate)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium">{formatCurrency(invoice.balance)}</p>
+                      <p className="text-xs text-gray-400">
+                        {invoice.items?.length || 0} item(s)
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                  <span className="text-sm text-gray-600">Total Selected:</span>
+                  <span className="font-bold text-emerald-600">
+                    {formatCurrency(selectedInvoiceDetails.reduce((sum, inv) => sum + inv.balance, 0))}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 text-center py-4">
+                {formData.supplierId 
+                  ? 'Click "Select Invoices" to choose invoices for payment'
+                  : 'Select a supplier first'}
+              </p>
+            )}
+          </div>
 
           <Input
             label="Notes"
@@ -556,6 +640,15 @@ export default function SupplierPaymentsPage() {
           </div>
         )}
       </Modal>
+
+      {/* Invoice Selection Modal */}
+      <InvoiceSelectionModal
+        isOpen={showInvoiceSelectionModal}
+        onClose={() => setShowInvoiceSelectionModal(false)}
+        onSelect={handleInvoiceSelection}
+        supplierId={formData.supplierId}
+        supplierName={suppliers.find(s => s._id === formData.supplierId)?.name}
+      />
     </div>
   );
 }

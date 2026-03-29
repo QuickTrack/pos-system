@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/mongodb';
 import Purchase from '@/models/Purchase';
 import Product from '@/models/Product';
+import Supplier from '@/models/Supplier';
 import { StockAudit, User } from '@/models';
 import { getAuthUser } from '@/lib/auth-server';
 import '@/models';
@@ -59,6 +60,10 @@ export async function POST(
         unitCost: item.unitCost,
         total: item.quantity * item.unitCost,
         receivedQuantity: item.quantity,
+        // Store unit info for stock conversion
+        unitName: item.unitName,
+        unitAbbreviation: item.unitAbbreviation,
+        conversionToBase: item.conversionToBase || 1,
       }));
       
       subtotal = updatedItems.reduce((sum: number, item: any) => sum + item.total, 0);
@@ -85,26 +90,37 @@ export async function POST(
     purchase.balance = balance;
     purchase.status = 'received';
     purchase.paymentStatus = balance === 0 ? 'paid' : purchase.paymentStatus;
+    purchase.receivedDate = new Date();
+    
+    // Save supplier invoice number if provided
+    if (body.supplierInvoiceNumber) {
+      purchase.supplierInvoiceNumber = body.supplierInvoiceNumber;
+    }
     
     await purchase.save();
     
     // Update product stock for each received item - at specified location
+    // Also update supplier's totalPurchases
     for (const item of updatedItems) {
       const product = await Product.findById(item.product);
       if (product) {
         // Get quantity before
         const quantityBefore = location === 'shop' ? product.shopStock : product.remoteStock;
         
-        // Update stock at the specified location
+        // Calculate base unit quantity using conversionToBase
+        const conversionToBase = item.conversionToBase || 1;
+        const baseQuantity = item.receivedQuantity * conversionToBase;
+        
+        // Update stock at the specified location (using base unit quantity)
         const updateField = location === 'shop' ? 'shopStock' : 'remoteStock';
         await Product.findByIdAndUpdate(
           item.product,
-          { $inc: { [updateField]: item.receivedQuantity, stockQuantity: item.receivedQuantity } },
+          { $inc: { [updateField]: baseQuantity, stockQuantity: baseQuantity } },
           { new: true }
         );
         
         // Get quantity after
-        const quantityAfter = quantityBefore + item.receivedQuantity;
+        const quantityAfter = quantityBefore + baseQuantity;
         
         // Create audit log for the purchase receipt
         await StockAudit.create({
@@ -112,7 +128,7 @@ export async function POST(
           productName: product.name,
           productSku: product.sku,
           movementType: 'purchase',
-          quantity: item.receivedQuantity,
+          quantity: baseQuantity,
           quantityBefore,
           quantityAfter,
           location,
@@ -126,6 +142,13 @@ export async function POST(
           notes: `Received from purchase ${purchase.orderNumber} at ${location}`,
         });
       }
+    }
+    
+    // Update supplier's totalPurchases with the received total
+    if (purchase.supplier) {
+      await Supplier.findByIdAndUpdate(purchase.supplier, {
+        $inc: { totalPurchases: total, balance: total },
+      });
     }
     
     return NextResponse.json({

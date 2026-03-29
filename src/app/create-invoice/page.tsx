@@ -55,6 +55,8 @@ interface Product {
 interface UnitOption {
   name: string;
   price: number;
+  abbreviation?: string;
+  conversionToBase?: number;
 }
 
 interface InvoiceItem {
@@ -64,6 +66,8 @@ interface InvoiceItem {
   quantity: number;
   unitPrice: number;
   unitName: string;
+  unitAbbreviation?: string;
+  conversionToBase?: number;
   discount: number;
   discountType: 'fixed' | 'percentage';
   total: number;
@@ -338,6 +342,8 @@ export default function CreateInvoicePage() {
     } else {
       const unitPrice = unitToUse?.price || product.retailPrice;
       const unitName = unitToUse?.name || product.baseUnit || 'unit';
+      const unitAbbreviation = unitToUse?.abbreviation || '';
+      const conversionToBase = unitToUse?.conversionToBase || 1;
       
       const newItem: InvoiceItem = {
         productId: product._id,
@@ -346,6 +352,8 @@ export default function CreateInvoicePage() {
         quantity: 1,
         unitPrice,
         unitName,
+        unitAbbreviation,
+        conversionToBase,
         discount: 0,
         discountType: 'fixed',
         total: unitPrice
@@ -498,6 +506,8 @@ export default function CreateInvoicePage() {
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       unitName: item.unitName,
+      unitAbbreviation: item.unitAbbreviation,
+      conversionToBase: item.conversionToBase,
       discount: item.discount || 0,
       discountType: item.discountType || 'fixed',
       total: item.total,

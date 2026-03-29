@@ -9,6 +9,10 @@ export interface IPurchaseItem {
   total: number;
   receivedQuantity: number;
   expiryDate?: Date;
+  // Unit info for stock conversion
+  unitName?: string;
+  unitAbbreviation?: string;
+  conversionToBase?: number;
 }
 
 export interface IPurchase extends Document {
@@ -17,6 +21,7 @@ export interface IPurchase extends Document {
   // Supplier
   supplier: mongoose.Types.ObjectId;
   supplierName: string;
+  supplierInvoiceNumber?: string;
   
   // Branch
   branch: mongoose.Types.ObjectId;
@@ -66,6 +71,10 @@ const PurchaseItemSchema = new Schema<IPurchaseItem>(
     total: { type: Number, required: true },
     receivedQuantity: { type: Number, default: 0 },
     expiryDate: { type: Date },
+    // Unit info for stock conversion
+    unitName: { type: String },
+    unitAbbreviation: { type: String },
+    conversionToBase: { type: Number, default: 1 },
   },
   { _id: false }
 );
@@ -77,6 +86,7 @@ const PurchaseSchema = new Schema<IPurchase>(
     // Supplier
     supplier: { type: Schema.Types.ObjectId, ref: 'Supplier', required: true },
     supplierName: { type: String, required: true },
+    supplierInvoiceNumber: { type: String },
     
     // Branch
     branch: { type: Schema.Types.ObjectId, ref: 'Branch', required: false },

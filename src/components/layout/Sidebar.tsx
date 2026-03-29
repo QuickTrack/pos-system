@@ -99,10 +99,16 @@ const menuItems = [
     permission: 'manage_sales',
   },
   { 
-    label: 'New Invoice', 
+    label: 'Customer Invoices', 
     href: '/create-invoice', 
     icon: FilePlus,
     permission: 'manage_sales',
+  },
+  { 
+    label: 'Supplier Invoices', 
+    href: '/supplier-invoices', 
+    icon: FileText,
+    permission: 'manage_purchases',
   },
   { 
     label: 'Reports', 

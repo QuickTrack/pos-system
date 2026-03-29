@@ -80,6 +80,9 @@ export async function POST(request: NextRequest) {
       total: item.quantity * item.unitCost,
       receivedQuantity: 0,
       expiryDate: item.expiryDate,
+      unitName: item.unit || item.productDetails?.baseUnit || 'pcs',
+      unitAbbreviation: item.unit || item.productDetails?.baseUnit || 'pcs',
+      conversionToBase: item.conversionToBase || 1,
     }));
     
     const subtotal = items.reduce((sum: number, item: any) => sum + item.total, 0);

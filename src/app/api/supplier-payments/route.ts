@@ -3,6 +3,7 @@ import dbConnect from '@/lib/db/mongodb';
 import SupplierPayment from '@/models/SupplierPayment';
 import Purchase from '@/models/Purchase';
 import Supplier from '@/models/Supplier';
+import SupplierInvoice from '@/models/SupplierInvoice';
 import '@/models';
 
 export async function GET(request: NextRequest) {
@@ -76,9 +77,10 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // If invoice numbers provided, update related purchases
+    // If invoice numbers provided, update related purchases and supplier invoices
     if (data.invoiceNumbers && data.invoiceNumbers.length > 0) {
       for (const orderNumber of data.invoiceNumbers) {
+        // Update Purchase model
         await Purchase.findOneAndUpdate(
           { orderNumber },
           { 
@@ -86,6 +88,18 @@ export async function POST(request: NextRequest) {
             $set: {
               balance: 0,
               paymentStatus: 'paid'
+            }
+          }
+        );
+        
+        // Update SupplierInvoice model
+        await SupplierInvoice.findOneAndUpdate(
+          { invoiceNumber: orderNumber },
+          { 
+            $inc: { amountPaid: data.amount },
+            $set: {
+              balance: 0,
+              status: 'paid'
             }
           }
         );
@@ -97,10 +111,21 @@ export async function POST(request: NextRequest) {
       supplierName: supplier.name,
       amount: data.amount,
       paymentDate: data.paymentDate || new Date(),
-      paymentMethod: data.paymentMethod || 'cash',
+      paymentMethod: data.paymentMethod || 'cheque',
       invoiceNumbers: data.invoiceNumbers || [],
       status: data.invoiceNumbers?.length > 0 ? 'paid' : 'pending',
       notes: data.notes,
+      // Cheque fields
+      chequeNumber: data.chequeNumber,
+      bankName: data.bankName,
+      bankBranch: data.bankBranch,
+      // M-Pesa fields
+      mpesaTransactionId: data.mpesaTransactionId,
+    });
+    
+    // Update supplier's balance (reduce the amount owed)
+    await Supplier.findByIdAndUpdate(data.supplier, {
+      $inc: { balance: -data.amount },
     });
     
     return NextResponse.json({

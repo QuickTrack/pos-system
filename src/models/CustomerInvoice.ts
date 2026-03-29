@@ -6,11 +6,15 @@ export interface IInvoiceItem {
   sku: string;
   quantity: number;
   unitName: string;
+  unitAbbreviation?: string;
+  conversionToBase?: number;
   unitPrice: number;
   discount: number;
   discountType?: 'percentage' | 'fixed';
   tax: number;
   total: number;
+  // Base unit quantity for inventory tracking
+  baseQuantity?: number;
 }
 
 export interface IInvoicePayment {
@@ -84,11 +88,15 @@ const InvoiceItemSchema = new Schema<IInvoiceItem>({
   sku: { type: String, required: true },
   quantity: { type: Number, required: true },
   unitName: { type: String, required: true },
+  unitAbbreviation: { type: String },
+  conversionToBase: { type: Number, default: 1 },
   unitPrice: { type: Number, required: true },
   discount: { type: Number, default: 0 },
   discountType: { type: String, enum: ['percentage', 'fixed'] },
   tax: { type: Number, default: 0 },
   total: { type: Number, required: true },
+  // Base unit quantity for inventory tracking
+  baseQuantity: { type: Number },
 }, { _id: false });
 
 const InvoicePaymentSchema = new Schema<IInvoicePayment>({
