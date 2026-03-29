@@ -489,6 +489,9 @@ Implemented complete multi-user authentication system:
   - Fixed /api/supplier-payments to accept both 'supplier' and 'supplierId' field names
   - Frontend sends 'supplierId' but API was expecting 'supplier'
   - Resolves issue where Record Payment button was not working
+- [x] Disable Edit for Paid Invoices
+  - Added disabled prop to edit button when invoice status is 'paid'
+  - Prevents editing of invoices that have been fully paid
 
 ## Current Structure
 
@@ -618,6 +621,7 @@ const result = await printEngine.print({
 | 2026-03-28 | Implemented full editing functionality for Supplier Invoices - PUT API endpoint, edit button, modal repurposing, pre-filled data |
 | 2026-03-29 | Fixed InvoiceSelectionModal API - added comma-separated status filter support using MongoDB $in operator |
 | 2026-03-29 | Fixed supplier payments API to accept both supplier and supplierId fields |
+| 2026-03-29 | Disabled edit button for paid invoices in supplier-invoices page |
 
 ## Notes
 
