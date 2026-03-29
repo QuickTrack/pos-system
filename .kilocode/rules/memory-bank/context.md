@@ -503,6 +503,13 @@ Implemented complete multi-user authentication system:
   - Added MenuGroupItem component for collapsible sections
   - Groups auto-expand when containing active page
   - Single-item groups render directly without collapse
+- [x] Clear All System Data Button
+  - Created /api/settings/clear-data endpoint with super admin authorization
+  - Added multi-step confirmation modal with warning about irreversible action
+  - Button only visible to super_admin users in Settings > Security tab
+  - Requires typing 'DELETE ALL DATA' to confirm
+  - Preserves User, Branch, Settings, License, and Session models
+  - Forces full application reload on success
 
 ## Current Structure
 
@@ -634,6 +641,7 @@ const result = await printEngine.print({
 | 2026-03-29 | Fixed supplier payments API to accept both supplier and supplierId fields |
 | 2026-03-29 | Disabled edit button for paid invoices in supplier-invoices page |
 | 2026-03-29 | Reorganized sidebar menu with logical categories (Sales, Purchases, Inventory, Parties, Reports, Administration) |
+| 2026-03-29 | Added Clear All System Data button for super admins with multi-step confirmation |
 
 ## Notes
 
