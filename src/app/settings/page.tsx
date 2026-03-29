@@ -7,7 +7,9 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
-import { Save, Building2, Receipt, Bell, Shield, Palette, Calendar, Monitor, Smartphone, Globe, X, Trash2, RefreshCw, Settings2 } from 'lucide-react';
+import { Save, Building2, Receipt, Bell, Shield, Palette, Calendar, Monitor, Smartphone, Globe, X, Trash2, RefreshCw, Settings2, AlertTriangle } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
+import { isSuperAdmin } from '@/lib/auth';
 
 interface Settings {
   business: {
@@ -56,6 +58,7 @@ const TABS = [
 ];
 
 export default function SettingsPage() {
+  const { user } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('business');
   const [loading, setLoading] = useState(true);
@@ -67,6 +70,13 @@ export default function SettingsPage() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionsError, setSessionsError] = useState('');
+  
+  // Clear system data state
+  const [clearDataModalOpen, setClearDataModalOpen] = useState(false);
+  const [clearDataStep, setClearDataStep] = useState(1);
+  const [clearDataConfirmation, setClearDataConfirmation] = useState('');
+  const [clearDataLoading, setClearDataLoading] = useState(false);
+  const [clearDataError, setClearDataError] = useState('');
   
   const [settings, setSettings] = useState<Settings>({
     business: {
@@ -296,6 +306,45 @@ export default function SettingsPage() {
   const handleRunOnboarding = () => {
     localStorage.removeItem('onboarding-complete');
     router.push('/onboarding');
+  };
+
+  const handleClearSystemData = async () => {
+    if (clearDataConfirmation !== 'DELETE ALL DATA') {
+      setClearDataError('Please type "DELETE ALL DATA" to confirm');
+      return;
+    }
+
+    setClearDataLoading(true);
+    setClearDataError('');
+
+    try {
+      const response = await fetch('/api/settings/clear-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmationText: clearDataConfirmation }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Success - reload the application
+        window.location.reload();
+      } else {
+        setClearDataError(data.error || 'Failed to clear system data');
+      }
+    } catch (error) {
+      setClearDataError('Failed to clear system data. Please try again.');
+      console.error('Clear system data error:', error);
+    } finally {
+      setClearDataLoading(false);
+    }
+  };
+
+  const resetClearDataModal = () => {
+    setClearDataModalOpen(false);
+    setClearDataStep(1);
+    setClearDataConfirmation('');
+    setClearDataError('');
   };
 
   const updateBusinessField = (field: string, value: string) => {
@@ -757,6 +806,24 @@ export default function SettingsPage() {
                       Run Setup Wizard
                     </Button>
                   </div>
+
+                  {isSuperAdmin(user?.role as any) && (
+                    <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                      <h3 className="font-medium text-red-900 mb-2">Clear All System Data</h3>
+                      <p className="text-sm text-red-700 mb-4">
+                        Permanently delete all data from the database. This action cannot be undone.
+                      </p>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setClearDataModalOpen(true)}
+                        className="border-red-300 text-red-700 hover:bg-red-100"
+                      >
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        Clear All Data
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -904,6 +971,81 @@ export default function SettingsPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Clear System Data Modal */}
+      <Modal isOpen={clearDataModalOpen} onClose={resetClearDataModal} title="Clear All System Data" size="lg">
+        <div className="space-y-6">
+          {clearDataStep === 1 && (
+            <div className="space-y-4">
+              <div className="flex items-start gap-3 p-4 bg-red-50 rounded-lg border border-red-200">
+                <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-medium text-red-900">Warning: This action is irreversible</h3>
+                  <p className="text-sm text-red-700 mt-1">
+                    This will permanently delete ALL data from the database including:
+                  </p>
+                  <ul className="text-sm text-red-700 mt-2 list-disc list-inside">
+                    <li>All sales and transactions</li>
+                    <li>All products and inventory</li>
+                    <li>All customers and suppliers</li>
+                    <li>All invoices and payments</li>
+                    <li>All purchase orders</li>
+                    <li>All reports and analytics data</li>
+                  </ul>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600">
+                Only user accounts, branch settings, and system configuration will be preserved.
+              </p>
+              <div className="flex justify-end gap-3">
+                <Button variant="outline" onClick={resetClearDataModal}>
+                  Cancel
+                </Button>
+                <Button 
+                  variant="primary" 
+                  onClick={() => setClearDataStep(2)}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  I Understand, Continue
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {clearDataStep === 2 && (
+            <div className="space-y-4">
+              <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                <h3 className="font-medium text-red-900 mb-2">Final Confirmation Required</h3>
+                <p className="text-sm text-red-700">
+                  To confirm this action, please type <strong>"DELETE ALL DATA"</strong> below:
+                </p>
+                <Input
+                  value={clearDataConfirmation}
+                  onChange={(e) => setClearDataConfirmation(e.target.value)}
+                  placeholder="Type DELETE ALL DATA to confirm"
+                  className="mt-3"
+                />
+                {clearDataError && (
+                  <p className="text-sm text-red-600 mt-2">{clearDataError}</p>
+                )}
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button variant="outline" onClick={() => setClearDataStep(1)}>
+                  Back
+                </Button>
+                <Button 
+                  variant="primary" 
+                  onClick={handleClearSystemData}
+                  disabled={clearDataLoading || clearDataConfirmation !== 'DELETE ALL DATA'}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  {clearDataLoading ? 'Clearing Data...' : 'Clear All Data Permanently'}
+                </Button>
+              </div>
             </div>
           )}
         </div>
