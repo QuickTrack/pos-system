@@ -485,6 +485,10 @@ Implemented complete multi-user authentication system:
   - API now handles comma-separated status values using MongoDB $in operator
   - Modal sends status filter: 'unpaid,pending_approval,approved,partially_paid,overdue'
   - API correctly parses comma-separated values and queries database
+- [x] Supplier Payments API Field Name Fix
+  - Fixed /api/supplier-payments to accept both 'supplier' and 'supplierId' field names
+  - Frontend sends 'supplierId' but API was expecting 'supplier'
+  - Resolves issue where Record Payment button was not working
 
 ## Current Structure
 
@@ -613,6 +617,7 @@ const result = await printEngine.print({
 | 2026-03-28 | Fixed supplier invoices API to use user-entered invoice number instead of auto-generating one |
 | 2026-03-28 | Implemented full editing functionality for Supplier Invoices - PUT API endpoint, edit button, modal repurposing, pre-filled data |
 | 2026-03-29 | Fixed InvoiceSelectionModal API - added comma-separated status filter support using MongoDB $in operator |
+| 2026-03-29 | Fixed supplier payments API to accept both supplier and supplierId fields |
 
 ## Notes
 

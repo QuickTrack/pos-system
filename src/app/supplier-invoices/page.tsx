@@ -585,7 +585,7 @@ export default function SupplierInvoicesPage() {
       header: 'Actions',
       render: (item: SupplierInvoice) => (
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={() => handleEditInvoice(item)}>
+          <Button variant="ghost" size="sm" onClick={() => handleEditInvoice(item)} disabled={item.status === 'paid'}>
             <Edit className="w-4 h-4" />
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setSelectedInvoice(item)}>
