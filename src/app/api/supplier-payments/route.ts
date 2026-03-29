@@ -68,8 +68,11 @@ export async function POST(request: NextRequest) {
     
     const data = await request.json();
     
+    // Accept both 'supplier' and 'supplierId' field names
+    const supplierId = data.supplier || data.supplierId;
+    
     // Validate supplier exists
-    const supplier = await Supplier.findById(data.supplier);
+    const supplier = await Supplier.findById(supplierId);
     if (!supplier) {
       return NextResponse.json(
         { error: 'Supplier not found' },
@@ -107,7 +110,7 @@ export async function POST(request: NextRequest) {
     }
     
     const payment = await SupplierPayment.create({
-      supplier: data.supplier,
+      supplier: supplierId,
       supplierName: supplier.name,
       amount: data.amount,
       paymentDate: data.paymentDate || new Date(),
@@ -124,7 +127,7 @@ export async function POST(request: NextRequest) {
     });
     
     // Update supplier's balance (reduce the amount owed)
-    await Supplier.findByIdAndUpdate(data.supplier, {
+    await Supplier.findByIdAndUpdate(supplierId, {
       $inc: { balance: -data.amount },
     });
     
