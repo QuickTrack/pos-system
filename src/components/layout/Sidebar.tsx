@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
+import { useState } from 'react';
 import { 
   LayoutDashboard, 
   ShoppingCart, 
@@ -24,129 +25,176 @@ import {
   Shield,
   FilePlus,
   Receipt,
-  Key
+  Key,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/lib/store';
 import { useAuth } from '@/lib/auth-context';
 import { hasPermission, isSuperAdmin, Role } from '@/lib/auth';
 
-const menuItems = [
-  { 
-    label: 'Dashboard', 
-    href: '/dashboard', 
+interface MenuItem {
+  label: string;
+  href: string;
+  icon: any;
+  permission: string;
+}
+
+interface MenuGroup {
+  label: string;
+  icon: any;
+  permission?: string;
+  items: MenuItem[];
+}
+
+const menuGroups: MenuGroup[] = [
+  {
+    label: 'Dashboard',
     icon: LayoutDashboard,
     permission: 'view_dashboard',
+    items: [
+      { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, permission: 'view_dashboard' },
+    ],
   },
   {
-    label: 'POS Sales',
-    href: '/pos',
+    label: 'Sales',
     icon: ShoppingCart,
     permission: 'manage_sales',
+    items: [
+      { label: 'POS Sales', href: '/pos', icon: ShoppingCart, permission: 'manage_sales' },
+      { label: 'Cash Sales', href: '/cash-sales', icon: Receipt, permission: 'manage_sales' },
+      { label: 'Customer Invoices', href: '/create-invoice', icon: FilePlus, permission: 'manage_sales' },
+      { label: 'Customer Payments', href: '/customer-payments', icon: CreditCard, permission: 'manage_sales' },
+      { label: 'Sales Returns', href: '/sales-returns', icon: FileText, permission: 'manage_sales' },
+    ],
   },
   {
-    label: 'Cash Sales',
-    href: '/cash-sales',
-    icon: Receipt,
-    permission: 'manage_sales',
-  },
-  { 
-    label: 'Inventory', 
-    href: '/inventory', 
-    icon: Package,
-    permission: 'manage_products',
-  },
-  {
-    label: 'Stock Transfers',
-    href: '/stock-transfers',
-    icon: ArrowRightLeft,
-    permission: 'manage_products',
-  },
-  { 
-    label: 'Customers', 
-    href: '/customers', 
-    icon: Users,
-    permission: 'view_customers',
-  },
-  { 
-    label: 'Suppliers', 
-    href: '/suppliers', 
-    icon: Truck,
-    permission: 'manage_suppliers',
-  },
-  { 
-    label: 'Purchases', 
-    href: '/purchases', 
+    label: 'Purchases',
     icon: ShoppingBag,
     permission: 'manage_purchases',
+    items: [
+      { label: 'Purchases', href: '/purchases', icon: ShoppingBag, permission: 'manage_purchases' },
+      { label: 'Supplier Invoices', href: '/supplier-invoices', icon: FileText, permission: 'manage_purchases' },
+      { label: 'Supplier Payments', href: '/supplier-payments', icon: DollarSign, permission: 'manage_purchases' },
+    ],
   },
-  { 
-    label: 'Supplier Payments', 
-    href: '/supplier-payments', 
-    icon: DollarSign,
-    permission: 'manage_purchases',
+  {
+    label: 'Inventory',
+    icon: Package,
+    permission: 'manage_products',
+    items: [
+      { label: 'Inventory', href: '/inventory', icon: Package, permission: 'manage_products' },
+      { label: 'Stock Transfers', href: '/stock-transfers', icon: ArrowRightLeft, permission: 'manage_products' },
+    ],
   },
-  { 
-    label: 'Customer Payments', 
-    href: '/customer-payments', 
-    icon: CreditCard,
-    permission: 'manage_sales',
+  {
+    label: 'Parties',
+    icon: Users,
+    permission: 'view_customers',
+    items: [
+      { label: 'Customers', href: '/customers', icon: Users, permission: 'view_customers' },
+      { label: 'Suppliers', href: '/suppliers', icon: Truck, permission: 'manage_suppliers' },
+    ],
   },
-  { 
-    label: 'Sales Returns', 
-    href: '/sales-returns', 
-    icon: FileText,
-    permission: 'manage_sales',
-  },
-  { 
-    label: 'Customer Invoices', 
-    href: '/create-invoice', 
-    icon: FilePlus,
-    permission: 'manage_sales',
-  },
-  { 
-    label: 'Supplier Invoices', 
-    href: '/supplier-invoices', 
-    icon: FileText,
-    permission: 'manage_purchases',
-  },
-  { 
-    label: 'Reports', 
-    href: '/reports', 
-    icon: FileText,
-    permission: 'view_reports',
-  },
-  { 
-    label: 'Analytics', 
-    href: '/analytics', 
+  {
+    label: 'Reports & Analytics',
     icon: BarChart3,
     permission: 'view_reports',
+    items: [
+      { label: 'Reports', href: '/reports', icon: FileText, permission: 'view_reports' },
+      { label: 'Analytics', href: '/analytics', icon: BarChart3, permission: 'view_reports' },
+    ],
   },
-  { 
-    label: 'Branches', 
-    href: '/branches', 
-    icon: Store,
-    permission: 'manage_branches',
-  },
-  { 
-    label: 'Users', 
-    href: '/users', 
-    icon: UserCog,
-    permission: 'manage_users',
-  },
-  { 
-    label: 'Licenses', 
-    href: '/licenses', 
-    icon: Key,
-    permission: 'super_admin',
-  },
-  { 
-    label: 'Settings', 
-    href: '/settings', 
+  {
+    label: 'Administration',
     icon: Settings,
     permission: 'manage_settings',
+    items: [
+      { label: 'Branches', href: '/branches', icon: Store, permission: 'manage_branches' },
+      { label: 'Users', href: '/users', icon: UserCog, permission: 'manage_users' },
+      { label: 'Licenses', href: '/licenses', icon: Key, permission: 'super_admin' },
+      { label: 'Settings', href: '/settings', icon: Settings, permission: 'manage_settings' },
+    ],
   },
 ];
+
+function MenuGroupItem({ group, pathname, onClose }: { group: MenuGroup; pathname: string; onClose: () => void }) {
+  const [isOpen, setIsOpen] = useState(true);
+  const hasActiveItem = group.items.some((item) => 
+    pathname === item.href || pathname.startsWith(item.href + '/')
+  );
+
+  // Auto-expand if there's an active item
+  const shouldExpand = isOpen || hasActiveItem;
+
+  // If group has only one item, render it directly without collapse
+  if (group.items.length === 1) {
+    const item = group.items[0];
+    const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+    return (
+      <li>
+        <Link
+          href={item.href}
+          className={cn(
+            "sidebar-link",
+            isActive && "active"
+          )}
+          onClick={onClose}
+        >
+          <item.icon className="w-4 h-4" />
+          <span className="text-sm">{item.label}</span>
+        </Link>
+      </li>
+    );
+  }
+
+  return (
+    <li>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={cn(
+          "w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg transition-colors",
+          hasActiveItem 
+            ? "bg-emerald-50 text-emerald-700" 
+            : "text-gray-700 hover:bg-gray-100"
+        )}
+      >
+        <div className="flex items-center gap-2">
+          <group.icon className="w-4 h-4" />
+          <span>{group.label}</span>
+        </div>
+        {shouldExpand ? (
+          <ChevronDown className="w-4 h-4" />
+        ) : (
+          <ChevronRight className="w-4 h-4" />
+        )}
+      </button>
+      {shouldExpand && (
+        <ul className="ml-4 mt-1 space-y-0.5">
+          {group.items.map((item) => {
+            const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  className={cn(
+                    "sidebar-link pl-6",
+                    isActive && "active"
+                  )}
+                  onClick={onClose}
+                >
+                  <item.icon className="w-4 h-4" />
+                  <span className="text-sm">{item.label}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </li>
+  );
+}
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -157,16 +205,20 @@ export function Sidebar() {
   const userRole = user?.role as Role;
   const isAdmin = isSuperAdmin(userRole);
 
-  // Filter menu items based on user role and permissions
+  // Filter menu groups based on user role and permissions
   // Super admin sees all menu items
-  const filteredMenuItems = menuItems.filter((item) => {
-    if (!userRole) return false;
+  const filteredMenuGroups = menuGroups.map((group) => {
+    if (!userRole) return { ...group, items: [] };
     // Super admin sees everything
     if (isSuperAdmin(userRole)) {
-      return true;
+      return group;
     }
-    return hasPermission(userRole, item.permission);
-  });
+    // Filter items within the group based on permissions
+    const filteredItems = group.items.filter((item) => 
+      hasPermission(userRole, item.permission)
+    );
+    return { ...group, items: filteredItems };
+  }).filter((group) => group.items.length > 0);
 
   const handleLogout = async () => {
     await logout();
@@ -219,25 +271,15 @@ export function Sidebar() {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-3 px-2" style={{ maxHeight: 'calc(100vh - 180px)' }}>
-          <ul className="space-y-0.5">
-            {filteredMenuItems.map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    className={cn(
-                      "sidebar-link",
-                      isActive && "active"
-                    )}
-                    onClick={() => setSidebarOpen(false)}
-                  >
-                    <item.icon className="w-4 h-4" />
-                    <span className="text-sm">{item.label}</span>
-                  </Link>
-                </li>
-              );
-            })}
+          <ul className="space-y-1">
+            {filteredMenuGroups.map((group) => (
+              <MenuGroupItem 
+                key={group.label} 
+                group={group} 
+                pathname={pathname}
+                onClose={() => setSidebarOpen(false)}
+              />
+            ))}
           </ul>
         </nav>
 
