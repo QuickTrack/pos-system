@@ -1748,9 +1748,9 @@ export default function POSPage() {
               
               {/* Quick Amount Buttons */}
               <div className="flex flex-wrap gap-1">
-                {[total, 1000, 2000, 5000, 10000].map((amt) => (
+                {[total, 1000, 2000, 5000, 10000].map((amt, idx) => (
                   <button
-                    key={amt}
+                    key={`amt-${idx}`}
                     type="button"
                     onClick={() => setAmountPaid(amt.toString())}
                     className={`px-2 py-1 text-[10px] rounded border transition-colors ${

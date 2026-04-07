@@ -10,11 +10,14 @@ export function TutorialOverlay() {
   const [highlightStyle, setHighlightStyle] = useState<React.CSSProperties>({});
 
   const currentStep = currentTutorial?.steps[currentStepIndex];
+  
+  // Derive initial style from currentStep to avoid setState in effect for initial render
+  const derivedStyle = !currentStep?.targetElement ? {} : undefined;
 
   // Update highlight position when step changes
   useEffect(() => {
+    // Skip if no target element (will use derived state)
     if (!currentStep?.targetElement) {
-      setHighlightStyle({});
       return;
     }
 

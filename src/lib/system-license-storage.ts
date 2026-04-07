@@ -220,3 +220,33 @@ export function updateLastValidated(): boolean {
     return false;
   }
 }
+
+/**
+ * Get last validated timestamp
+ */
+export function getLastValidated(): string | null {
+  try {
+    const storedLicense = loadSystemLicense();
+    return storedLicense?.lastValidated || null;
+  } catch (error) {
+    console.error('Failed to get last validated:', error);
+    return null;
+  }
+}
+
+/**
+ * Check if enough time has passed since last validation (default 24 hours)
+ */
+export function shouldRevalidate(hours: number = 24): boolean {
+  const lastValidated = getLastValidated();
+  
+  if (!lastValidated) {
+    return true; // Never validated, must validate
+  }
+  
+  const lastDate = new Date(lastValidated);
+  const now = new Date();
+  const hoursPassed = (now.getTime() - lastDate.getTime()) / (1000 * 60 * 60);
+  
+  return hoursPassed >= hours;
+}

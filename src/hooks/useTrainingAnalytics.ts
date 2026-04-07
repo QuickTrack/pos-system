@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useTraining } from '@/lib/training-context';
 import { 
   getTrainingAnalytics, 
@@ -11,15 +11,19 @@ import {
 
 export function useTrainingAnalytics() {
   const { isTrainingMode } = useTraining();
+  const analyticsEngine = getTrainingAnalytics();
+  
+  // Use refs to track engine state to avoid setState in effects
+  const engineStarted = React.useRef(false);
+
   const [analytics, setAnalytics] = useState<TrainingAnalytics | null>(null);
   const [progress, setProgress] = useState<TutorialProgress[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
 
-  const analyticsEngine = getTrainingAnalytics();
-
   useEffect(() => {
     if (isTrainingMode) {
       analyticsEngine.startSession();
+      engineStarted.current = true;
       
       // Update analytics periodically
       const interval = setInterval(() => {
@@ -33,11 +37,9 @@ export function useTrainingAnalytics() {
         clearInterval(interval);
         analyticsEngine.endSession();
       };
-    } else {
+    } else if (engineStarted.current) {
+      engineStarted.current = false;
       analyticsEngine.endSession();
-      setAnalytics(null);
-      setProgress([]);
-      setAchievements([]);
     }
   }, [isTrainingMode]);
 

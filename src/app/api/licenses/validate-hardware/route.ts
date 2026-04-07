@@ -9,6 +9,8 @@ import {
   saveSystemLicense, 
   verifyHardwareMatch,
   updateLastValidated,
+  getLastValidated,
+  shouldRevalidate,
   SystemLicenseData 
 } from '@/lib/system-license-storage';
 
@@ -47,6 +49,82 @@ export async function GET(req: NextRequest) {
     const systemLicense = loadSystemLicense();
     
     if (systemLicense) {
+      // Check if we should skip revalidation (within 24 hours)
+      if (!shouldRevalidate(24)) {
+        const lastValidated = getLastValidated();
+        // Return cached success - license still valid based on recent check
+        // Get license info from database to check status
+        const normalizedKey = systemLicense.licenseKey.toUpperCase();
+        const license = await License.findOne({ licenseKey: normalizedKey });
+        
+        if (license) {
+          const licenseData = license.toObject();
+          const expired = isLicenseExpired(licenseData.expirationDate);
+          const isLifetime = licenseData.licenseType === 'lifetime';
+          
+          // Even with cached check, we still need to verify license isn't suspended/expired
+          if (licenseData.status === 'suspended' && !isSuperAdmin) {
+            return NextResponse.json({
+              licensed: false,
+              status: 'suspended',
+              isSuperAdmin: false,
+              message: 'Your license has been suspended. Please contact support.',
+              hardwareId: currentHardwareHash,
+              cached: true,
+            }, { status: 403 });
+          }
+          
+          if (expired && !isLifetime && !isSuperAdmin) {
+            return NextResponse.json({
+              licensed: false,
+              status: 'expired',
+              expirationDate: licenseData.expirationDate,
+              isSuperAdmin: false,
+              message: 'Your license has expired. Please renew to continue using the system.',
+              renewalUrl: '/license/renew',
+              hardwareId: currentHardwareHash,
+              cached: true,
+            }, { status: 403 });
+          }
+          
+          // License is valid from recent check - return cached response
+          const daysRemaining = Math.ceil(
+            (new Date(licenseData.expirationDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+          );
+          
+          const expiringSoon = isLicenseExpiringSoon(licenseData.expirationDate, 30);
+          
+          return NextResponse.json({
+            licensed: true,
+            valid: true,
+            isSuperAdmin,
+            license: {
+              licenseKey: licenseData.licenseKey,
+              businessName: licenseData.businessName,
+              email: licenseData.email,
+              licenseType: licenseData.licenseType,
+              status: licenseData.status,
+              expirationDate: licenseData.expirationDate,
+              daysRemaining: isLifetime ? null : daysRemaining,
+              maxUsers: licenseData.maxUsers,
+              maxBranches: licenseData.maxBranches,
+              features: licenseData.features,
+            },
+            warnings: expiringSoon && !isLifetime ? [
+              {
+                type: 'expiring_soon',
+                message: `Your license expires in ${daysRemaining} days. Renew now to avoid interruption.`,
+                daysRemaining,
+              }
+            ] : [],
+            hardwareId: currentHardwareHash,
+            hardwareBound: true,
+            cached: true,
+            lastValidated,
+          });
+        }
+      }
+      
       // Verify hardware matches
       const hardwareMatch = verifyHardwareMatch(currentHardwareHash);
       

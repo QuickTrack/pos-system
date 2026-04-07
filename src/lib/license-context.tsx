@@ -40,11 +40,11 @@ interface LicenseContextType {
 
 const LicenseContext = createContext<LicenseContextType | undefined>(undefined);
 
-// Default sync interval: 30 seconds (configurable)
-const DEFAULT_SYNC_INTERVAL = 30000;
+// Default sync interval: once per day (24 hours)
+const DEFAULT_SYNC_INTERVAL = 24 * 60 * 60 * 1000;
 
-// Cache duration: 10 seconds (shorter than sync interval for real-time feel)
-const CACHE_DURATION = 10000;
+// Cache duration: same as sync interval (24 hours)
+const CACHE_DURATION = 24 * 60 * 60 * 1000;
 
 export function LicenseProvider({ children }: { children: ReactNode }) {
   const [license, setLicenseState] = useState<LicenseInfo | null>(null);
@@ -60,10 +60,16 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
     data: any;
     timestamp: number;
   } | null>(null);
+  const [isChecking, setIsChecking] = useState(false);
   const router = useRouter();
 
   const checkLicense = useCallback(async (forceRefresh = false) => {
     try {
+      // Prevent concurrent checks - only one check at a time
+      if (isChecking) {
+        return;
+      }
+      
       // Check cache first (unless force refresh is requested)
       const now = Date.now();
       if (!forceRefresh && cachedResponse && (now - cachedResponse.timestamp) < CACHE_DURATION) {
@@ -80,6 +86,9 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
           return;
         }
       }
+      
+      // Mark as checking to prevent concurrent calls
+      setIsChecking(true);
 
       const storedLicense = localStorage.getItem('pos-license');
       let licenseKey = '';
@@ -143,6 +152,7 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
       setError('Failed to validate license');
     } finally {
       setLoading(false);
+      setIsChecking(false);
     }
   }, [cachedResponse, router]);
 
@@ -164,21 +174,10 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
     setCachedResponse(null);
   }, []);
 
-  // Initial license check
+  // Initial license check on mount
   useEffect(() => {
     checkLicense();
   }, []);
-
-  // Polling mechanism for license status synchronization
-  useEffect(() => {
-    if (syncInterval <= 0) return;
-
-    const intervalId = setInterval(() => {
-      checkLicense(true); // Force refresh on interval
-    }, syncInterval);
-
-    return () => clearInterval(intervalId);
-  }, [syncInterval, checkLicense]);
 
   // Check for license changes via localStorage (cross-tab communication)
   useEffect(() => {
@@ -195,17 +194,22 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
   }, [checkLicense]);
 
   // Also check license when window gains focus (user returns to tab)
+  // Only check if enough time has passed since last check (24 hours)
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        // Check license when user returns to the tab
-        checkLicense(true);
+        // Only refresh if 24+ hours since last check
+        const lastCheck = lastChecked?.getTime() || 0;
+        const hoursSinceLastCheck = (Date.now() - lastCheck) / (1000 * 60 * 60);
+        if (hoursSinceLastCheck >= 24) {
+          checkLicense(true);
+        }
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [checkLicense]);
+  }, [checkLicense, lastChecked]);
 
   return (
     <LicenseContext.Provider value={{

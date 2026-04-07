@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useTraining } from '@/lib/training-context';
 import { 
   getSimulationEngine, 
@@ -10,17 +10,24 @@ import {
 
 export function useSimulationEngine() {
   const { isTrainingMode } = useTraining();
+  const engine = getSimulationEngine();
+  
+  // Use refs to track engine state
+  const engineStarted = useRef(false);
+
   const [activities, setActivities] = useState<SimulatedActivity[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [config, setConfig] = useState<SimulationConfig | null>(null);
 
-  const engine = getSimulationEngine();
-
   useEffect(() => {
     if (isTrainingMode) {
       engine.start();
-      setIsRunning(true);
-      setConfig(engine.getConfig());
+      engineStarted.current = true;
+      // Defer state update to next tick to avoid setState in effect body
+      queueMicrotask(() => {
+        setIsRunning(true);
+        setConfig(engine.getConfig());
+      });
       
       // Update activities periodically
       const interval = setInterval(() => {
@@ -30,12 +37,14 @@ export function useSimulationEngine() {
       return () => {
         clearInterval(interval);
         engine.stop();
-        setIsRunning(false);
+        engineStarted.current = false;
+        // Defer state update to next tick to avoid setState in effect body
+        queueMicrotask(() => setIsRunning(false));
       };
-    } else {
+    } else if (engineStarted.current) {
       engine.stop();
-      setIsRunning(false);
-      setActivities([]);
+      engineStarted.current = false;
+      queueMicrotask(() => setIsRunning(false));
     }
   }, [isTrainingMode]);
 

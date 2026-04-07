@@ -410,6 +410,7 @@ export default function SalesPage() {
           documentType="receipt"
           document={{
             includeInPrice: businessSettings?.includeInPrice || false,
+            kraPin: businessSettings?.kraPin || '',
             invoiceNumber: (selectedSale as any).receiptNumber || (selectedSale as any)._id,
             date: (selectedSale as any).createdAt,
             customer: {

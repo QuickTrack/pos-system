@@ -83,15 +83,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Super admins bypass license validation - they can access the system regardless of license status
       const isSuperAdmin = user.role === 'super_admin';
       
-      // Check license first
+      // Check license first - only check once per day
       const checkLicense = async () => {
         try {
+          // Check if we've validated within the last 24 hours
+          const lastValidated = localStorage.getItem('license-last-validated');
+          if (lastValidated) {
+            const lastDate = new Date(lastValidated);
+            const hoursSince = (Date.now() - lastDate.getTime()) / (1000 * 60 * 60);
+            if (hoursSince < 24) {
+              return; // Skip validation - done within last 24 hours
+            }
+          }
+          
           const storedLicense = localStorage.getItem('pos-license');
           
           // If super admin, skip license check entirely
           if (isSuperAdmin) {
             // Clear any license warnings for super admins
             localStorage.removeItem('license-warning');
+            localStorage.setItem('license-last-validated', new Date().toISOString());
             return;
           }
           
@@ -101,6 +112,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // Validate license with server
             const response = await fetch(`/api/licenses/validate?licenseKey=${encodeURIComponent(licenseData.licenseKey)}`);
             const data = await response.json();
+            
+            // Store validation timestamp
+            localStorage.setItem('license-last-validated', new Date().toISOString());
             
             if (!data.valid) {
               // License invalid or expired
@@ -117,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           } else {
             // No license found
+            localStorage.setItem('license-last-validated', new Date().toISOString());
             if (currentPath !== '/license/activate') {
               router.push('/license/activate');
             }

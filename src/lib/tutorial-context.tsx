@@ -400,21 +400,20 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   const [currentTutorial, setCurrentTutorial] = useState<Tutorial | null>(null);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isTutorialActive, setIsTutorialActive] = useState(false);
-  const [completedTutorials, setCompletedTutorials] = useState<string[]>([]);
-
-  // Load completed tutorials from localStorage
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    
+  
+  // Lazy initialization to avoid setState in effect
+  const [completedTutorials, setCompletedTutorials] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
     try {
       const saved = localStorage.getItem(COMPLETED_TUTORIALS_KEY);
       if (saved) {
-        setCompletedTutorials(JSON.parse(saved));
+        return JSON.parse(saved);
       }
     } catch (error) {
       console.error('Failed to load completed tutorials:', error);
     }
-  }, []);
+    return [];
+  });
 
   // Save completed tutorials to localStorage
   useEffect(() => {

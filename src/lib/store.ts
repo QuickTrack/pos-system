@@ -143,7 +143,7 @@ interface UIState {
 export const useUIStore = create<UIState>()(
   persist(
     (set) => ({
-      sidebarOpen: true,
+      sidebarOpen: false,
       darkMode: false,
       activeBranch: null,
 
@@ -183,41 +183,66 @@ export const useAuthStore = create<AuthState>()(
 );
 
 // Notification Store
-interface Notification {
+export interface Notification {
   id: string;
   type: 'success' | 'error' | 'warning' | 'info';
   message: string;
+  timestamp: number;
+  read: boolean;
+  category?: 'sale' | 'inventory' | 'customer' | 'supplier' | 'license' | 'system';
 }
 
 interface NotificationState {
   notifications: Notification[];
-  addNotification: (notification: Omit<Notification, 'id'>) => void;
+  addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => void;
   removeNotification: (id: string) => void;
+  markAsRead: (id: string) => void;
+  clearAll: () => void;
+  getUnreadCount: () => number;
 }
 
-export const useNotificationStore = create<NotificationState>()((set) => ({
-  notifications: [],
-  
-  addNotification: (notification) => {
-    const id = Math.random().toString(36).substr(2, 9);
-    set((state) => ({
-      notifications: [...state.notifications, { ...notification, id }],
-    }));
-    
-    // Auto-remove after 5 seconds
-    setTimeout(() => {
-      set((state) => ({
-        notifications: state.notifications.filter((n) => n.id !== id),
-      }));
-    }, 5000);
-  },
-  
-  removeNotification: (id) => {
-    set((state) => ({
-      notifications: state.notifications.filter((n) => n.id !== id),
-    }));
-  },
-}));
+export const useNotificationStore = create<NotificationState>()(
+  persist(
+    (set, get) => ({
+      notifications: [],
+      
+      addNotification: (notification) => {
+        const id = Math.random().toString(36).substr(2, 9);
+        set((state) => ({
+          notifications: [
+            { ...notification, id, timestamp: Date.now(), read: false },
+            ...state.notifications
+          ].slice(0, 50),
+        }));
+      },
+      
+      removeNotification: (id) => {
+        set((state) => ({
+          notifications: state.notifications.filter((n) => n.id !== id),
+        }));
+      },
+      
+      markAsRead: (id) => {
+        set((state) => ({
+          notifications: state.notifications.map((n) =>
+            n.id === id ? { ...n, read: true } : n
+          ),
+        }));
+      },
+      
+      clearAll: () => {
+        set({ notifications: [] });
+      },
+      
+      getUnreadCount: () => {
+        return get().notifications.filter((n) => !n.read).length;
+      },
+    }),
+    {
+      name: 'pos-notifications',
+    }
+  )
+);
 
 // Held Sales Store for Hold/Recall functionality
 export interface HeldSale {

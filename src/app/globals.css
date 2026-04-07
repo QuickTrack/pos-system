@@ -285,7 +285,7 @@ input[type="number"] {
   }
 }
 
-/* Dark mode support (future) */
+/* Dark mode support */
 .dark {
   --color-gray-50: #111827;
   --color-gray-100: #1f2937;
@@ -297,4 +297,55 @@ input[type="number"] {
   --color-gray-700: #e5e7eb;
   --color-gray-800: #f3f4f6;
   --color-gray-900: #f9fafb;
+  background-color: #111827;
+  color: #f3f4f6;
+}
+
+.dark body {
+  background-color: #111827;
+  color: #f3f4f6;
+}
+
+.dark .bg-white {
+  background-color: #1f2937;
+}
+
+.dark .bg-gray-50 {
+  background-color: #111827;
+}
+
+.dark .bg-gray-100 {
+  background-color: #1f2937;
+}
+
+.dark .text-gray-900 {
+  color: #f9fafb;
+}
+
+.dark .text-gray-800 {
+  color: #f3f4f6;
+}
+
+.dark .text-gray-700 {
+  color: #e5e7eb;
+}
+
+.dark .text-gray-600 {
+  color: #d1d5db;
+}
+
+.dark .text-gray-500 {
+  color: #9ca3af;
+}
+
+.dark .border-gray-200 {
+  border-color: #374151;
+}
+
+.dark .border-gray-100 {
+  border-color: #1f2937;
+}
+
+.dark .border-b {
+  border-color: #374151;
 }

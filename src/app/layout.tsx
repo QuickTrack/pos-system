@@ -6,6 +6,7 @@ import { AuthProvider } from '@/lib/auth-context';
 import { TrainingBanner } from '@/components/ui/TrainingBanner';
 import { TutorialOverlay } from '@/components/tutorial/TutorialOverlay';
 import { RestrictedActionModal } from '@/components/training/RestrictedActionModal';
+import { NotificationManager } from '@/lib/use-notifications';
 
 export const metadata: Metadata = {
   title: 'NairobiPOS - Cloud POS System for Kenyan Businesses',
@@ -25,6 +26,7 @@ export default function RootLayout({
           <TrainingProvider>
             <TutorialProvider>
               <TrainingBanner />
+              <NotificationManager />
               {children}
               <TutorialOverlay />
               <RestrictedActionModal />

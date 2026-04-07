@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { useAuth } from '@/lib/auth-context';
@@ -38,7 +38,7 @@ function AuthCheck({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function DashboardLayout({
+export default function SalesLayout({
   children,
 }: {
   children: React.ReactNode;

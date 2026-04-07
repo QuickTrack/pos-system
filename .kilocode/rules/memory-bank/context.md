@@ -566,22 +566,34 @@ Implemented complete multi-user authentication system:
   - TypeScript typecheck passed with no errors
 
 - [x] License Key Regeneration System
-  - Created secure and auditable license key regeneration feature
-  - Added regenerationHistory, previousLicenseKey, regeneratedAt, regeneratedBy fields to License model
-  - Created /api/licenses/regenerate API endpoint for individual and bulk regeneration
-  - Supports setting new expiration dates during regeneration
-  - Supports modifying feature entitlements (features, maxUsers, maxBranches)
-  - Automatically invalidates previous keys upon activation of new ones
-  - Comprehensive audit logging via ActivityLog model for compliance
-  - Regeneration history tracked in license document for full audit trail
-  - Added regeneration UI to licenses management page:
-    - Individual regenerate button for each license
-    - Bulk regeneration with checkbox selection
-    - Regeneration history modal showing all past regenerations
-    - Copy new license key to clipboard functionality
-  - Regeneration preserves license type and business information
-  - Reactivates expired licenses when new expiration date is set
-  - All regeneration actions logged with admin user, timestamp, reason, and previous/new keys
+
+- [x] Create Invoice Page Sidebar Navigation
+  - Created layout.tsx for /create-invoice route
+  - Wraps page with AuthProvider, LicenseProvider, and Sidebar component
+  - Sidebar now appears on the create-invoice page consistent with other authenticated pages
+  - TypeScript typecheck and lint passed
+
+- [x] License Verification Frequency
+  - Changed license sync interval from 30 seconds to once per day (24 hours)
+  - Cache duration also set to 24 hours to match
+  - Significantly reduces API calls and improves performance
+  - Users can still manually trigger sync via the sync button in header
+
+- [x] Hardware License Validation Once Per Day
+  - Added `shouldRevalidate()` function in system-license-storage.ts
+  - Checks lastValidated timestamp and only revalidates if 24+ hours have passed
+  - Returns cached success response if within 24 hours (still checks for suspended/expired)
+  - API returns `cached: true` and `lastValidated` timestamp in response
+  - Works in conjunction with client-side 24-hour cache
+  - Added concurrent check protection to prevent duplicate API calls
+  - Removed 24-hour polling interval (only checks on mount and manual trigger)
+  - Added 24-hour throttle to visibility change handler
+  - Added throttle in auth-context.tsx to skip validation within 24 hours
+
+- [x] Added Sidebar to All Authenticated Pages
+  - Created layout.tsx for all main authenticated routes: dashboard, pos, sales, cash-sales, customer-payments, sales-returns, purchases, supplier-invoices, supplier-payments, inventory, customers, suppliers, reports, analytics
+  - Each layout wraps pages with LicenseProvider and AuthCheck component with Sidebar
+  - TypeScript typecheck passed
 
 ## Current Structure
 
@@ -718,6 +730,11 @@ const result = await printEngine.print({
 | 2026-03-29 | Added license key validation in License Management modal - validates format, type, and uniqueness before saving |
 | 2026-03-29 | Enhanced Header component license status synchronization - fixed hooks rules violation, implemented lazy localStorage initialization, added corrupted data handling, eliminated stale renders |
 | 2026-03-29 | Implemented stock validation in POS sales interface - prevents adding out-of-stock products to cart, displays error modal with admin password override for admin/super_admin users |
+| 2026-04-07 | Added sidebar to create-invoice and all other authenticated pages by creating layout.tsx files |
+| 2026-04-07 | Renamed Revenue to Sales in dashboard Performance Overview |
+| 2026-04-07 | Changed license verification to happen once per day (24 hours) instead of every 30 seconds |
+| 2026-04-07 | Added hardware license validation caching - API only revalidates once per day, returns cached response otherwise |
+| 2026-04-07 | Fixed frequent license API calls - added concurrent check protection, removed 24-hour polling, added throttles to visibility and auth-context checks |
 
 ## Notes
 

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   LayoutDashboard, 
   ShoppingCart, 
@@ -27,7 +27,8 @@ import {
   Receipt,
   Key,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Menu
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/lib/store';
@@ -200,6 +201,50 @@ export function Sidebar() {
   const pathname = usePathname();
   const { sidebarOpen, setSidebarOpen } = useUIStore();
   const { user, logout } = useAuth();
+  const [isHovering, setIsHovering] = useState(false);
+  const [isHoveringTrigger, setIsHoveringTrigger] = useState(false);
+  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const clearHideTimeout = useCallback(() => {
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+  }, []);
+
+  const handleTriggerEnter = useCallback(() => {
+    clearHideTimeout();
+    setIsHoveringTrigger(true);
+    setIsHovering(true);
+  }, [clearHideTimeout]);
+
+  const handleTriggerLeave = useCallback(() => {
+    setIsHoveringTrigger(false);
+    hideTimeoutRef.current = setTimeout(() => {
+      if (!isHoveringTrigger) {
+        setIsHovering(false);
+      }
+    }, 300);
+  }, [isHoveringTrigger]);
+
+  const handleSidebarEnter = useCallback(() => {
+    clearHideTimeout();
+    setIsHovering(true);
+  }, [clearHideTimeout]);
+
+  const handleSidebarLeave = useCallback(() => {
+    hideTimeoutRef.current = setTimeout(() => {
+      setIsHovering(false);
+    }, 300);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Get user role
   const userRole = user?.role as Role;
@@ -234,10 +279,30 @@ export function Sidebar() {
       .slice(0, 2);
   };
 
+  const isDesktopOpen = isHovering;
+  const isMobileOpen = sidebarOpen;
+
   return (
     <>
+      {/* Hover trigger zone */}
+      <div
+        className="fixed top-0 left-0 h-full z-40"
+        style={{ width: isDesktopOpen ? '0px' : '20px' }}
+        onMouseEnter={handleTriggerEnter}
+        onMouseLeave={handleTriggerLeave}
+      >
+        <div className={cn(
+          "absolute left-0 top-1/2 -translate-y-1/2 w-8 h-16 bg-emerald-500 rounded-r-lg",
+          "flex items-center justify-center cursor-pointer transition-all duration-200",
+          "hover:bg-emerald-600 shadow-lg",
+          isDesktopOpen ? "opacity-0 pointer-events-none" : "opacity-90 hover:opacity-100"
+        )}>
+          <Menu className="w-4 h-4 text-white -rotate-90" />
+        </div>
+      </div>
+
       {/* Mobile overlay */}
-      {sidebarOpen && (
+      {isMobileOpen && (
         <div 
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
@@ -246,9 +311,13 @@ export function Sidebar() {
       
       {/* Sidebar */}
       <aside className={cn(
-        "fixed top-0 left-0 z-50 h-full w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 lg:translate-x-0",
-        sidebarOpen ? "translate-x-0" : "-translate-x-full"
-      )}>
+        "fixed top-0 left-0 z-50 h-full w-64 bg-white border-r border-gray-200 transition-transform duration-300 ease-out",
+        isDesktopOpen ? "lg:translate-x-0" : "lg:-translate-x-full",
+        isMobileOpen ? "translate-x-0" : "-translate-x-full"
+      )}
+      onMouseEnter={handleSidebarEnter}
+      onMouseLeave={handleSidebarLeave}
+      >
         {/* Logo */}
         <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
           <Link href="/dashboard" className="flex items-center gap-2">
@@ -259,7 +328,7 @@ export function Sidebar() {
               height={32} 
               className="w-8 h-8 rounded-lg"
             />
-            <span className="font-bold text-lg text-gray-900 hidden lg:block">QuickTrack ERP</span>
+            <span className="font-bold text-lg text-gray-900">QuickTrack ERP</span>
           </Link>
           <button 
             onClick={() => setSidebarOpen(false)}

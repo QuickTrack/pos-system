@@ -8,7 +8,8 @@ import { Input, Select, Textarea } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { DataTable } from '@/components/ui/DataTable';
 import { formatCurrency } from '@/lib/utils';
-import { Plus, Edit, Trash2, Search, Package, AlertTriangle, Download, Upload, FolderTree, ChevronRight, ChevronDown, CheckSquare, Square, Settings2, Minus, Plus as PlusIcon } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { Plus, Edit, Trash2, Search, Package, AlertTriangle, Download, Upload, FolderTree, ChevronRight, ChevronDown, CheckSquare, Square, Settings2, Minus, Plus as PlusIcon, FileSpreadsheet } from 'lucide-react';
 
 interface Product {
   _id: string;
@@ -144,6 +145,8 @@ export default function InventoryPage() {
   const [bulkAdjustReason, setBulkAdjustReason] = useState<string>('');
   const [bulkAdjustLoading, setBulkAdjustLoading] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   // Helper to get effective shop stock (fallback to stockQuantity for legacy data)
   const getEffectiveShopStock = (product: Product) => {
@@ -273,6 +276,106 @@ export default function InventoryPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Export products to Excel/CSV
+  const handleExport = async (format: 'xlsx' | 'csv') => {
+    const exportData = products.map(p => ({
+      'Name': p.name,
+      'SKU': p.sku || '',
+      'Barcode': p.barcode || '',
+      'Category': p.category?.name || '',
+      'Retail Price': p.retailPrice || 0,
+      'Wholesale Price': p.wholesalePrice || 0,
+      'Cost Price': p.costPrice || 0,
+      'Shop Stock': getEffectiveShopStock(p),
+      'Remote Stock': getEffectiveRemoteStock(p),
+      'Total Stock': (getEffectiveShopStock(p) + getEffectiveRemoteStock(p)),
+      'Low Stock Threshold': p.lowStockThreshold || 10,
+      'Base Unit': p.baseUnit || 'piece',
+      'Active': p.isActive ? 'Yes' : 'No',
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Products');
+    XLSX.writeFile(wb, `products_export_${new Date().toISOString().split('T')[0]}.${format}`);
+  };
+
+  // Import products from Excel/CSV
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(sheet) as any[];
+
+        let importedCount = 0;
+        let errorCount = 0;
+
+        for (const row of jsonData) {
+          try {
+            // Find category by name
+            let categoryId = '';
+            if (row['Category']) {
+              const cat = categories.find(c => c.name.toLowerCase() === String(row['Category']).toLowerCase());
+              categoryId = cat?._id || '';
+            }
+
+            const productData = {
+              name: row['Name'] || '',
+              sku: row['SKU'] || '',
+              barcode: row['Barcode'] || '',
+              category: categoryId,
+              retailPrice: parseFloat(row['Retail Price']) || 0,
+              wholesalePrice: parseFloat(row['Wholesale Price']) || 0,
+              costPrice: parseFloat(row['Cost Price']) || 0,
+              stockQuantity: parseInt(row['Total Stock']) || parseInt(row['Shop Stock']) || 0,
+              shopStock: parseInt(row['Shop Stock']) || 0,
+              remoteStock: parseInt(row['Remote Stock']) || 0,
+              lowStockThreshold: parseInt(row['Low Stock Threshold']) || 10,
+              baseUnit: row['Base Unit'] || 'piece',
+              isActive: row['Active'] === 'Yes' || row['Active'] === 'TRUE',
+            };
+
+            if (!productData.name) {
+              errorCount++;
+              continue;
+            }
+
+            const response = await fetch('/api/products', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(productData),
+            });
+
+            if (response.ok) {
+              importedCount++;
+            } else {
+              errorCount++;
+            }
+          } catch (err) {
+            errorCount++;
+          }
+        }
+
+        alert(`Import complete: ${importedCount} products imported, ${errorCount} errors`);
+        fetchData();
+      };
+      reader.readAsArrayBuffer(file);
+    } catch (error) {
+      console.error('Import error:', error);
+      alert('Failed to import file');
+    }
+
+    // Reset input
+    e.target.value = '';
   };
 
   // Category CRUD functions
@@ -707,11 +810,39 @@ export default function InventoryPage() {
               <FolderTree className="w-4 h-4" />
               Categories
             </Button>
-            <Button variant="outline" className="gap-2">
-              <Download className="w-4 h-4" />
-              Export
-            </Button>
-            <Button variant="outline" className="gap-2">
+            <div className="relative">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                className="gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Export
+              </Button>
+              {showExportMenu && (
+                <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[140px]">
+                  <button
+                    onClick={() => { handleExport('xlsx'); setShowExportMenu(false); }}
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" />
+                    Excel (.xlsx)
+                  </button>
+                  <button
+                    onClick={() => { handleExport('csv'); setShowExportMenu(false); }}
+                    className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" />
+                    CSV (.csv)
+                  </button>
+                </div>
+              )}
+            </div>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowImportModal(true)}
+              className="gap-2"
+            >
               <Upload className="w-4 h-4" />
               Import
             </Button>
@@ -1563,6 +1694,48 @@ export default function InventoryPage() {
                 ))
               )}
             </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Import Modal */}
+      <Modal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        title="Import Products"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h4 className="font-medium text-blue-800 mb-2">Import Instructions</h4>
+            <ul className="text-sm text-blue-700 space-y-1">
+              <li>• Upload an Excel (.xlsx) or CSV file</li>
+              <li>• Required columns: Name</li>
+              <li>• Optional columns: SKU, Barcode, Category, Retail Price, Wholesale Price, Cost Price, Shop Stock, Remote Stock, Low Stock Threshold, Base Unit, Active</li>
+              <li>• Category should match existing category names</li>
+              <li>• Active column: &quot;Yes&quot; or &quot;TRUE&quot; for active products</li>
+            </ul>
+          </div>
+          
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-emerald-500 transition-colors">
+            <input
+              type="file"
+              accept=".xlsx,.csv"
+              onChange={handleImport}
+              className="hidden"
+              id="import-file"
+            />
+            <label htmlFor="import-file" className="cursor-pointer">
+              <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+              <p className="text-sm text-gray-600">Click to upload or drag and drop</p>
+              <p className="text-xs text-gray-400 mt-1">Excel or CSV files only</p>
+            </label>
+          </div>
+
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={() => setShowImportModal(false)}>
+              Cancel
+            </Button>
           </div>
         </div>
       </Modal>

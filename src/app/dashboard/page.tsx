@@ -179,7 +179,7 @@ export default function DashboardPage() {
             icon={ShoppingCart}
           />
           <StatCard 
-            title="Revenue" 
+            title="Sales" 
             value={stats?.revenue.current || 0} 
             change={stats?.revenue.change || 0}
             icon={DollarSign}
