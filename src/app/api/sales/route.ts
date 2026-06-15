@@ -3,6 +3,7 @@ import dbConnect from '@/lib/db/mongodb';
 import { Sale, Product, Customer, User, Branch, Settings, ActivityLog } from '@/models';
 import { getAuthUser } from '@/lib/auth-server';
 import { hasPermission } from '@/lib/auth';
+import { calculateCustomerBalanceDue, syncCustomerBalanceDue } from '@/lib/customer-balance';
 import { 
   generateInvoiceNumber, 
   generateCashSaleNumber,
@@ -308,26 +309,7 @@ export async function POST(request: NextRequest) {
       const customer = await Customer.findById(data.customerId).lean();
       
       if (customer && customer.creditLimit && customer.creditLimit > 0) {
-        // Calculate current outstanding balance from unpaid sales
-        const currentOutstanding = await Sale.aggregate([
-          {
-            $match: {
-              customer: customer._id,
-              paymentMethod: 'account',
-              status: 'completed'
-            }
-          },
-          {
-            $group: {
-              _id: null,
-              totalOutstanding: {
-                $sum: { $subtract: ['$total', { $ifNull: ['$amountPaid', 0] }] }
-              }
-            }
-          }
-        ]);
-        
-        const currentDebt = currentOutstanding.length > 0 ? currentOutstanding[0].totalOutstanding : 0;
+        const currentDebt = await calculateCustomerBalanceDue(customer._id, user.branch);
         const newDebt = currentDebt + orderTotal;
         
         if (newDebt > customer.creditLimit) {
@@ -410,6 +392,10 @@ export async function POST(request: NextRequest) {
       // creditLimit is used to validate account payment eligibility
       
       await Customer.findByIdAndUpdate(data.customerId, updateData);
+    }
+    
+    if (data.customerId && data.paymentMethod === 'account') {
+      await syncCustomerBalanceDue(data.customerId, user.branch);
     }
     
     // Log the sale activity

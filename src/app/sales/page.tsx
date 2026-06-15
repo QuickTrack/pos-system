@@ -58,7 +58,9 @@ export default function SalesPage() {
       const response = await fetch('/api/settings');
       if (response.ok) {
         const data = await response.json();
-        setBusinessSettings(data);
+        if (data.settings) {
+          setBusinessSettings(data.settings);
+        }
       }
     } catch (error) {
       console.error('Error fetching settings:', error);
@@ -411,6 +413,12 @@ export default function SalesPage() {
           document={{
             includeInPrice: businessSettings?.includeInPrice || false,
             kraPin: businessSettings?.kraPin || '',
+            bankName: businessSettings?.bankName || '',
+            bankAccount: businessSettings?.bankAccount || '',
+            bankBranch: businessSettings?.bankBranch || '',
+            paymentTill: businessSettings?.paymentTill || '',
+            sendMoneyPhoneNumber: businessSettings?.sendMoneyPhoneNumber || '',
+            acceptedPaymentMethods: businessSettings?.acceptedPaymentMethods || '',
             invoiceNumber: (selectedSale as any).receiptNumber || (selectedSale as any)._id,
             date: (selectedSale as any).createdAt,
             customer: {

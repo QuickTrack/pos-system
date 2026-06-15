@@ -20,24 +20,38 @@ export async function GET(request: NextRequest) {
     
     const now = new Date();
     let startDate: Date;
-    
+
     switch (period) {
-      case 'today':
-        startDate = new Date(now.setHours(0, 0, 0, 0));
+      case 'today': {
+        const today = new Date(now);
+        startDate = new Date(today.setHours(0, 0, 0, 0));
         break;
-      case 'week':
-        startDate = new Date(now.setDate(now.getDate() - 7));
+      }
+      case 'week': {
+        const weekAgo = new Date(now);
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        startDate = weekAgo;
         break;
-      case 'month':
-        startDate = new Date(now.setMonth(now.getMonth() - 1));
+      }
+      case 'month': {
+        const monthAgo = new Date(now);
+        monthAgo.setMonth(monthAgo.getMonth() - 1);
+        startDate = monthAgo;
         break;
-      case 'year':
-        startDate = new Date(now.setFullYear(now.getFullYear() - 1));
+      }
+      case 'year': {
+        const yearAgo = new Date(now);
+        yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+        startDate = yearAgo;
         break;
-      default:
-        startDate = new Date(now.setMonth(now.getMonth() - 1));
+      }
+      default: {
+        const monthAgo = new Date(now);
+        monthAgo.setMonth(monthAgo.getMonth() - 1);
+        startDate = monthAgo;
+      }
     }
-    
+
     const branchFilter = user.role !== 'admin' && user.branch ? { branch: user.branch } : {};
     
     const [
@@ -66,16 +80,33 @@ export async function GET(request: NextRequest) {
         { $match: { saleDate: { $gte: startDate }, status: 'completed', ...branchFilter } },
         {
           $group: {
-            _id: { $month: '$saleDate' },
+            _id: { year: { $year: '$saleDate' }, month: { $month: '$saleDate' } },
             revenue: { $sum: '$total' },
             profit: { $sum: '$profit' },
           },
         },
-        { $sort: { _id: 1 } },
+        {
+          $addFields: {
+            monthLabel: {
+              $dateToString: {
+                format: '%Y-%m',
+                date: {
+                  $dateFromParts: {
+                    year: '$_id.year',
+                    month: '$_id.month',
+                    day: 1,
+                  },
+                },
+              },
+            },
+          },
+        },
+        { $sort: { '_id.year': 1, '_id.month': 1 } },
       ]),
       Sale.aggregate([
         { $match: { saleDate: { $gte: startDate }, status: 'completed', ...branchFilter } },
         { $unwind: '$items' },
+        { $match: { 'items.product': { $exists: true, $ne: null } } },
         {
           $group: {
             _id: '$items.product',
@@ -88,7 +119,7 @@ export async function GET(request: NextRequest) {
         { $limit: 10 },
       ]),
       Sale.aggregate([
-        { $match: { saleDate: { $gte: startDate }, status: 'completed', customer: { $ne: null } } },
+        { $match: { saleDate: { $gte: startDate }, status: 'completed', customer: { $ne: null }, ...branchFilter } },
         {
           $group: {
             _id: '$customer',
@@ -127,7 +158,7 @@ export async function GET(request: NextRequest) {
         },
       ]),
       Sale.aggregate([
-        { $match: { saleDate: { $gte: new Date(now.setDate(now.getDate() - 30)) }, status: 'completed', ...branchFilter } },
+        { $match: { saleDate: { $gte: new Date(new Date().setDate(new Date().getDate() - 30)) }, status: 'completed', ...branchFilter } },
         {
           $group: {
             _id: { $dateToString: { format: '%Y-%m-%d', date: '$saleDate' } },

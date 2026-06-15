@@ -16,8 +16,6 @@ import {
   BarChart3,
   Store,
   Layout,
-  X,
-  LogOut,
   ShoppingBag,
   ArrowRightLeft,
   DollarSign,
@@ -26,9 +24,13 @@ import {
   FilePlus,
   Receipt,
   Key,
+  FileSearch,
+  X,
+  LogOut,
   ChevronDown,
   ChevronRight,
-  Menu
+  Star,
+  Menu,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/lib/store';
@@ -49,6 +51,35 @@ interface MenuGroup {
   items: MenuItem[];
 }
 
+interface FavoriteItem {
+  href: string;
+  label: string;
+  iconName?: string;
+}
+
+const iconMap: Record<string, any> = {
+  LayoutDashboard,
+  ShoppingCart,
+  Package,
+  Users,
+  UserCog,
+  Truck,
+  FileText,
+  Settings,
+  BarChart3,
+  Store,
+  Layout,
+  ShoppingBag,
+  ArrowRightLeft,
+  DollarSign,
+  CreditCard,
+  Shield,
+  FilePlus,
+  Receipt,
+  Key,
+  FileSearch,
+};
+
 const menuGroups: MenuGroup[] = [
   {
     label: 'Dashboard',
@@ -65,6 +96,7 @@ const menuGroups: MenuGroup[] = [
     items: [
       { label: 'POS Sales', href: '/pos', icon: ShoppingCart, permission: 'manage_sales' },
       { label: 'Cash Sales', href: '/cash-sales', icon: Receipt, permission: 'manage_sales' },
+      { label: 'Quotations', href: '/quotations', icon: FileSearch, permission: 'manage_sales' },
       { label: 'Customer Invoices', href: '/create-invoice', icon: FilePlus, permission: 'manage_sales' },
       { label: 'Customer Payments', href: '/customer-payments', icon: CreditCard, permission: 'manage_sales' },
       { label: 'Sales Returns', href: '/sales-returns', icon: FileText, permission: 'manage_sales' },
@@ -76,7 +108,7 @@ const menuGroups: MenuGroup[] = [
     permission: 'manage_purchases',
     items: [
       { label: 'Purchases', href: '/purchases', icon: ShoppingBag, permission: 'manage_purchases' },
-      { label: 'Supplier Invoices', href: '/supplier-invoices', icon: FileText, permission: 'manage_purchases' },
+      { label: 'Receive Inventory', href: '/supplier-invoices', icon: FileText, permission: 'manage_purchases' },
       { label: 'Supplier Payments', href: '/supplier-payments', icon: DollarSign, permission: 'manage_purchases' },
     ],
   },
@@ -120,16 +152,14 @@ const menuGroups: MenuGroup[] = [
   },
 ];
 
-function MenuGroupItem({ group, pathname, onClose }: { group: MenuGroup; pathname: string; onClose: () => void }) {
+function MenuGroupItem({ group, pathname, onClose, toggleFavorite, isFavorite }: { group: MenuGroup; pathname: string; onClose: () => void; toggleFavorite: (item: any) => void; isFavorite: (href: string) => boolean }) {
   const [isOpen, setIsOpen] = useState(true);
   const hasActiveItem = group.items.some((item) => 
     pathname === item.href || pathname.startsWith(item.href + '/')
   );
 
-  // Auto-expand if there's an active item
   const shouldExpand = isOpen || hasActiveItem;
 
-  // If group has only one item, render it directly without collapse
   if (group.items.length === 1) {
     const item = group.items[0];
     const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
@@ -138,13 +168,31 @@ function MenuGroupItem({ group, pathname, onClose }: { group: MenuGroup; pathnam
         <Link
           href={item.href}
           className={cn(
-            "sidebar-link",
+            "sidebar-link flex items-center justify-between",
             isActive && "active"
           )}
           onClick={onClose}
         >
-          <item.icon className="w-4 h-4" />
-          <span className="text-sm">{item.label}</span>
+          <span className="flex items-center gap-2">
+            <item.icon className="w-4 h-4" />
+            <span className="text-sm">{item.label}</span>
+          </span>
+          <button
+            type="button"
+            className="p-1 rounded hover:bg-gray-100"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              toggleFavorite({
+                href: item.href,
+                label: item.label,
+                iconName: item.icon?.name || item.icon?.displayName || '',
+              });
+            }}
+            title="Toggle favorite"
+          >
+            <Star className={`w-3 h-3 ${isFavorite(item.href) ? 'fill-amber-400 text-amber-500' : 'text-gray-400'}`} />
+          </button>
         </Link>
       </li>
     );
@@ -180,13 +228,31 @@ function MenuGroupItem({ group, pathname, onClose }: { group: MenuGroup; pathnam
                 <Link
                   href={item.href}
                   className={cn(
-                    "sidebar-link pl-6",
+                    "sidebar-link pl-6 flex items-center justify-between",
                     isActive && "active"
                   )}
                   onClick={onClose}
                 >
-                  <item.icon className="w-4 h-4" />
-                  <span className="text-sm">{item.label}</span>
+                  <span className="flex items-center gap-2">
+                    <item.icon className="w-4 h-4" />
+                    <span className="text-sm">{item.label}</span>
+                  </span>
+                  <button
+                    type="button"
+                    className="p-1 rounded hover:bg-gray-100"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toggleFavorite({
+                        href: item.href,
+                        label: item.label,
+                        iconName: item.icon?.name || item.icon?.displayName || '',
+                      });
+                    }}
+                    title="Toggle favorite"
+                  >
+                    <Star className={`w-3 h-3 ${isFavorite(item.href) ? 'fill-amber-400 text-amber-500' : 'text-gray-400'}`} />
+                  </button>
                 </Link>
               </li>
             );
@@ -199,7 +265,7 @@ function MenuGroupItem({ group, pathname, onClose }: { group: MenuGroup; pathnam
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { sidebarOpen, setSidebarOpen } = useUIStore();
+  const { sidebarOpen, setSidebarOpen, favoriteLinks, toggleFavorite, isFavorite } = useUIStore();
   const { user, logout } = useAuth();
   const [isHovering, setIsHovering] = useState(false);
   const [isHoveringTrigger, setIsHoveringTrigger] = useState(false);
@@ -246,19 +312,14 @@ export function Sidebar() {
     };
   }, []);
 
-  // Get user role
   const userRole = user?.role as Role;
   const isAdmin = isSuperAdmin(userRole);
 
-  // Filter menu groups based on user role and permissions
-  // Super admin sees all menu items
   const filteredMenuGroups = menuGroups.map((group) => {
     if (!userRole) return { ...group, items: [] };
-    // Super admin sees everything
     if (isSuperAdmin(userRole)) {
       return group;
     }
-    // Filter items within the group based on permissions
     const filteredItems = group.items.filter((item) => 
       hasPermission(userRole, item.permission)
     );
@@ -269,7 +330,6 @@ export function Sidebar() {
     await logout();
   };
 
-  // Get user initials
   const getInitials = (name: string) => {
     return name
       .split(' ')
@@ -282,9 +342,20 @@ export function Sidebar() {
   const isDesktopOpen = isHovering;
   const isMobileOpen = sidebarOpen;
 
+  const getBaseHref = (href: string) => href.split('?')[0].split('#')[0];
+
+  const resolveIcon = (iconName: string) => iconMap[iconName] || Star;
+
+  const isInvalidFavorite = (fav: any) => !fav || !fav.href || !fav.label;
+  const safeFavorites = (favoriteLinks || [])
+    .filter((fav: any) => !isInvalidFavorite(fav));
+
+  const handleToggleFavorite = (fav: any) => {
+    toggleFavorite(fav);
+  };
+
   return (
     <>
-      {/* Hover trigger zone */}
       <div
         className="fixed top-0 left-0 h-full z-40"
         style={{ width: isDesktopOpen ? '0px' : '20px' }}
@@ -301,7 +372,6 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Mobile overlay */}
       {isMobileOpen && (
         <div 
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
@@ -309,7 +379,6 @@ export function Sidebar() {
         />
       )}
       
-      {/* Sidebar */}
       <aside className={cn(
         "fixed top-0 left-0 z-50 h-full w-64 bg-white border-r border-gray-200 transition-transform duration-300 ease-out",
         isDesktopOpen ? "lg:translate-x-0" : "lg:-translate-x-full",
@@ -318,7 +387,6 @@ export function Sidebar() {
       onMouseEnter={handleSidebarEnter}
       onMouseLeave={handleSidebarLeave}
       >
-        {/* Logo */}
         <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
           <Link href="/dashboard" className="flex items-center gap-2">
             <Image 
@@ -338,21 +406,69 @@ export function Sidebar() {
           </button>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-3 px-2" style={{ maxHeight: 'calc(100vh - 180px)' }}>
           <ul className="space-y-1">
+            <li className="mb-2">
+              <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Favorite Links
+              </div>
+              {safeFavorites.length === 0 ? (
+                <p className="px-3 text-xs text-gray-400">Click the star icon next to any menu item to pin it here.</p>
+              ) : (
+                <ul className="space-y-0.5">
+                  {safeFavorites.map((fav: any) => {
+                    const isActive = getBaseHref(pathname) === getBaseHref(fav.href);
+                    const IconComp = resolveIcon(fav.iconName || '');
+                    return (
+                      <li key={`${fav.href}-${fav.label}`}>
+                        <Link
+                          href={fav.href}
+                          className={cn(
+                            "sidebar-link flex items-center justify-between",
+                            isActive && "active"
+                          )}
+                        >
+                          <span className="flex items-center gap-2">
+                            <IconComp className="w-4 h-4" />
+                            <span className="text-sm">{fav.label}</span>
+                          </span>
+                          <button
+                            type="button"
+                            className="p-1 rounded hover:bg-gray-100"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              toggleFavorite({
+                                href: fav.href,
+                                label: fav.label,
+                                iconName: fav.iconName,
+                              });
+                            }}
+                            title="Remove from favorites"
+                          >
+                            <Star className="w-3 h-3 fill-amber-400 text-amber-500" />
+                          </button>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </li>
+
             {filteredMenuGroups.map((group) => (
               <MenuGroupItem 
                 key={group.label} 
                 group={group} 
                 pathname={pathname}
                 onClose={() => setSidebarOpen(false)}
+                toggleFavorite={toggleFavorite}
+                isFavorite={isFavorite}
               />
             ))}
           </ul>
         </nav>
 
-        {/* User section */}
         <div className="border-t border-gray-200 p-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">

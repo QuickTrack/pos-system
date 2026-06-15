@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Header } from '@/components/layout/Header';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -9,7 +9,7 @@ import { Modal } from '@/components/ui/Modal';
 import { DataTable } from '@/components/ui/DataTable';
 import { formatCurrency } from '@/lib/utils';
 import * as XLSX from 'xlsx';
-import { Plus, Edit, Trash2, Search, Package, AlertTriangle, Download, Upload, FolderTree, ChevronRight, ChevronDown, CheckSquare, Square, Settings2, Minus, Plus as PlusIcon, FileSpreadsheet } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Package, AlertTriangle, Download, Upload, FolderTree, ChevronRight, ChevronDown, CheckSquare, Square, Settings2, Minus, Plus as PlusIcon, FileSpreadsheet, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 
 interface Product {
   _id: string;
@@ -119,6 +119,8 @@ export default function InventoryPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [showLowStock, setShowLowStock] = useState(false);
   const [newUnit, setNewUnit] = useState({ name: '', abbreviation: '' });
+  const [sortKey, setSortKey] = useState<string>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [formData, setFormData] = useState({
     name: '',
     sku: '',
@@ -645,6 +647,34 @@ export default function InventoryPage() {
     setProductUnits(updated);
   };
 
+  const handleSort = (key: string) => {
+    setSortKey(key);
+    setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+  };
+
+  const sortedProducts = useMemo(() => {
+    const data = [...products];
+    if (!sortKey) return data;
+    data.sort((a, b) => {
+      let aVal: any = a[sortKey as keyof Product];
+      let bVal: any = b[sortKey as keyof Product];
+
+      if (sortKey === 'name') {
+        aVal = a.name.toLowerCase();
+        bVal = b.name.toLowerCase();
+      } else if (sortKey === 'category') {
+        aVal = a.category?.name?.toLowerCase() || '';
+        bVal = b.category?.name?.toLowerCase() || '';
+      }
+
+      if (typeof aVal === 'string') {
+        return sortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+      return sortOrder === 'asc' ? (aVal || 0) - (bVal || 0) : (bVal || 0) - (aVal || 0);
+    });
+    return data;
+  }, [products, sortKey, sortOrder]);
+
   const columns = [
     {
       key: 'select',
@@ -680,7 +710,14 @@ export default function InventoryPage() {
     },
     {
       key: 'name',
-      header: 'Product',
+      header: (
+        <button onClick={() => handleSort('name')} className="flex items-center gap-1 hover:text-emerald-600 transition-colors">
+          Product
+          {sortKey === 'name' ? (
+            sortOrder === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+          ) : <ArrowUpDown className="w-3 h-3 opacity-40" />}
+        </button>
+      ),
       render: (item: Product) => (
         <div>
           <p className="font-medium">{item.name}</p>
@@ -690,7 +727,14 @@ export default function InventoryPage() {
     },
     {
       key: 'category',
-      header: 'Category',
+      header: (
+        <button onClick={() => handleSort('category')} className="flex items-center gap-1 hover:text-emerald-600 transition-colors">
+          Category
+          {sortKey === 'category' ? (
+            sortOrder === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+          ) : <ArrowUpDown className="w-3 h-3 opacity-40" />}
+        </button>
+      ),
       render: (item: Product) => item.category?.name || '-',
     },
     {
@@ -868,7 +912,7 @@ export default function InventoryPage() {
           />
           <DataTable
             columns={columns}
-            data={products}
+            data={sortedProducts}
             keyExtractor={(item) => item._id}
             loading={loading}
             emptyMessage="No products found"
@@ -940,20 +984,20 @@ export default function InventoryPage() {
               label="Retail Price"
               type="number"
               value={formData.retailPrice}
-              onChange={(e) => setFormData({ ...formData, retailPrice: parseFloat(e.target.value) })}
-              required
+               onChange={(e) => setFormData({ ...formData, retailPrice: parseFloat(e.target.value) || 0 })}
+               required
             />
             <Input
               label="Wholesale Price"
               type="number"
               value={formData.wholesalePrice}
-              onChange={(e) => setFormData({ ...formData, wholesalePrice: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, wholesalePrice: parseFloat(e.target.value) || 0 })}
             />
             <Input
               label="Cost Price"
               type="number"
               value={formData.costPrice}
-              onChange={(e) => setFormData({ ...formData, costPrice: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, costPrice: parseFloat(e.target.value) || 0 })}
             />
           </div>
 
@@ -962,13 +1006,13 @@ export default function InventoryPage() {
               label="Initial Stock"
               type="number"
               value={formData.stockQuantity}
-              onChange={(e) => setFormData({ ...formData, stockQuantity: parseInt(e.target.value) })}
+               onChange={(e) => setFormData({ ...formData, stockQuantity: parseInt(e.target.value) || 0 })}
             />
             <Input
               label="Low Stock Alert"
               type="number"
               value={formData.lowStockThreshold}
-              onChange={(e) => setFormData({ ...formData, lowStockThreshold: parseInt(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, lowStockThreshold: parseInt(e.target.value) || 0 })}
             />
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">

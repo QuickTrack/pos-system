@@ -9,7 +9,7 @@ import { RestrictedActionModal } from '@/components/training/RestrictedActionMod
 import { NotificationManager } from '@/lib/use-notifications';
 
 export const metadata: Metadata = {
-  title: 'NairobiPOS - Cloud POS System for Kenyan Businesses',
+  title: 'POS System',
   description: 'Modern cloud-based Point of Sale system designed for small shops, mini-marts, supermarkets, kiosks, and wholesale businesses in Nairobi, Kenya.',
   keywords: 'POS, Point of Sale, Kenya, Nairobi, Retail, Wholesale, M-Pesa',
 };

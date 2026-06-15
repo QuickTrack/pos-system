@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type FocusEvent } from 'react';
+import Link from 'next/link';
 import { Header } from '@/components/layout/Header';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -15,10 +16,10 @@ interface SupplierInvoiceItem {
   productId: string;
   productName: string;
   sku: string;
-  quantity: number;
-  unitCost: number;
-  discount: number;
-  tax: number;
+  quantity: number | string;
+  unitCost: number | string;
+  discount: number | string;
+  tax: number | string;
   total: number;
   unitName?: string;
   unitAbbreviation?: string;
@@ -164,6 +165,14 @@ export default function SupplierInvoicesPage() {
     fetchInvoices();
   }, [status, supplierFilter]);
 
+  useEffect(() => {
+    fetchSuppliers();
+  }, []);
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
 
 
   // Auto-focus supplier select when modal opens
@@ -176,13 +185,35 @@ export default function SupplierInvoicesPage() {
     }
   }, [showCreateModal]);
 
+  useEffect(() => {
+    if (!showCreateModal || editingInvoice) return;
+
+    setInvoiceNumber('');
+
+    const fetchNextInvoiceNumber = async () => {
+      try {
+        const response = await fetch('/api/supplier-invoices?next=true');
+        const data = await response.json();
+        if (data.success && data.nextInvoiceNumber) {
+          setInvoiceNumber(data.nextInvoiceNumber);
+        }
+      } catch (error) {
+        console.error('Failed to fetch next supplier invoice number:', error);
+      }
+    };
+
+    fetchNextInvoiceNumber();
+  }, [showCreateModal, editingInvoice]);
+
   // Real-time product search with debouncing
   useEffect(() => {
     if (productSearchDebounceTimer) {
       clearTimeout(productSearchDebounceTimer);
+      setProductSearchDebounceTimer(null);
     }
 
     if (productSearchQuery.trim()) {
+      setShowProductDropdown(true);
       const timer = setTimeout(async () => {
         setProductSearchLoading(true);
         try {
@@ -203,8 +234,8 @@ export default function SupplierInvoicesPage() {
       setProductSearchDebounceTimer(timer);
     } else {
       setFilteredProducts(selectedSupplierProducts.length > 0 ? selectedSupplierProducts : products);
+      setShowProductDropdown(false);
     }
-    setShowProductDropdown(true);
   }, [productSearchQuery, selectedSupplierProducts, products]);
 
   useEffect(() => {
@@ -243,7 +274,9 @@ export default function SupplierInvoicesPage() {
     try {
       const response = await fetch('/api/suppliers');
       const data = await response.json();
-      if (data.success) setSuppliers(data.suppliers);
+      if (data.success) {
+        setSuppliers([...data.suppliers].sort((a, b) => a.name.localeCompare(b.name)));
+      }
     } catch (error) {
       console.error('Failed to fetch suppliers:', error);
     }
@@ -255,11 +288,14 @@ export default function SupplierInvoicesPage() {
         s.name.toLowerCase().includes(supplierSearchQuery.toLowerCase()) ||
         (s.email && s.email.toLowerCase().includes(supplierSearchQuery.toLowerCase())) ||
         (s.phone && s.phone.includes(supplierSearchQuery))
-      )
-    : suppliers;
+      ).sort((a, b) => a.name.localeCompare(b.name))
+    : [...suppliers].sort((a, b) => a.name.localeCompare(b.name));
 
   // Handle selecting a supplier from dropdown
-  const handleSelectSupplier = (supplier: Supplier) => {
+  const handleSelectSupplier = async (supplier: Supplier) => {
+    const fetchedProducts = await fetchProducts();
+    const availableProducts = fetchedProducts.length > 0 ? fetchedProducts : products;
+
     setFormData({
       ...formData,
       supplierId: supplier._id,
@@ -268,8 +304,9 @@ export default function SupplierInvoicesPage() {
     });
     setSupplierSearchQuery(supplier.name);
     setShowSupplierDropdown(false);
+    setShowProductDropdown(false);
     // Filter products by supplier
-    const supplierProducts = products.filter(p => (p as any).supplier?._id === supplier._id || (p as any).supplier === supplier._id);
+    const supplierProducts = availableProducts.filter((p: Product) => (p as any).supplier?._id === supplier._id || (p as any).supplier === supplier._id);
     setSelectedSupplierProducts(supplierProducts);
   };
 
@@ -299,13 +336,16 @@ export default function SupplierInvoicesPage() {
     setSupplierSearchQuery(po.supplierName);
     setPoSearchQuery(po.orderNumber);
     setShowPoDropdown(false);
+    setShowProductDropdown(false);
+    
+    // Fetch suppliers and products to ensure they are loaded before opening modal
+    await fetchSuppliers();
+    const fetchedProducts = await fetchProducts();
+    const availableProducts = fetchedProducts.length > 0 ? fetchedProducts : products;
     
     // Filter products by supplier
-    const supplierProducts = products.filter(p => (p as any).supplier?._id === (po.supplier?._id || po.supplier) || (p as any).supplier === (po.supplier?._id || po.supplier));
+    const supplierProducts = availableProducts.filter((p: Product) => (p as any).supplier?._id === (po.supplier?._id || po.supplier) || (p as any).supplier === (po.supplier?._id || po.supplier));
     setSelectedSupplierProducts(supplierProducts);
-    
-    // Fetch suppliers to ensure they are loaded before opening modal
-    await fetchSuppliers();
     
     // Open the create invoice modal
     setShowCreateModal(true);
@@ -331,7 +371,7 @@ export default function SupplierInvoicesPage() {
       if (data.success) {
         const newSupplier = data.supplier;
         setSuppliers(prev => [...prev, newSupplier]);
-        handleSelectSupplier(newSupplier);
+        await handleSelectSupplier(newSupplier);
         setTimeout(() => {
           productSearchRef.current?.focus();
         }, 100);
@@ -391,10 +431,14 @@ export default function SupplierInvoicesPage() {
     try {
       const response = await fetch('/api/products?limit=100');
       const data = await response.json();
-      if (data.success) setProducts(data.products);
+      if (data.success) {
+        setProducts(data.products);
+        return data.products;
+      }
     } catch (error) {
       console.error('Failed to fetch products:', error);
     }
+    return [];
   };
 
   const fetchPurchaseOrders = async () => {
@@ -407,14 +451,29 @@ export default function SupplierInvoicesPage() {
     }
   };
 
+  const toNumber = (value: number | string | undefined) => {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : 0;
+  };
+
+  const resetZeroField = (value: number | string | undefined, onChange: (value: string) => void) => (
+    event: FocusEvent<HTMLInputElement>
+  ) => {
+    if (toNumber(value) === 0) {
+      event.currentTarget.value = '';
+      onChange('');
+    }
+  };
+
   const addItem = (product: Product) => {
+    setShowProductDropdown(false);
     const existingItem = formData.items.find((item: any) => item.productId === product._id);
     if (existingItem) {
       setFormData({
         ...formData,
         items: formData.items.map((item: any) => 
           item.productId === product._id 
-            ? { ...item, quantity: item.quantity + 1, total: (item.quantity + 1) * item.unitCost }
+            ? { ...item, quantity: toNumber(item.quantity) + 1, total: (toNumber(item.quantity) + 1) * toNumber(item.unitCost) - toNumber(item.discount) + toNumber(item.tax) }
             : item
         )
       });
@@ -437,45 +496,45 @@ export default function SupplierInvoicesPage() {
     }
   };
 
-  const updateItemQuantity = (productId: string, quantity: number) => {
+  const updateItemQuantity = (productId: string, quantity: number | string) => {
     setFormData({
       ...formData,
       items: formData.items.map((item: any) => 
         item.productId === productId 
-          ? { ...item, quantity, total: quantity * item.unitCost - (item.discount || 0) + (item.tax || 0) }
+          ? { ...item, quantity, total: toNumber(quantity) * toNumber(item.unitCost) - toNumber(item.discount) + toNumber(item.tax) }
           : item
       )
     });
   };
 
-  const updateItemCost = (productId: string, unitCost: number) => {
+  const updateItemCost = (productId: string, unitCost: number | string) => {
     setFormData({
       ...formData,
       items: formData.items.map((item: any) => 
         item.productId === productId 
-          ? { ...item, unitCost, total: item.quantity * unitCost - (item.discount || 0) + (item.tax || 0) }
+          ? { ...item, unitCost, total: toNumber(item.quantity) * toNumber(unitCost) - toNumber(item.discount) + toNumber(item.tax) }
           : item
       )
     });
   };
 
-  const updateItemDiscount = (productId: string, discount: number) => {
+  const updateItemDiscount = (productId: string, discount: number | string) => {
     setFormData({
       ...formData,
       items: formData.items.map((item: any) => 
         item.productId === productId 
-          ? { ...item, discount, total: item.quantity * item.unitCost - discount + (item.tax || 0) }
+          ? { ...item, discount, total: toNumber(item.quantity) * toNumber(item.unitCost) - toNumber(discount) + toNumber(item.tax) }
           : item
       )
     });
   };
 
-  const updateItemTax = (productId: string, tax: number) => {
+  const updateItemTax = (productId: string, tax: number | string) => {
     setFormData({
       ...formData,
       items: formData.items.map((item: any) => 
         item.productId === productId 
-          ? { ...item, tax, total: item.quantity * item.unitCost - (item.discount || 0) + tax }
+          ? { ...item, tax, total: toNumber(item.quantity) * toNumber(item.unitCost) - toNumber(item.discount) + toNumber(tax) }
           : item
       )
     });
@@ -646,8 +705,15 @@ export default function SupplierInvoicesPage() {
             <RefreshCw className="w-4 h-4" />
             Refresh
           </Button>
+          <Link href="/supplier-payments">
+            <Button variant="outline" className="gap-2">
+              <DollarSign className="w-4 h-4" />
+              Supplier Payments
+            </Button>
+          </Link>
           <Button variant="outline" onClick={() => {
             fetchPurchaseOrders();
+            fetchProducts();
             setShowPOModal(true);
             setShowPoDropdown(true);
           }} className="gap-2">
@@ -788,9 +854,9 @@ export default function SupplierInvoicesPage() {
                           <td className="px-4 py-2">{item.productName}</td>
                           <td className="px-4 py-2 text-right text-gray-500">{item.unitAbbreviation || item.unitName || '-'}</td>
                           <td className="px-4 py-2 text-right">{item.quantity}</td>
-                          <td className="px-4 py-2 text-right">{formatCurrency(item.unitCost)}</td>
-                          <td className="px-4 py-2 text-right">{formatCurrency(item.discount)}</td>
-                          <td className="px-4 py-2 text-right">{formatCurrency(item.tax)}</td>
+                          <td className="px-4 py-2 text-right">{formatCurrency(toNumber(item.unitCost))}</td>
+                          <td className="px-4 py-2 text-right">{formatCurrency(toNumber(item.discount))}</td>
+                          <td className="px-4 py-2 text-right">{formatCurrency(toNumber(item.tax))}</td>
                           <td className="px-4 py-2 text-right font-medium">{formatCurrency(item.total)}</td>
                         </tr>
                       ))}
@@ -893,7 +959,7 @@ export default function SupplierInvoicesPage() {
                       setInvoiceNumber(e.target.value);
                       if (invoiceNumberError) setInvoiceNumberError('');
                     }}
-                    placeholder="Invoice #"
+                    placeholder="Auto-generated"
                   />
                   {invoiceNumberError && (
                     <p className="text-red-500 text-xs mt-1">{invoiceNumberError}</p>
@@ -990,10 +1056,6 @@ export default function SupplierInvoicesPage() {
                 e.preventDefault();
                 
                 // Validate required fields
-                if (!invoiceNumber.trim()) {
-                  setInvoiceNumberError('Invoice number is required');
-                  return;
-                }
                 setInvoiceNumberError('');
                 if (!formData.supplierId) {
                   alert('Please select a supplier');
@@ -1009,11 +1071,12 @@ export default function SupplierInvoicesPage() {
                     ? `/api/supplier-invoices/${editingInvoice._id}`
                     : '/api/supplier-invoices';
                   const method = editingInvoice ? 'PUT' : 'POST';
+                  const invoiceNumberForSubmit = invoiceNumber.trim();
                   
                   const response = await fetch(url, {
                     method,
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ...formData, invoiceNumber }),
+                    body: JSON.stringify({ ...formData, invoiceNumber: invoiceNumberForSubmit }),
                   });
                   if (response.ok) {
                     const invoice = await response.json();
@@ -1024,19 +1087,20 @@ export default function SupplierInvoicesPage() {
                     setEditingInvoice(null);
                   } else {
                     const error = await response.json();
-                    alert(`Failed to ${editingInvoice ? 'update' : 'create'} invoice: ` + error.error);
+                    const details = error.details && error.details !== 'Unknown error' ? ` ${error.details}` : '';
+                    alert(`Failed to ${editingInvoice ? 'update' : 'create'} invoice: ${error.error || 'Unknown error'}${details}`);
                   }
                 } catch (error) {
                   console.error(`Failed to ${editingInvoice ? 'update' : 'create'} invoice:`, error);
                   alert(`Failed to ${editingInvoice ? 'update' : 'create'} invoice`);
                 }
-              }} className="space-y-6">
+              }} className="space-y-3">
                 {/* Top Section: Product Search and Invoice Details */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 gap-3">
                   {/* Product Search Section */}
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <h3 className="font-medium text-gray-900 mb-4">Add Products</h3>
-                    <div className="mb-4">
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <h3 className="font-medium text-gray-900 mb-2">Add Products</h3>
+                    <div className="mb-2">
                       <div className="flex-1 relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <input
@@ -1080,50 +1144,6 @@ export default function SupplierInvoicesPage() {
                     )}
                   </div>
 
-                  {/* Invoice Details Section */}
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <h3 className="font-medium text-gray-900 mb-4">Invoice Details</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Date</label>
-                        <input
-                          type="date"
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                          value={formData.invoiceDate}
-                          onChange={(e) => setFormData({ ...formData, invoiceDate: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
-                        <input
-                          type="date"
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                          value={formData.dueDate}
-                          onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Order #</label>
-                        <input
-                          type="text"
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                          value={formData.purchaseOrderNumber}
-                          onChange={(e) => setFormData({ ...formData, purchaseOrderNumber: e.target.value })}
-                          placeholder="Optional"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                        <textarea
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                          rows={2}
-                          value={formData.notes}
-                          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                          placeholder="Optional notes"
-                        />
-                      </div>
-                    </div>
-                  </div>
                 </div>
 
                 {/* Items Table */}
@@ -1169,7 +1189,8 @@ export default function SupplierInvoicesPage() {
                                   min="0"
                                   className="w-16 px-2 py-1 border border-gray-200 rounded text-right"
                                   value={item.quantity}
-                                  onChange={(e) => updateItemQuantity(item.productId, parseInt(e.target.value) || 0)}
+                                  onFocus={resetZeroField(item.quantity, (value) => updateItemQuantity(item.productId, value))}
+                                  onChange={(e) => updateItemQuantity(item.productId, e.target.value)}
                                 />
                               </td>
                               <td className="px-4 py-2">
@@ -1179,7 +1200,8 @@ export default function SupplierInvoicesPage() {
                                   step="0.01"
                                   className="w-24 px-2 py-1 border border-gray-200 rounded text-right"
                                   value={item.unitCost}
-                                  onChange={(e) => updateItemCost(item.productId, parseFloat(e.target.value) || 0)}
+                                  onFocus={resetZeroField(item.unitCost, (value) => updateItemCost(item.productId, value))}
+                                  onChange={(e) => updateItemCost(item.productId, e.target.value)}
                                 />
                               </td>
                               <td className="px-4 py-2">
@@ -1189,7 +1211,8 @@ export default function SupplierInvoicesPage() {
                                   step="0.01"
                                   className="w-20 px-2 py-1 border border-gray-200 rounded text-right"
                                   value={item.discount}
-                                  onChange={(e) => updateItemDiscount(item.productId, parseFloat(e.target.value) || 0)}
+                                  onFocus={resetZeroField(item.discount, (value) => updateItemDiscount(item.productId, value))}
+                                  onChange={(e) => updateItemDiscount(item.productId, e.target.value)}
                                 />
                               </td>
                               <td className="px-4 py-2">
@@ -1199,7 +1222,8 @@ export default function SupplierInvoicesPage() {
                                   step="0.01"
                                   className="w-20 px-2 py-1 border border-gray-200 rounded text-right"
                                   value={item.tax}
-                                  onChange={(e) => updateItemTax(item.productId, parseFloat(e.target.value) || 0)}
+                                  onFocus={resetZeroField(item.tax, (value) => updateItemTax(item.productId, value))}
+                                  onChange={(e) => updateItemTax(item.productId, e.target.value)}
                                 />
                               </td>
                               <td className="px-4 py-2 text-right font-medium">{formatCurrency(item.total)}</td>
@@ -1226,6 +1250,51 @@ export default function SupplierInvoicesPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Invoice Details Section */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h3 className="font-medium text-gray-900 mb-4">Invoice Details</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Date</label>
+                      <input
+                        type="date"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        value={formData.invoiceDate}
+                        onChange={(e) => setFormData({ ...formData, invoiceDate: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                      <input
+                        type="date"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        value={formData.dueDate}
+                        onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Order #</label>
+                      <input
+                        type="text"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        value={formData.purchaseOrderNumber}
+                        onChange={(e) => setFormData({ ...formData, purchaseOrderNumber: e.target.value })}
+                        placeholder="Optional"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                      <textarea
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        rows={2}
+                        value={formData.notes}
+                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                        placeholder="Optional notes"
+                      />
+                    </div>
+                  </div>
+                </div>
 
                 <div className="flex justify-end gap-3 pt-4 border-t">
                   <Button type="button" variant="outline" onClick={() => {

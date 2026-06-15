@@ -18,6 +18,7 @@ interface Customer {
   phone?: string;
   email?: string;
   creditBalance?: number;
+  balanceDue?: number;
 }
 
 interface CustomerPayment {
@@ -588,7 +589,7 @@ export default function CustomerPaymentsPage() {
                       {/* Show credit balance from customer model */}
                       Outstanding: {formatCurrency(
                         customerInvoices.find(c => String(c.customerId) === String(formData.customerId))?.totalOutstanding || 
-                        customers.find(c => String(c._id) === String(formData.customerId))?.creditBalance || 
+                        customers.find(c => String(c._id) === String(formData.customerId))?.balanceDue || 
                         0
                       )}
                     </div>

@@ -129,29 +129,48 @@ export const useCartStore = create<CartState>()(
 );
 
 // UI Store for managing UI state
+interface FavoriteItem {
+  href: string;
+  label: string;
+  iconName?: string;
+}
+
 interface UIState {
   sidebarOpen: boolean;
   darkMode: boolean;
   activeBranch: string | null;
+  favoriteLinks: FavoriteItem[];
   setSidebarOpen: (open: boolean) => void;
   toggleSidebar: () => void;
   setDarkMode: (mode: boolean) => void;
   toggleDarkMode: () => void;
   setActiveBranch: (branchId: string | null) => void;
+  toggleFavorite: (item: { href: string; label: string; iconName?: string }) => void;
+  isFavorite: (href: string) => boolean;
 }
 
 export const useUIStore = create<UIState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       sidebarOpen: false,
       darkMode: false,
       activeBranch: null,
+      favoriteLinks: [],
 
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
       setDarkMode: (mode) => set({ darkMode: mode }),
       toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),
       setActiveBranch: (branchId) => set({ activeBranch: branchId }),
+      toggleFavorite: (item) => {
+        const exists = get().favoriteLinks.some(f => f.href === item.href);
+        if (exists) {
+          set({ favoriteLinks: get().favoriteLinks.filter(f => f.href !== item.href) });
+        } else {
+          set({ favoriteLinks: [...get().favoriteLinks, item] });
+        }
+      },
+      isFavorite: (href) => get().favoriteLinks.some(f => f.href === href),
     }),
     {
       name: 'pos-ui',

@@ -37,15 +37,22 @@ export async function GET(request: NextRequest) {
       query.branch = branch;
     }
     
-    // Low stock check - uses shopStock (or falls back to stockQuantity for legacy data)
+    // Low stock check - handles both split stock (shopStock + remoteStock) and legacy stockQuantity
     if (lowStock === 'true') {
-      // For simplicity, just check stockQuantity for legacy data compatibility
-      // The frontend handles displaying both shop and remote stock separately
       query.$expr = {
-        $lte: ['$stockQuantity', '$lowStockThreshold']
+        $lte: [
+          {
+            $cond: {
+              if: { $or: [{ $ne: [{ $type: '$shopStock' }, 'missing'] }, { $ne: [{ $type: '$remoteStock' }, 'missing'] }] },
+              then: { $add: [{ $ifNull: ['$shopStock', 0] }, { $ifNull: ['$remoteStock', 0] }] },
+              else: { $ifNull: ['$stockQuantity', 0] }
+            }
+          },
+          { $ifNull: ['$lowStockThreshold', 10] }
+        ]
       };
     }
-    
+
     const skip = (page - 1) * limit;
     
     const [products, total] = await Promise.all([

@@ -245,6 +245,17 @@ export async function DELETE(
       });
     }
     
+    // Revert inventory levels for each item
+    for (const item of invoice.items) {
+      const baseQuantity = item.quantity * (item.conversionToBase || 1);
+      await Product.findByIdAndUpdate(item.product, {
+        $inc: {
+          stockQuantity: -baseQuantity,
+          shopStock: -baseQuantity,
+        },
+      });
+    }
+    
     await SupplierInvoice.findByIdAndDelete(id);
     
     return NextResponse.json({

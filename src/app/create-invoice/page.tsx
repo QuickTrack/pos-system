@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -36,6 +37,7 @@ interface Customer {
   phone: string;
   creditLimit: number;
   creditBalance: number;
+  balanceDue?: number;
   customerType?: string;
 }
 
@@ -88,12 +90,18 @@ interface Invoice {
   dueDate?: string;
   notes?: string;
   payments?: any[];
+  customerBalanceDue?: number;
   invoiceType?: 'sale' | 'credit';
   includeInPrice?: boolean;
   paymentTerms?: string;
 }
 
+const getCustomerBalanceDue = (customer?: Customer | null, customerBalanceDue?: number) =>
+  customerBalanceDue ?? customer?.balanceDue ?? customer?.creditBalance ?? 0;
+
 export default function CreateInvoicePage() {
+  const searchParams = useSearchParams();
+  const invoiceIdToOpen = searchParams.get('invoiceId');
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -102,6 +110,7 @@ export default function CreateInvoicePage() {
   // Invoice creation state
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [customerBalanceDue, setCustomerBalanceDue] = useState(0);
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
   const [invoiceNotes, setInvoiceNotes] = useState('');
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0]);
@@ -136,6 +145,7 @@ export default function CreateInvoicePage() {
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [selectedInvoiceForPrint, setSelectedInvoiceForPrint] = useState<Invoice | null>(null);
   const [printDocumentType, setPrintDocumentType] = useState<'invoice' | 'delivery-note'>('invoice');
+  const [activePrintMenu, setActivePrintMenu] = useState<string | null>(null);
   const [businessSettings, setBusinessSettings] = useState<any>(null);
 
   // Alert modal state
@@ -162,6 +172,12 @@ export default function CreateInvoicePage() {
             email: parsed.business.email || '',
             vatNumber: parsed.business.taxNumber || '',
             kraPin: parsed.business.taxNumber || '',
+            bankName: parsed.paymentMethods?.bank || '',
+            bankAccount: parsed.paymentMethods?.bankAccount || '',
+            bankBranch: parsed.paymentMethods?.bankBranch || '',
+            paymentTill: parsed.paymentMethods?.till || '',
+            sendMoneyPhoneNumber: parsed.paymentMethods?.sendMoneyPhoneNumber || '',
+            acceptedPaymentMethods: parsed.paymentMethods?.acceptedPaymentMethods || '',
             includeInPrice: parsed.tax?.includeInPrice || false
           };
         }
@@ -232,6 +248,24 @@ export default function CreateInvoicePage() {
     }
   };
 
+  const openInvoiceById = async (invoiceId: string) => {
+    try {
+      const response = await fetch(`/api/customer-invoices/${invoiceId}`);
+      const data = await response.json();
+      if (data.success && data.invoice) {
+        setViewInvoice(data.invoice);
+      }
+    } catch (error) {
+      console.error('Failed to open invoice:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (invoiceIdToOpen && !loading) {
+      openInvoiceById(invoiceIdToOpen);
+    }
+  }, [invoiceIdToOpen, loading]);
+
   // Filter products based on search and category
   useEffect(() => {
     let filtered = [...products];
@@ -254,6 +288,7 @@ export default function CreateInvoicePage() {
 
   const handleOpenInvoiceModal = async (type: 'sale' | 'credit' = 'sale') => {
     setSelectedCustomer(null);
+    setCustomerBalanceDue(0);
     setInvoiceItems([]);
     setInvoiceNotes('');
     setInvoiceDate(new Date().toISOString().split('T')[0]);
@@ -300,6 +335,7 @@ export default function CreateInvoicePage() {
 
   const selectCustomer = (customer: Customer) => {
     setSelectedCustomer(customer);
+    setCustomerBalanceDue(getCustomerBalanceDue(customer));
     setShowCustomerModal(false);
     setCustomerSearch('');
   };
@@ -399,6 +435,7 @@ export default function CreateInvoicePage() {
     try {
       const payload = {
         customerId: selectedCustomer._id,
+        customerBalanceDue,
         invoiceNumber: invoiceNumber,
         items: invoiceItems,
         notes: invoiceNotes,
@@ -448,6 +485,7 @@ export default function CreateInvoicePage() {
               name: selectedCustomer.name,
               phone: selectedCustomer.phone || ''
             },
+            customerBalanceDue: data.invoice.customerBalanceDue ?? customerBalanceDue,
             // Transform unitName to unit for PrintPreview
             items: data.invoice.items?.map((item: any) => ({
               ...item,
@@ -495,7 +533,9 @@ export default function CreateInvoicePage() {
     
     // Load customer
     if (invoice.customer) {
-      setSelectedCustomer(invoice.customer as unknown as Customer);
+      const customer = invoice.customer as unknown as Customer;
+      setSelectedCustomer(customer);
+      setCustomerBalanceDue(getCustomerBalanceDue(customer, (invoice as any).customerBalanceDue));
     }
     
     // Load items
@@ -541,9 +581,16 @@ export default function CreateInvoicePage() {
 
   const handlePrintInvoice = (invoice: Invoice, docType: 'invoice' | 'delivery-note' = 'invoice') => {
     setPrintDocumentType(docType);
-    // Transform unitName to unit for PrintPreview
+    const currentCustomerBalanceDue = getCustomerBalanceDue(invoice.customer as unknown as Customer | undefined);
+    const invoiceBalanceDue = Number((invoice as any).balanceDue ?? 0);
+    const snapshotCustomerBalanceDue = (invoice as any).customerBalanceDue;
+    const customerBalanceDue =
+      snapshotCustomerBalanceDue === 0 && invoiceBalanceDue > 0 && currentCustomerBalanceDue > 0
+        ? currentCustomerBalanceDue
+        : snapshotCustomerBalanceDue ?? currentCustomerBalanceDue;
     const transformedInvoice = {
       ...invoice,
+      customerBalanceDue,
       items: invoice.items?.map((item: any) => ({
         ...item,
         unit: item.unitName || item.unit || '-'
@@ -555,6 +602,7 @@ export default function CreateInvoicePage() {
 
   const resetInvoiceForm = () => {
     setSelectedCustomer(null);
+    setCustomerBalanceDue(0);
     setInvoiceItems([]);
     setInvoiceNotes('');
     setInvoiceDate(new Date().toISOString().split('T')[0]);
@@ -652,20 +700,37 @@ export default function CreateInvoicePage() {
               <DollarSign className="w-4 h-4" />
             </Button>
           )}
-          <div className="relative group">
-            <Button variant="ghost" size="sm" title="Print">
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="sm"
+              title="Print"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActivePrintMenu(activePrintMenu === item._id ? null : item._id);
+              }}
+            >
               <Printer className="w-4 h-4" />
+              <span>Print</span>
             </Button>
-            <div className="absolute right-0 mt-1 w-40 bg-white border rounded-lg shadow-lg z-10 hidden group-hover:block">
+            <div className={`absolute right-0 mt-1 w-40 bg-white border rounded-lg shadow-lg z-20 ${activePrintMenu === item._id ? 'block' : 'hidden'}`}>
               <button
                 className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
-                onClick={() => handlePrintInvoice(item, 'invoice')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActivePrintMenu(null);
+                  handlePrintInvoice(item, 'invoice');
+                }}
               >
                 Print Invoice
               </button>
               <button
                 className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
-                onClick={() => handlePrintInvoice(item, 'delivery-note')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActivePrintMenu(null);
+                  handlePrintInvoice(item, 'delivery-note');
+                }}
               >
                 Print Delivery Note
               </button>
@@ -733,6 +798,7 @@ export default function CreateInvoicePage() {
                   placeholder="Customer..."
                   value={selectedCustomer?.name || ''}
                   readOnly
+                  title={`Customer Balance Due: ${formatCurrency(customerBalanceDue)}`}
                   className="w-24 text-xs h-7"
                 />
                 <Button variant="outline" size="sm" onClick={() => setShowCustomerModal(true)} className="h-7 px-2">
@@ -1016,6 +1082,7 @@ export default function CreateInvoicePage() {
               >
                 <div className="font-medium">{customer.name}</div>
                 <div className="text-sm text-gray-500">{customer.phone}</div>
+                <div className="text-xs text-amber-600 mt-1">Balance Due: {formatCurrency(customer.balanceDue ?? customer.creditBalance ?? 0)}</div>
                 {customer.customerType && (
                   <div className="text-xs text-gray-400 mt-1">{customer.customerType}</div>
                 )}
@@ -1088,6 +1155,10 @@ export default function CreateInvoicePage() {
             </div>
 
             <div className="flex justify-end gap-2 border-t pt-4">
+              <Button variant="primary" size="sm" onClick={() => handlePrintInvoice(viewInvoice, 'invoice')}>
+                <Printer className="w-4 h-4" />
+                Print Invoice
+              </Button>
               <Button variant="outline" onClick={() => setViewInvoice(null)}>
                 Close
               </Button>
@@ -1111,6 +1182,9 @@ export default function CreateInvoicePage() {
             bankName: businessSettings?.bankName || '',
             bankAccount: businessSettings?.bankAccount || '',
             bankBranch: businessSettings?.bankBranch || '',
+            paymentTill: businessSettings?.paymentTill || '',
+            sendMoneyPhoneNumber: businessSettings?.sendMoneyPhoneNumber || '',
+            acceptedPaymentMethods: businessSettings?.acceptedPaymentMethods || '',
             terms: businessSettings?.invoiceTerms || '',
             kraPin: businessSettings?.kraPin || '',
             invoiceNumber: selectedInvoiceForPrint.invoiceNumber,
@@ -1137,6 +1211,7 @@ export default function CreateInvoicePage() {
             notes: selectedInvoiceForPrint.notes,
             status: selectedInvoiceForPrint.status,
             balanceDue: selectedInvoiceForPrint.total - (selectedInvoiceForPrint.payments?.reduce((sum: number, p: any) => sum + p.amount, 0) || 0),
+            customerBalanceDue: selectedInvoiceForPrint.customerBalanceDue,
             deliveryDate: printDocumentType === 'delivery-note' ? new Date().toISOString().split('T')[0] : undefined,
             deliveryAddress: ''
           }}

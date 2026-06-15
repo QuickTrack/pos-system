@@ -55,7 +55,10 @@ export async function POST(request: NextRequest) {
       vatNumber: settings?.vatNumber || '',
       bankName: settings?.bankName || 'N/A',
       bankAccount: settings?.bankAccount || 'N/A',
-      bankBranch: settings?.bankBranch || 'N/A'
+      bankBranch: settings?.bankBranch || 'N/A',
+      paymentTill: settings?.paymentTill || '',
+      sendMoneyPhoneNumber: settings?.sendMoneyPhoneNumber || '',
+      acceptedPaymentMethods: settings?.acceptedPaymentMethods || ''
     };
 
     // Get template

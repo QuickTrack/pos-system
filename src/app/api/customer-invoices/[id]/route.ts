@@ -5,6 +5,7 @@ import Customer from '@/models/Customer';
 import { getAuthUser } from '@/lib/auth-server';
 import { hasPermission } from '@/lib/auth';
 import mongoose from 'mongoose';
+import { calculateCustomerBalanceDue, syncCustomerBalanceDue } from '@/lib/customer-balance';
 
 export async function GET(
   request: NextRequest,
@@ -15,7 +16,7 @@ export async function GET(
     await dbConnect();
     
     const invoice = await CustomerInvoice.findById(id)
-      .populate('customer', 'name phone email address creditLimit')
+      .populate('customer', 'name phone email address creditLimit creditBalance balanceDue')
       .populate('createdBy', 'name');
     
     if (!invoice) {
@@ -100,6 +101,9 @@ export async function PUT(
       if (typeof data.total === 'number') {
         invoice.total = data.total;
       }
+      invoice.balanceDue = Math.max(0, invoice.total - invoice.amountPaid);
+      const customerBalanceDue = await calculateCustomerBalanceDue(invoice.customer, invoice.branch);
+      invoice.customerBalanceDue = customerBalanceDue + invoice.balanceDue;
       if (typeof data.taxRate === 'number') {
         invoice.taxRate = data.taxRate;
       }
@@ -120,6 +124,7 @@ export async function PUT(
       }
       
       await invoice.save();
+      await syncCustomerBalanceDue(invoice.customer, invoice.branch);
       
       return NextResponse.json({
         success: true,
@@ -133,6 +138,8 @@ export async function PUT(
       // If marking as sent, update status
       if (data.status === 'sent' && invoice.status === 'draft') {
         invoice.status = 'sent';
+        const customerBalanceDue = await calculateCustomerBalanceDue(invoice.customer, invoice.branch);
+        invoice.customerBalanceDue = customerBalanceDue;
       }
       
       // If cancelling
@@ -144,6 +151,10 @@ export async function PUT(
       }
     }
     
+    if (data.status && invoice.status !== 'draft') {
+      await syncCustomerBalanceDue(invoice.customer, invoice.branch);
+    }
+
     // Handle payments
     if (data.payment) {
       const payment = data.payment;
@@ -180,6 +191,7 @@ export async function PUT(
     }
     
     await invoice.save();
+    await syncCustomerBalanceDue(invoice.customer, invoice.branch);
     
     return NextResponse.json({
       success: true,
@@ -226,6 +238,7 @@ export async function DELETE(
     }
     
     await CustomerInvoice.findByIdAndDelete(id);
+    await syncCustomerBalanceDue(invoice.customer, invoice.branch);
     
     return NextResponse.json({
       success: true,

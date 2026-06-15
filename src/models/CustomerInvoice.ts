@@ -1,7 +1,7 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
 export interface IInvoiceItem {
-  product: mongoose.Types.ObjectId;
+  product?: mongoose.Types.ObjectId;
   productName: string;
   sku: string;
   quantity: number;
@@ -31,6 +31,9 @@ export interface ICustomerInvoice extends Document {
   invoiceType: 'sale' | 'credit';
   referenceInvoiceId?: mongoose.Types.ObjectId;
   referenceInvoiceNumber?: string;
+  sourceType?: 'quotation' | 'sale' | 'pos' | 'manual';
+  sourceId?: mongoose.Types.ObjectId;
+  sourceNumber?: string;
   
   // Customer
   customer: mongoose.Types.ObjectId;
@@ -64,6 +67,7 @@ export interface ICustomerInvoice extends Document {
   payments: IInvoicePayment[];
   amountPaid: number;
   balanceDue: number;
+  customerBalanceDue: number;
   
   // Notes
   notes?: string;
@@ -83,7 +87,7 @@ export interface ICustomerInvoice extends Document {
 }
 
 const InvoiceItemSchema = new Schema<IInvoiceItem>({
-  product: { type: Schema.Types.ObjectId, ref: 'Product', required: true },
+  product: { type: Schema.Types.ObjectId, ref: 'Product' },
   productName: { type: String, required: true },
   sku: { type: String, required: true },
   quantity: { type: Number, required: true },
@@ -117,6 +121,13 @@ const CustomerInvoiceSchema = new Schema<ICustomerInvoice>({
   invoiceType: { type: String, enum: ['sale', 'credit'], default: 'sale' },
   referenceInvoiceId: { type: Schema.Types.ObjectId, ref: 'CustomerInvoice' },
   referenceInvoiceNumber: { type: String },
+  sourceType: {
+    type: String,
+    enum: ['quotation', 'sale', 'pos', 'manual'],
+    default: 'manual'
+  },
+  sourceId: { type: Schema.Types.ObjectId },
+  sourceNumber: { type: String },
   
   // Customer
   customer: { type: Schema.Types.ObjectId, ref: 'Customer', required: true },
@@ -154,6 +165,7 @@ const CustomerInvoiceSchema = new Schema<ICustomerInvoice>({
   payments: [InvoicePaymentSchema],
   amountPaid: { type: Number, default: 0 },
   balanceDue: { type: Number, required: true },
+  customerBalanceDue: { type: Number, default: 0 },
   
   // Notes
   notes: { type: String },

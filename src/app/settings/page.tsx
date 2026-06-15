@@ -22,6 +22,13 @@ interface Settings {
     currency: string;
     logo?: string;
   };
+  paymentMethods: {
+    till: string;
+    sendMoneyPhoneNumber: string;
+    bank: string;
+    bankAccount: string;
+    acceptedPaymentMethods: string;
+  };
   tax: {
     enabled: boolean;
     rate: number;
@@ -88,6 +95,13 @@ export default function SettingsPage() {
       taxNumber: '',
       currency: 'KES',
       logo: '',
+    },
+    paymentMethods: {
+      till: '',
+      sendMoneyPhoneNumber: '',
+      bank: '',
+      bankAccount: '',
+      acceptedPaymentMethods: '',
     },
     tax: {
       enabled: true,
@@ -162,6 +176,13 @@ export default function SettingsPage() {
               currency: 'KES',
               logo: data.settings.logo || localData?.business?.logo || '',
             },
+            paymentMethods: {
+              till: data.settings.paymentTill || localData?.paymentMethods?.till || '',
+              sendMoneyPhoneNumber: data.settings.sendMoneyPhoneNumber || localData?.paymentMethods?.sendMoneyPhoneNumber || '',
+              bank: data.settings.bankName || localData?.paymentMethods?.bank || '',
+              bankAccount: data.settings.bankAccount || localData?.paymentMethods?.bankAccount || '',
+              acceptedPaymentMethods: data.settings.acceptedPaymentMethods || localData?.paymentMethods?.acceptedPaymentMethods || '',
+            },
             tax: {
               enabled: data.settings.enableTax ?? localData?.tax?.enabled ?? true,
               rate: data.settings.taxRate ?? localData?.tax?.rate ?? 16,
@@ -209,6 +230,11 @@ export default function SettingsPage() {
         address: settings.business.address,
         kraPin: settings.business.taxNumber,
         logo: settings.business.logo,
+        paymentTill: settings.paymentMethods?.till ?? '',
+        sendMoneyPhoneNumber: settings.paymentMethods?.sendMoneyPhoneNumber ?? '',
+        bankName: settings.paymentMethods?.bank ?? '',
+        bankAccount: settings.paymentMethods?.bankAccount ?? '',
+        acceptedPaymentMethods: settings.paymentMethods?.acceptedPaymentMethods ?? '',
         taxRate: settings.tax.rate,
         enableTax: settings.tax.enabled,
         includeInPrice: settings.tax.includeInPrice,
@@ -351,6 +377,13 @@ export default function SettingsPage() {
     setSettings(prev => ({
       ...prev,
       business: { ...prev.business, [field]: value },
+    }));
+  };
+
+  const updatePaymentMethodField = (field: string, value: string) => {
+    setSettings(prev => ({
+      ...prev,
+      paymentMethods: { ...(prev.paymentMethods ?? {}), [field]: value },
     }));
   };
 
@@ -589,6 +622,72 @@ export default function SettingsPage() {
                         onChange={(e) => updateBusinessField('taxNumber', e.target.value)}
                         placeholder="A0000000000"
                       />
+                    </div>
+                  </div>
+
+                  <div className="border-t border-gray-200 pt-6">
+                    <div className="mb-4">
+                      <h3 className="text-base font-semibold text-gray-900">Payment Method Settings</h3>
+                      <p className="text-sm text-gray-500 mt-1">Configure payment details displayed on invoices and receipts.</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Till
+                        </label>
+                        <Input
+                          type="text"
+                          value={settings.paymentMethods?.till ?? ''}
+                          onChange={(e) => updatePaymentMethodField('till', e.target.value)}
+                          placeholder="e.g., 123456"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Send Money Phone Number
+                        </label>
+                        <Input
+                          type="tel"
+                          value={settings.paymentMethods?.sendMoneyPhoneNumber ?? ''}
+                          onChange={(e) => updatePaymentMethodField('sendMoneyPhoneNumber', e.target.value)}
+                          placeholder="+254 700 000 000"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Bank
+                        </label>
+                        <Input
+                          type="text"
+                          value={settings.paymentMethods?.bank ?? ''}
+                          onChange={(e) => updatePaymentMethodField('bank', e.target.value)}
+                          placeholder="Bank name"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Bank Account Details
+                        </label>
+                        <Input
+                          type="text"
+                          value={settings.paymentMethods?.bankAccount ?? ''}
+                          onChange={(e) => updatePaymentMethodField('bankAccount', e.target.value)}
+                          placeholder="Account number"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Accepted Payment Methods
+                        </label>
+                        <Input
+                          type="text"
+                          value={settings.paymentMethods?.acceptedPaymentMethods ?? ''}
+                          onChange={(e) => updatePaymentMethodField('acceptedPaymentMethods', e.target.value)}
+                          placeholder="Cash, M-Pesa, Card, Bank Transfer"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Separate methods with commas. These will appear on customer invoices.</p>
+                      </div>
                     </div>
                   </div>
                 </div>

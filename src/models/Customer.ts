@@ -11,6 +11,7 @@ export interface ICustomer extends Document {
   
   // Credit & Loyalty
   creditBalance: number;
+  balanceDue: number;
   loyaltyPoints: number;
   creditLimit?: number;
   
@@ -57,6 +58,7 @@ const CustomerSchema = new Schema<ICustomer>(
     
     // Credit & Loyalty
     creditBalance: { type: Number, default: 0 },
+    balanceDue: { type: Number, default: 0 },
     loyaltyPoints: { type: Number, default: 0 },
     creditLimit: { type: Number, default: 0 },
     

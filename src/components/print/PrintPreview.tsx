@@ -18,6 +18,7 @@ export default function PrintPreview({
   onPrint,
   onClose
 }: PrintPreviewProps) {
+  const doc = document || {};
   const [copies, setCopies] = useState(1);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const documentRef = useRef<HTMLDivElement>(null);
@@ -102,60 +103,97 @@ export default function PrintPreview({
     });
   };
 
-  const handlePrint = () => {
-    if (documentRef.current) {
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        const content = documentRef.current.innerHTML;
-        const doc = document || {};
-        const customerName = doc.customer?.name || doc.customerName || 'Customer';
-        const invoiceNumber = doc.invoiceNumber || 'Invoice';
-        const sanitizedName = customerName.replace(/[^a-zA-Z0-9]/g, '-');
-        const fileName = `${sanitizedName}-${invoiceNumber}`;
-        
-        printWindow.document.write(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <title>${fileName}</title>
-              <script src="https://cdn.tailwindcss.com"></script>
-              <style>
-                @page { margin: 10mm; size: A4; }
-                @media print {
-                  body { font-family: system-ui, -apple-system, sans-serif; }
-                  .page-break { page-break-after: always; }
-                  .no-break { page-break-inside: avoid; }
-                  .print-footer { 
-                    position: fixed; 
-                    bottom: 0; 
-                    left: 0; 
-                    right: 0; 
-                    height: 60px;
-                    background: white;
-                    border-top: 1px solid #e5e7eb;
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    padding: 0 15mm;
-                  }
-                  .print-content { margin-bottom: 70px; }
-                }
-              </style>
-            </head>
-            <body>${content}</body>
-          </html>
-        `);
-        printWindow.document.close();
-        printWindow.focus();
-        setTimeout(() => {
-          printWindow.print();
-          printWindow.close();
-        }, 500);
-      }
-    }
-  };
+  const discountAmount = Number(doc.discount || 0);
+  const taxableAmount = doc.taxableAmount !== undefined
+    ? Number(doc.taxableAmount)
+    : doc.includeInPrice
+      ? Number(doc.total || 0) - Number(doc.tax || 0)
+      : Number(doc.subtotal || 0) - discountAmount;
+  const taxAmount = Number(doc.tax || 0);
+  const taxRate = Number(doc.taxRate || 0);
+  const currentCustomerBalanceDue = Number(
+    doc.customer?.balanceDue ?? doc.customer?.creditBalance ?? 0,
+  );
+  const invoiceBalanceDue = Number(doc.balanceDue ?? 0);
+  const snapshotCustomerBalanceDue = Number(doc.customerBalanceDue ?? 0);
+  const customerBalanceDue =
+    snapshotCustomerBalanceDue === 0 && invoiceBalanceDue > 0 && currentCustomerBalanceDue > 0
+      ? currentCustomerBalanceDue
+      : snapshotCustomerBalanceDue;
 
-  const doc = document || {};
+  const handlePrint = () => {
+    if (!documentRef.current) return;
+
+    const printDocument = window.document;
+    const invoiceDoc = document as any;
+    const customerName = invoiceDoc.customer?.name || invoiceDoc.customerName || 'Customer';
+    const invoiceNumber = invoiceDoc.invoiceNumber || 'Invoice';
+    const sanitizedName = customerName.replace(/[^a-zA-Z0-9]/g, '-');
+    const fileName = `${sanitizedName}-${invoiceNumber}`;
+    const printContent = documentRef.current.outerHTML;
+    const originalTitle = printDocument.title;
+    const printCss = `
+      @page { margin: 0; size: A4; }
+      html, body { margin: 0; padding: 0; width: 210mm; min-height: 297mm; }
+      body { font-family: system-ui, -apple-system, sans-serif; }
+      body.invoice-print-active > *:not(#invoice-print-root) { display: none !important; }
+      #invoice-print-root {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        display: block !important;
+        width: 210mm;
+        min-height: 297mm;
+        margin: 0 auto;
+        background: white;
+        overflow: visible;
+      }
+      @media print {
+        body.invoice-print-active { margin: 0; padding: 0; }
+        body.invoice-print-active > *:not(#invoice-print-root) { display: none !important; }
+        #invoice-print-root {
+          position: static !important;
+          display: block !important;
+          width: 210mm !important;
+          min-height: 297mm !important;
+          margin: 0 auto !important;
+        }
+        .print-page {
+          position: relative;
+          box-sizing: border-box;
+          transform: none !important;
+          width: 210mm !important;
+          min-height: 297mm !important;
+          padding: 15mm !important;
+          padding-bottom: 80px !important;
+        }
+      }
+    `;
+
+    const cleanupPrintDocument = () => {
+      printDocument.getElementById('invoice-print-root')?.remove();
+      printDocument.getElementById('invoice-print-style')?.remove();
+      printDocument.body.classList.remove('invoice-print-active');
+      printDocument.title = originalTitle;
+    };
+
+    printDocument.body.classList.add('invoice-print-active');
+    printDocument.title = fileName;
+
+    const styleElement = printDocument.createElement('style');
+    styleElement.id = 'invoice-print-style';
+    styleElement.textContent = printCss;
+    printDocument.head.appendChild(styleElement);
+
+    const printRoot = printDocument.createElement('div');
+    printRoot.id = 'invoice-print-root';
+    printRoot.innerHTML = printContent;
+    printDocument.body.appendChild(printRoot);
+
+    window.addEventListener('afterprint', cleanupPrintDocument, { once: true });
+    window.print();
+    setTimeout(cleanupPrintDocument, 1000);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -175,7 +213,7 @@ export default function PrintPreview({
         {/* Preview */}
         <div className="flex-1 overflow-auto p-6 bg-gray-600">
           <div className="flex justify-center">
-            <div ref={documentRef} className="transform scale-75 origin-top md:scale-90 lg:scale-100 bg-white" style={{ width: '210mm', minHeight: '297mm', padding: '15mm', paddingBottom: '80px' }}>
+            <div ref={documentRef} className="print-page bg-white" style={{ width: '210mm', minHeight: '297mm', padding: '15mm', paddingBottom: '80px', position: 'relative' }}>
               {/* Header */}
               <div className="flex justify-between items-start mb-6 pb-4 border-b-2 border-emerald-600">
                 <div className="flex items-start gap-4">
@@ -252,7 +290,7 @@ export default function PrintPreview({
                         <td className="p-2 text-[11px] text-gray-900">{item.name}</td>
                         <td className="p-2 text-[11px] text-gray-600 text-center">{item.unit || '-'}</td>
                         <td className="p-2 text-[11px] text-gray-600 text-center">{item.quantity}</td>
-                        <td className="p-2 text-[11px] text-gray-600 text-right">{formatCurrency(item.price)}</td>
+                        <td className="p-2 text-[11px] text-gray-600 text-right">{formatCurrency(item.price ?? item.unitPrice)}</td>
                         <td className="p-2 text-[11px] text-gray-900 text-right font-medium">{formatCurrency(item.total)}</td>
                       </tr>
                     ))}
@@ -272,33 +310,65 @@ export default function PrintPreview({
                 </div>
               )}
 
-              {/* Invoice Totals */}
-              <div className="mb-6 flex justify-end">
-                <div className="w-64">
-                  <div className="flex justify-between py-2 border-b border-gray-100">
-                    <span className="text-[11px] text-gray-600 align-middle">Subtotal</span>
-                    <span className="text-[11px] font-medium text-gray-900 align-middle">{doc.subtotal?.toLocaleString()}</span>
-                  </div>
-                  {doc.tax > 0 && (
+              {/* Invoice Totals and Tax Summary */}
+              <div className="mb-6">
+                <div className="flex justify-end">
+                  <div className="w-64">
                     <div className="flex justify-between py-2 border-b border-gray-100">
-                      <span className="text-[11px] text-gray-600 align-middle">Tax ({doc.taxRate || 16}%)</span>
-                      <span className="text-[11px] font-medium text-gray-900 align-middle">{doc.tax?.toLocaleString()}</span>
+                      <span className="text-[11px] text-gray-600 align-middle">Subtotal</span>
+                      <span className="text-[11px] font-medium text-gray-900 align-middle">{formatCurrency(doc.subtotal)}</span>
                     </div>
-                  )}
-                  <div className="flex justify-between py-3 bg-gray-100 rounded px-3 mt-2">
-                    <span className="text-sm font-semibold text-gray-900 align-middle">Total</span>
-                    <span className="text-base font-bold text-emerald-600 align-middle">{doc.total?.toLocaleString()}</span>
+                    {doc.discount > 0 && (
+                      <div className="flex justify-between py-2 border-b border-gray-100">
+                        <span className="text-[11px] text-gray-600 align-middle">Discount</span>
+                        <span className="text-[11px] font-medium text-gray-900 align-middle">-{formatCurrency(doc.discount)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between py-3 bg-gray-100 rounded px-3 mt-2">
+                      <span className="text-sm font-semibold text-gray-900 align-middle">Total</span>
+                      <span className="text-base font-bold text-emerald-600 align-middle">{formatCurrency(doc.total)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 bg-gray-50 rounded-lg p-3 border border-gray-200">
+                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Detailed Tax Summary</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    <div className="rounded-lg bg-white p-2 border border-gray-100">
+                      <p className="text-[9px] text-gray-500">Subtotal</p>
+                      <p className="text-[10px] font-semibold text-gray-900 mt-0.5">{formatCurrency(doc.subtotal)}</p>
+                    </div>
+                    <div className="rounded-lg bg-white p-2 border border-gray-100">
+                      <p className="text-[9px] text-gray-500">Discount</p>
+                      <p className="text-[10px] font-semibold text-gray-900 mt-0.5">-{formatCurrency(discountAmount)}</p>
+                    </div>
+                    <div className="rounded-lg bg-white p-2 border border-gray-100">
+                      <p className="text-[9px] text-gray-500">Taxable Amount</p>
+                      <p className="text-[10px] font-semibold text-gray-900 mt-0.5">{formatCurrency(taxableAmount)}</p>
+                    </div>
+                    <div className="rounded-lg bg-white p-2 border border-gray-100">
+                      <p className="text-[9px] text-gray-500">Tax Rate</p>
+                      <p className="text-[10px] font-semibold text-gray-900 mt-0.5">{taxRate}%</p>
+                    </div>
+                    <div className="rounded-lg bg-white p-2 border border-gray-100">
+                      <p className="text-[9px] text-gray-500">VAT Amount</p>
+                      <p className="text-[10px] font-semibold text-gray-900 mt-0.5">{formatCurrency(taxAmount)}</p>
+                    </div>
+                    <div className="rounded-lg bg-white p-2 border border-gray-100">
+                      <p className="text-[9px] text-gray-500">Pricing</p>
+                      <p className="text-[10px] font-semibold text-gray-900 mt-0.5">{doc.includeInPrice ? 'Tax Included' : 'Tax Exclusive'}</p>
+                    </div>
+                    <div className="rounded-lg bg-white p-2 border border-gray-100">
+                      <p className="text-[9px] text-gray-500">Amount Paid</p>
+                      <p className="text-[10px] font-semibold text-gray-900 mt-0.5">{formatCurrency(doc.amountPaid ?? 0)}</p>
+                    </div>
+                    <div className="rounded-lg bg-white p-2 border border-gray-100">
+                      <p className="text-[9px] text-gray-500">Balance Due</p>
+                      <p className="text-[10px] font-semibold text-amber-600 mt-0.5">{formatCurrency(customerBalanceDue)}</p>
+                    </div>
                   </div>
                 </div>
               </div>
-
-              {/* Terms */}
-              {doc.terms && (
-                <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Terms & Payment Terms</p>
-                  <p className="text-[11px] text-gray-700 whitespace-pre-wrap">{doc.terms}</p>
-                </div>
-              )}
 
               {/* Status */}
               {doc.status && doc.status !== 'draft' && (
@@ -311,25 +381,36 @@ export default function PrintPreview({
                 </div>
               )}
 
-              {/* Notes */}
+              {/* Invoice Notes */}
               {doc.notes && (
-                <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Notes</p>
-                  <p className="text-[11px] text-gray-700 italic">{doc.notes}</p>
+                <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Invoice Notes</p>
+                  <p className="text-[11px] text-gray-700 whitespace-pre-wrap leading-relaxed">{doc.notes}</p>
+                </div>
+              )}
+
+              {/* Terms and Conditions */}
+              {doc.terms && (
+                <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Terms and Conditions</p>
+                  <p className="text-[11px] text-gray-700 whitespace-pre-wrap leading-relaxed">{doc.terms}</p>
                 </div>
               )}
 
               {/* Bank */}
-              {doc.bankName && doc.bankName !== 'N/A' && (
+              {(doc.bankName && doc.bankName !== 'N/A') || doc.paymentTill || doc.sendMoneyPhoneNumber || doc.bankAccount ? (
                 <div className="mb-4 p-3 bg-gray-50 rounded-lg">
                   <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Payment Information</p>
                   <div className="grid grid-cols-3 gap-2 text-[11px]">
-                    <div><p className="text-gray-500">Bank Name</p><p className="font-medium text-gray-900">{doc.bankName}</p></div>
-                    <div><p className="text-gray-500">Account Number</p><p className="font-medium text-gray-900">{doc.bankAccount}</p></div>
+                    {doc.paymentTill && <div><p className="text-gray-500">Till</p><p className="font-medium text-gray-900">{doc.paymentTill}</p></div>}
+                    {doc.paymentTill && <div><p className="text-gray-500">Till</p><p className="font-medium text-gray-900">{doc.paymentTill}</p></div>}
+                    {doc.sendMoneyPhoneNumber && <div><p className="text-gray-500">Send Money Phone</p><p className="font-medium text-gray-900">{doc.sendMoneyPhoneNumber}</p></div>}
+                    {doc.bankName && doc.bankName !== 'N/A' && <div><p className="text-gray-500">Bank Name</p><p className="font-medium text-gray-900">{doc.bankName}</p></div>}
+                    {doc.bankAccount && <div><p className="text-gray-500">Account Number</p><p className="font-medium text-gray-900">{doc.bankAccount}</p></div>}
                     {doc.bankBranch && <div><p className="text-gray-500">Branch</p><p className="font-medium text-gray-900">{doc.bankBranch}</p></div>}
                   </div>
                 </div>
-              )}
+              ) : null}
 
               {/* Footer - Always at bottom */}
               <div className="print-footer absolute bottom-0 left-0 right-0 flex justify-between items-center py-4 px-15mm border-t border-gray-200 bg-white" style={{ paddingLeft: '15mm', paddingRight: '15mm' }}>

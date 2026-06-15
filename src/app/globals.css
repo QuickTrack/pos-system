@@ -195,7 +195,9 @@ body {
 
 /* Print styles */
 @media print {
-  .no-print {
+  .no-print,
+  .fixed,
+  .sticky {
     display: none !important;
   }
   

@@ -182,6 +182,9 @@ export interface PrintDataContext {
     bankName?: string;
     bankAccount?: string;
     bankBranch?: string;
+    paymentTill?: string;
+    sendMoneyPhoneNumber?: string;
+    acceptedPaymentMethods?: string;
   };
   invoice?: {
     number: string;

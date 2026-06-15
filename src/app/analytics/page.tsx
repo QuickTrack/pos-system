@@ -14,6 +14,8 @@ import {
   CreditCard,
   Banknote,
   Smartphone,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -37,7 +39,7 @@ interface AnalyticsData {
     totalProfit: number;
     avgOrderValue: number;
   };
-  revenueData: { _id: number; revenue: number; profit: number }[];
+  revenueData: { _id: { year: number; month: number }; monthLabel: string; revenue: number; profit: number }[];
   topProducts: { _id: string; productName: string; totalQuantity: number; totalRevenue: number }[];
   topCustomers: { _id: string; customerName: string; totalSpent: number; orderCount: number }[];
   categoryBreakdown: { _id: string; category: { name: string }; totalRevenue: number; totalQuantity: number }[];
@@ -52,23 +54,47 @@ const COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4'
 export default function AnalyticsPage() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState('month');
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchAnalytics = async (p?: string) => {
+    const activePeriod = p || period;
+    setError(null);
+    try {
+      const response = await fetch(`/api/analytics?period=${activePeriod}`);
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('Please log in to view analytics.');
+        }
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+      const result = await response.json();
+      if (result.success) {
+        setData(result);
+      } else {
+        throw new Error(result.error || 'Failed to load analytics data.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch analytics');
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchAnalytics();
   }, [period]);
 
-  const fetchAnalytics = async () => {
-    try {
-      const response = await fetch(`/api/analytics?period=${period}`);
-      const result = await response.json();
-      
-      if (result.success) setData(result);
-    } catch (error) {
-      console.error('Failed to fetch analytics:', error);
-    } finally {
-      setLoading(false);
-    }
+  const handlePeriodChange = (p: string) => {
+    setPeriod(p);
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchAnalytics();
+    setRefreshing(false);
   };
 
   if (loading) {
@@ -78,6 +104,28 @@ export default function AnalyticsPage() {
         <div className="p-6">
           <div className="flex items-center justify-center py-20">
             <div className="spinner" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div>
+        <Header title="Analytics" subtitle="Business Insights" />
+        <div className="p-6">
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
+            <p className="text-red-600 font-medium mb-2">Failed to load analytics</p>
+            <p className="text-gray-500 text-sm mb-4">{error}</p>
+            <button
+              onClick={handleRefresh}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+              Retry
+            </button>
           </div>
         </div>
       </div>
@@ -190,12 +238,8 @@ export default function AnalyticsPage() {
                 <LineChart data={data?.dailySales || []}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis 
-                    dataKey="_id" 
+                    dataKey="monthLabel" 
                     tick={{ fontSize: 10 }}
-                    tickFormatter={(value) => {
-                      const date = new Date(value);
-                      return date.toLocaleDateString('en-KE', { month: 'short', day: 'numeric' });
-                    }}
                   />
                   <YAxis tick={{ fontSize: 10 }} />
                   <Tooltip 

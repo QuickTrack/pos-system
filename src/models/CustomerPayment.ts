@@ -51,6 +51,7 @@ const CustomerPaymentSchema = new Schema<ICustomerPayment>(
     },
     invoiceNumbers: [{
       type: String,
+      default: [],
     }],
     status: {
       type: String,

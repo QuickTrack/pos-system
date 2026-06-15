@@ -12,6 +12,7 @@ export { default as Settings } from './Settings';
 export { default as ActivityLog } from './ActivityLog';
 export { default as StockTransfer } from './StockTransfer';
 export { default as StockAudit } from './StockAudit';
+export { default as Quotation } from './Quotation';
 
 // Re-export types from each model
 export type { IUser } from './User';
@@ -28,3 +29,4 @@ export type { ISettings } from './Settings';
 export type { IActivityLog } from './ActivityLog';
 export type { IStockTransfer, IStockTransferItem, TransferStatus, StockLocation } from './StockTransfer';
 export type { IStockAudit, MovementType } from './StockAudit';
+export type { IQuotation, IQuotationItem } from './Quotation';

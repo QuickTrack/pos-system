@@ -3,6 +3,7 @@ import dbConnect from '@/lib/db/mongodb';
 import CustomerInvoice from '@/models/CustomerInvoice';
 import Customer from '@/models/Customer';
 import { getAuthUser } from '@/lib/auth-server';
+import { calculateCustomerBalanceDue } from '@/lib/customer-balance';
 
 export async function GET(
   request: NextRequest,
@@ -27,14 +28,11 @@ export async function GET(
     // Get all outstanding invoices for this customer
     const outstandingInvoices = await CustomerInvoice.find({
       customer: id,
-      status: { $in: ['sent', 'partial'] },
+      status: { $in: ['sent', 'partial', 'overdue'] },
     }).sort({ dueDate: 1 });
 
-    // Calculate totals
-    const totalOutstanding = outstandingInvoices.reduce(
-      (sum, inv) => sum + inv.balanceDue,
-      0
-    );
+    const totalOutstanding = await calculateCustomerBalanceDue(id, user.branch);
+    await Customer.findByIdAndUpdate(id, { $set: { balanceDue: totalOutstanding } });
 
     const overdueInvoices = outstandingInvoices.filter(
       (inv) => new Date(inv.dueDate) < new Date()
@@ -70,6 +68,7 @@ export async function GET(
         phone: customer.phone,
         email: customer.email,
         creditBalance: customer.creditBalance,
+        balanceDue: totalOutstanding,
         creditLimit: creditLimit,
         customerType: customer.customerType,
       },

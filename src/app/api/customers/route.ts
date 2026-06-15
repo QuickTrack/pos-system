@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/mongodb';
 import Customer from '@/models/Customer';
 import { getAuthUser } from '@/lib/auth-server';
-import { hasPermission } from '@/lib/auth';
+import { calculateCustomerBalanceDue } from '@/lib/customer-balance';
 
 export async function GET(request: NextRequest) {
   try {
@@ -37,10 +37,20 @@ export async function GET(request: NextRequest) {
         .limit(limit),
       Customer.countDocuments(query),
     ]);
+
+    const customersWithBalanceDue = await Promise.all(
+      customers.map(async (customer) => {
+        const balanceDue = await calculateCustomerBalanceDue(customer._id, customer.branch);
+        return {
+          ...customer.toObject(),
+          balanceDue,
+        };
+      })
+    );
     
     return NextResponse.json({
       success: true,
-      customers,
+      customers: customersWithBalanceDue,
       pagination: {
         page,
         limit,

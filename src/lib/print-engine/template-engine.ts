@@ -509,7 +509,10 @@ export class DocumentHandler {
         vatNumber: business.vatNumber || '',
         bankName: business.bankName || '',
         bankAccount: business.bankAccount || '',
-        bankBranch: business.bankBranch || ''
+        bankBranch: business.bankBranch || '',
+        paymentTill: business.paymentTill || '',
+        sendMoneyPhoneNumber: business.sendMoneyPhoneNumber || '',
+        acceptedPaymentMethods: business.acceptedPaymentMethods || ''
       },
       items: []
     };

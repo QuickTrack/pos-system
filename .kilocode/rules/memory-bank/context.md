@@ -20,6 +20,38 @@ Implemented complete multi-user authentication system:
 
 ## Recently Completed
 
+- [x] Invoice Printout and Print Invoice Window Alignment
+  - Reworked printing to use the current page with a temporary print-only root instead of a separate print window.
+  - The printout now uses the same DOM, active app styles, responsive classes, and print CSS as the print invoice preview.
+  - Restores the page after print through `afterprint` and timeout cleanup.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Open Invoice After Quotation Conversion
+  - After a quotation is converted to an invoice, the app now navigates to `/create-invoice?invoiceId=...`.
+  - The create-invoice page reads the invoice id from the query string and opens the generated invoice view modal.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Quotation Conversion Credit Limit Warning
+  - Changed quotation-to-invoice conversion so exceeding the customer's credit limit no longer blocks conversion.
+  - Conversion now returns a credit limit warning with current debt, available credit, invoice amount, and over-limit amount.
+  - The quotation detail page displays the warning after successful conversion.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Analytics Page Data Fetching Fixes
+  - Fixed date mutation bug in `/api/analytics` route
+  - Replaced mutating `now.setHours/setDate/setMonth/setFullYear` with immutable Date copies
+  - Fixed `revenueData` grouping to use year+month composite key (prevents Jan 2025 colliding with Jan 2026)
+  - Fixed `topCustomers` aggregation missing `branchFilter` (data leak for non-admin users)
+  - Added `$exists` filter after `$unwind` to prevent grouping sales with empty items arrays
+  - Added error state with retry button on analytics page
+  - Added `src/app/analytics/layout.tsx` with auth guard and sidebar
+  - Updated `revenueData` TypeScript type to match new composite key shape
+  - TypeScript typecheck passed
+
+- [x] TypeScript Compile Fixes
+  - Fixed `FavoriteItem` interface in `src/lib/store.ts` and `Sidebar.tsx` to include optional `iconName` field
+  - Resolved Object literal may only specify known properties error
+
 - [x] License File Download Feature
   - Added download license file functionality to license management modal
   - Generates license.txt file with all license details (key, business name, email, type, status, dates, limits, features)
@@ -565,6 +597,117 @@ Implemented complete multi-user authentication system:
   - Used useRef to track context sync state and prevent overwriting loaded data
   - TypeScript typecheck passed with no errors
 
+- [x] Supplier Invoice Add Products Spacing
+  - Reduced vertical spacing around the Add Products section in the supplier invoice create/edit modal.
+  - Tightened form, grid, card, heading, and search wrapper spacing to remove extra blank space above and below the section.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Supplier Invoice Numeric Field Zero Reset
+  - Supplier invoice item numeric fields now accept blank strings while editing.
+  - Quantity, unit cost, discount, and tax inputs reset to blank on focus when their value is 0.
+  - Numeric calculations use a safe numeric helper so blank fields do not break totals.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Supplier Invoice Product Search Fix
+  - Supplier invoice page now fetches products on page load so product search can query the database.
+  - Product search dropdown now opens while the user types and collapses after product selection.
+  - Supplier and purchase order selection flows now refresh products before filtering product options.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Supplier Invoice Create Modal Layout
+  - Moved Invoice Details section below the Items table in the supplier invoice create/edit modal.
+  - Invoice Details fields now render in one desktop row using a four-column responsive grid.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Supplier Dropdown Sorting
+  - Supplier invoice supplier dropdown now sorts fetched suppliers alphabetically by name.
+  - Filtered supplier dropdown results are also sorted alphabetically for consistent ordering.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Supplier Invoice Dropdown Collapse Behavior
+  - Product dropdown now remains collapsed by default and when product search is empty.
+  - Product dropdown collapses immediately after selecting a product.
+  - Supplier dropdown already collapses on supplier selection; product dropdown also collapses when supplier/Purchase Order selection changes.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Supplier Payments Navigation Link
+  - Added a visible "Supplier Payments" button on the Supplier Invoices page toolbar.
+  - Link redirects to `/supplier-payments` using Next.js `Link` and matches existing outline button styling.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Supplier Invoice Supplier Filter
+  - Supplier invoice page now fetches all suppliers on mount so the "All Suppliers" filter is populated from the database.
+  - Selecting an individual supplier filters the displayed invoice list by that supplier ID.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Supplier Invoice Inventory Updates
+  - Supplier invoice creation now increments `stockQuantity` and `shopStock` for each received item using base-unit conversion.
+  - Supplier invoice deletion now reverses the stock increment to keep inventory consistent.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Auto-Generate Supplier Invoice Numbers
+  - Added `/api/supplier-invoices?next=true` endpoint to return the next numeric supplier invoice number.
+  - Create Supplier Invoice modal now auto-fills the next invoice number when opened.
+  - Backend still generates a number if the invoice number field is left blank.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Supplier Invoice Creation Validation
+  - Added backend validation for supplier invoice creation inputs: valid supplier, duplicate invoice number, purchase order ID, invoice date, and item quantities/costs/taxes.
+  - Normalized item product IDs before saving to prevent generic 500 errors during invoice creation.
+  - Frontend now displays backend error details when supplier invoice creation fails.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Quotation Product Search Focus Retention
+  - Product search input now retains focus after selecting a product from the dropdown
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only
+
+- [x] Quotation Tax Inclusive Default
+  - Changed quotation tax inclusive checkbox default to checked
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only
+
+- [x] Quotation Print Preview Cleanup
+  - Hid app header, sidebar, action buttons, status badges, and generated footer in print preview
+  - Removed per-item discount and tax columns from the quotation print layout
+  - Hid zero-value discount and tax rows from totals
+  - Replaced hardcoded quotation header with business settings where available
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only
+
+- [x] Quotation to Invoice Conversion
+  - Added `convert_to_invoice` action to quotation actions API
+  - Added invoice source tracking fields for quotation-originated invoices
+  - Added quotation detail conversion modal with invoice date, due date, payment terms, status, notes, and terms
+  - Preserves quotation customer, line items, totals, tax, branch, and source quotation number on the created invoice
+  - Validates expired quotations, duplicate invoice numbers, missing customers/items, modified quotations, and sent-invoice stock availability.
+  - Allows credit-limit exceedance during conversion and returns a warning instead of rejecting the request.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only
+
+- [x] Quotation Save and Save & Send Fix
+  - Added frontend validation and visible save/send feedback on the quotation new page
+  - API now generates quotation numbers and fills salesperson/branch fields automatically
+  - Save & Send now stores `sentAt` when status is `sent`
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only
+
+- [x] Quotation New Page Sidebar Cleanup
+  - Removed the sidebar Customer card above Summary while keeping the inline customer selector before Save Draft
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only
+
+- [x] Quotation New Page Customer Selector and Tax Inclusive Control
+  - Added inline searchable customer dropdown before the Save Draft action
+  - Customer selection updates `formData.customer` before draft/save workflows
+  - Added tax inclusive checkbox that updates existing item tax types and new item defaults
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only
+
+- [x] Quotation New Page Layout and Customer Selection Restore
+  - Made the Items section full-width on the quotation creation page
+  - Restored customer selection with a searchable modal and selected-customer summary card
+  - Kept item table columns responsive with a minmax product column
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only
+
+- [x] Quotations New Page JSX Fix
+  - Fixed corrupted JSX structure in `src/app/quotations/new/page.tsx`
+  - Summary and Details cards were outside the grid layout due to misplaced closing tags
+  - Wrapped cards in proper `lg:col-span-1` sidebar column for correct 3-column layout
+
 - [x] License Key Regeneration System
 
 - [x] Create Invoice Page Sidebar Navigation
@@ -595,6 +738,55 @@ Implemented complete multi-user authentication system:
   - Each layout wraps pages with LicenseProvider and AuthCheck component with Sidebar
   - TypeScript typecheck passed
 
+- [x] Business Settings Payment Method Fields
+  - Added Payment Method Settings subsection to the Business tab with Till, Send Money Phone Number, Bank, and Bank Account Details fields.
+  - Persisted new settings fields through the existing `/api/settings` flow and localStorage settings state.
+  - Extended Settings model and print data paths so payment method fields are available to invoice templates.
+  - Added fallbacks for legacy localStorage settings that do not include `paymentMethods`.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Customer Invoice Template Enhancements
+  - Reformatted detailed tax summary as a horizontal card row below the subtotal/grand total block so the main totals remain visually anchored.
+  - Added the configured till number to the payment information section.
+  - Removed the accepted payment methods section from customer invoice print preview.
+  - Added formal Invoice Notes and Terms and Conditions sections to customer invoice print preview.
+  - Added `acceptedPaymentMethods` to Settings model/API state and Business Settings payment method fields.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Customer Balance Due Calculation Logic
+  - Added `balanceDue` to the Customer model as the persisted cumulative outstanding balance.
+  - Added shared balance calculation helper that sums unpaid customer invoices, account sales, and general paid customer payments, then floors the result at zero.
+  - Wired balance recalculation into customer invoice create/update/payment/delete flows, account sale creation, customer payment recording, and customer debt API responses.
+  - Updated customer payment and invoice UIs to read outstanding balance from `balanceDue` instead of store credit.
+  - Reduced Detailed Tax Summary amount values to small template text size.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Customer Invoice Template Cumulative Balance Due
+  - Changed the `/customers` page Balance column to use `balanceDue` as the cumulative outstanding balance source.
+  - Updated `/api/customers` to return recalculated `balanceDue` for each customer.
+  - Captured selected customer balance due at invoice creation time and persisted it on `CustomerInvoice.customerBalanceDue`.
+  - Updated the customer invoice print template Detailed Tax Summary Balance Due card to display the invoice-time cumulative customer balance due via `customerBalanceDue`.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Customer Invoice Balance Due Source of Truth
+  - Made customer invoice creation recalculate `customerBalanceDue` on the server from the same historical balance helper used by the `/customers` page Balance column.
+  - Updated invoice edit and print flows to prefer the invoice-time `customerBalanceDue` snapshot instead of falling back to the invoice's own outstanding balance.
+  - Updated the invoice print template to render the cumulative customer balance due from the snapshot or customer balance fields only.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Invoice Generation Balance Due Snapshot Fix
+  - Changed customer invoice creation to persist `customerBalanceDue` as the customer's cumulative outstanding balance after the new invoice is generated.
+  - Updated invoice send/edit flows so `customerBalanceDue` is recalculated at generation time instead of remaining zero for newly created invoices.
+  - Updated invoice print preview fallback handling so existing invoices with a zero snapshot can still render the customer's current cumulative balance when the invoice itself is outstanding.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Invoice Print Preview and Printed Output Alignment
+  - Updated invoice printing to copy the full preview A4 document DOM instead of only its inner HTML.
+  - Injected the active application stylesheets into the print window so printed invoices use the same Tailwind/global styles as the preview.
+  - Removed the external Tailwind CDN dependency from the print path and waited for local images/styles before calling `print()`.
+  - Replaced iterable stylesheet collection with indexed access to avoid Turbopack/runtime `StyleSheetList` iteration errors.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
 ## Current Structure
 
 | File/Directory | Purpose | Status |
@@ -615,7 +807,7 @@ Implemented complete multi-user authentication system:
 | `src/app/api/customers/[id]/statement/route.ts` | Customer statements API | ✅ |
 | `src/components/customer-statement/CustomerStatementModal.tsx` | Statement modal component | ✅ |
 | `src/app/customer-payments/page.tsx` | Customer payments with statement button | ✅ |
-| `src/models/Settings.ts` | Settings with bank fields | ✅ Updated |
+| `src/models/Settings.ts` | Settings with bank and payment method fields | ✅ Updated |
 
 ## Print Engine Features
 
@@ -734,10 +926,27 @@ const result = await printEngine.print({
 | 2026-04-07 | Renamed Revenue to Sales in dashboard Performance Overview |
 | 2026-04-07 | Changed license verification to happen once per day (24 hours) instead of every 30 seconds |
 | 2026-04-07 | Added hardware license validation caching - API only revalidates once per day, returns cached response otherwise |
-| 2026-04-07 | Fixed frequent license API calls - added concurrent check protection, removed 24-hour polling, added throttles to visibility and auth-context checks |
+| 2026-06-14 | Added Payment Method Settings subsection to Business Settings with Till, Send Money Phone Number, Bank, and Bank Account Details fields; persisted fields through Settings model/API/localStorage; exposed fields in invoice print data and PrintPreview; enhanced customer invoice template with detailed tax summary, accepted payment methods from business settings, custom invoice notes, and formal terms and conditions sections; reworked customer balance due calculation with shared helper and persisted Customer.balanceDue; reduced Detailed Tax Summary amount font sizes |
+| 2026-06-14 | Updated customer invoice print template to show the customer's cumulative outstanding balance due from the `/customers` page Balance column, captured at invoice generation time and persisted on CustomerInvoice.customerBalanceDue |
+| 2026-06-14 | Made customer invoice Balance Due display use the invoice-time cumulative customer balance due snapshot calculated from the same customer balance helper as the `/customers` page Balance column; removed invoice balance fallback from the tax summary rendering path |
+| 2026-06-14 | Fixed customer invoice Balance Due snapshots to include the newly generated invoice total so newly created invoices no longer print with a zero cumulative customer balance |
+| 2026-06-14 | Aligned printed invoice output with the print preview by printing the full preview A4 DOM with the active application stylesheets instead of using an external Tailwind CDN copy |
+| 2026-06-14 | Fixed print stylesheet collection to use indexed `StyleSheetList` access so invoice printing works under Next.js/Turbopack without iterable runtime errors |
+| 2026-06-15 | Fixed invoice print-window formatting by printing from the active app DOM and live styles instead of reconstructing a separate print window document |
+| 2026-06-15 | Aligned invoice preview and print rendering by removing preview scaling and using the same A4 dimensions, zero page margin print CSS, and preview DOM for printing |
+| 2026-06-15 | Fixed customer invoice printing by switching print document replacement to `beforeprint`/`afterprint` lifecycle handling and passing `customerBalanceDue` into the print preview data |
+| 2026-06-15 | Made the customer invoice print action visible as a labeled `Print` button and changed the print options menu to open on click instead of hover |
+| 2026-06-15 | Added a visible `Print Invoice` button to the customer invoice view modal so viewed invoices can open the print preview flow directly |
+| 2026-06-15 | Reworked customer invoice printing to use a dedicated print window populated with the exact preview DOM, active app stylesheets, and image load waiting before invoking `print()` |
+| 2026-06-15 | Fixed invoice footer positioning by making the A4 print page container relatively positioned so the footer anchors to the page bottom |
+| 2026-06-15 | Compacted the invoice detailed tax summary print layout to reduce unnecessary vertical space |
+| 2026-06-15 | Aligned invoice printout with the print invoice window by using a temporary same-document print root with the active app styles |
+| 2026-06-15 | Removed the accepted payment methods section from customer invoice print preview |
+| 2026-06-15 | Allowed quotation-to-invoice conversion to exceed customer credit limits while returning and displaying a warning |
+| 2026-06-15 | Opened the generated customer invoice view modal after successful quotation-to-invoice conversion |
 
 ## Notes
 
 The print engine integrates with the existing DocumentTemplate system. Templates can be designed using the document-templates page and then used for printing via the print engine.
 
-Bank details (bankName, bankAccount, bankBranch) and VAT number (vatNumber) can be configured in Settings page and will appear on invoices.
+Bank details (`bankName`, `bankAccount`, `bankBranch`) and payment method details (`paymentTill`, `sendMoneyPhoneNumber`) can be configured in Settings > Business > Payment Method Settings and will appear on invoices.

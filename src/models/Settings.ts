@@ -14,6 +14,9 @@ export interface ISettings extends Document {
   bankName?: string;
   bankAccount?: string;
   bankBranch?: string;
+  paymentTill?: string;
+  sendMoneyPhoneNumber?: string;
+  acceptedPaymentMethods?: string;
   
   // Logo
   logo?: string;
@@ -91,6 +94,9 @@ const SettingsSchema = new Schema<ISettings>(
     bankName: { type: String },
     bankAccount: { type: String },
     bankBranch: { type: String },
+    paymentTill: { type: String },
+    sendMoneyPhoneNumber: { type: String },
+    acceptedPaymentMethods: { type: String },
     
     // Logo
     logo: { type: String },

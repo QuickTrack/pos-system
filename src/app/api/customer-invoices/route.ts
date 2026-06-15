@@ -6,6 +6,7 @@ import Product from '@/models/Product';
 import Settings from '@/models/Settings';
 import { getAuthUser } from '@/lib/auth-server';
 import { hasPermission } from '@/lib/auth';
+import { calculateCustomerBalanceDue, syncCustomerBalanceDue } from '@/lib/customer-balance';
 
 // Generate invoice number - sequential format
 function generateInvoiceNumber(sequence: number): string {
@@ -103,7 +104,7 @@ export async function GET(request: NextRequest) {
     
     const [invoices, total] = await Promise.all([
       CustomerInvoice.find(query)
-        .populate('customer', 'name phone creditLimit creditBalance')
+        .populate('customer', 'name phone creditLimit creditBalance balanceDue')
         .populate('items.product', 'name baseUnit units')
         .sort({ invoiceDate: -1 })
         .skip(skip)
@@ -191,53 +192,17 @@ export async function POST(request: NextRequest) {
     }
     
     // Credit limit validation for sale invoices (not credit invoices)
+    let branch = user.branch || data.branchId;
+    if (!branch) {
+      const Branch = (await import('@/models/Branch')).default;
+      const defaultBranch = await Branch.findOne();
+      if (defaultBranch) {
+        branch = defaultBranch._id.toString();
+      }
+    }
+
     if (data.invoiceType === 'sale' && customer.creditLimit && customer.creditLimit > 0) {
-      // Calculate current outstanding balance from unpaid invoices
-      const currentOutstanding = await CustomerInvoice.aggregate([
-        {
-          $match: {
-            customer: customer._id,
-            invoiceType: 'sale',
-            status: { $in: ['sent', 'partial', 'overdue'] }
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            totalOutstanding: {
-              $sum: { $subtract: ['$total', { $ifNull: ['$amountPaid', 0] }] }
-            }
-          }
-        }
-      ]);
-      
-      // Also check sales with account payment
-      const Sale = (await import('@/models/Sale')).default;
-      const salesOutstanding = await Sale.aggregate([
-        {
-          $match: {
-            customer: customer._id,
-            paymentMethod: 'account',
-            status: 'completed'
-          }
-        },
-        {
-          $group: {
-            _id: null,
-            totalOutstanding: {
-              $sum: { $subtract: ['$total', { $ifNull: ['$amountPaid', 0] }] }
-            }
-          }
-        }
-      ]);
-      
-      const currentDebt = (currentOutstanding.length > 0 ? currentOutstanding[0].totalOutstanding : 0) +
-        (salesOutstanding.length > 0 ? salesOutstanding[0].totalOutstanding : 0);
-      
-      // We don't have the total yet, so we'll calculate it first then validate
-      // This will be checked after totals are calculated
-      
-      // Store current debt for later validation
+      const currentDebt = await calculateCustomerBalanceDue(customer._id, branch);
       data._currentDebt = currentDebt;
       data._creditLimit = customer.creditLimit;
     }
@@ -333,19 +298,9 @@ export async function POST(request: NextRequest) {
       dueDate.setDate(dueDate.getDate() + paymentTerms);
     }
     
-    // Get branch from user or data
-    let branch = user.branch || data.branchId;
     const createdBy = user.userId;
     const createdByName = user.name;
-    
-    // If no branch, fetch default branch
-    if (!branch) {
-      const Branch = (await import('@/models/Branch')).default;
-      const defaultBranch = await Branch.findOne();
-      if (defaultBranch) {
-        branch = defaultBranch._id.toString();
-      }
-    }
+    const currentCustomerBalanceDue = await calculateCustomerBalanceDue(customer._id, branch);
     
     // Create invoice
     const invoiceNumber = data.invoiceNumber || await getNextInvoiceNumber();
@@ -370,6 +325,7 @@ export async function POST(request: NextRequest) {
       total,
       amountPaid: 0,
       balanceDue: total,
+      customerBalanceDue: total,
       status: 'draft',
       branch,
       createdBy,
@@ -390,6 +346,13 @@ export async function POST(request: NextRequest) {
           $inc: { stockQuantity: -baseQty, shopStock: -baseQty },
         });
       }
+    }
+
+    invoice.customerBalanceDue = currentCustomerBalanceDue + invoice.balanceDue;
+    await invoice.save();
+
+    if (invoice.status !== 'draft') {
+      await syncCustomerBalanceDue(customer._id, branch);
     }
 
     // Note: Do NOT update creditBalance here

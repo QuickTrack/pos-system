@@ -19,6 +19,7 @@ interface Customer {
   customerType: 'retail' | 'wholesale' | 'distributor';
   loyaltyPoints: number;
   creditBalance: number;
+  balanceDue?: number;
   totalPurchases: number;
   totalSpent: number;
   lastPurchaseDate?: string;
@@ -297,8 +298,8 @@ export default function CustomersPage() {
       key: 'creditBalance',
       header: 'Balance',
       render: (item: Customer) => (
-        <span className={item.creditBalance > 0 ? 'text-amber-600' : ''}>
-          {formatCurrency(item.creditBalance)}
+        <span className={((item.balanceDue ?? item.creditBalance) > 0 ? 'text-amber-600' : '')}>
+          {formatCurrency(item.balanceDue ?? item.creditBalance)}
         </span>
       ),
     },
@@ -373,7 +374,7 @@ export default function CustomersPage() {
           </Card>
           <Card>
             <p className="text-sm text-gray-500">With Credit</p>
-            <p className="text-2xl font-bold">{customers.filter(c => c.creditBalance > 0).length}</p>
+            <p className="text-2xl font-bold">{customers.filter(c => (c.balanceDue ?? c.creditBalance) > 0).length}</p>
           </Card>
         </div>
 

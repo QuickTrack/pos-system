@@ -5,6 +5,7 @@ import Customer from '@/models/Customer';
 import CustomerInvoice from '@/models/CustomerInvoice';
 import { getAuthUser } from '@/lib/auth-server';
 import mongoose from 'mongoose';
+import { syncCustomerBalanceDue } from '@/lib/customer-balance';
 
 export async function GET(request: Request) {
   try {
@@ -215,6 +216,10 @@ export async function POST(request: Request) {
           });
         }
       }
+    }
+
+    if (paymentStatus === 'completed' || paymentStatus === 'paid') {
+      await syncCustomerBalanceDue(customerId, user.branch);
     }
 
     return NextResponse.json({

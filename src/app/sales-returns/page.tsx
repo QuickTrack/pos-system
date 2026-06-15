@@ -36,6 +36,7 @@ interface Customer {
   phone: string;
   creditLimit: number;
   creditBalance: number;
+  balanceDue?: number;
   customerType?: string;
 }
 
@@ -223,7 +224,9 @@ export default function BackofficeInvoicesPage() {
       const response = await fetch('/api/settings');
       if (response.ok) {
         const data = await response.json();
-        setBusinessSettings(data);
+        if (data.settings) {
+          setBusinessSettings(data.settings);
+        }
       }
     } catch (error) {
       console.error('Error fetching settings:', error);
@@ -605,7 +608,7 @@ export default function BackofficeInvoicesPage() {
       key: 'balanceDue',
       header: 'Customer Balance',
       render: (item: Invoice) => {
-        const customerBalance = item.customer?.creditBalance ?? 0;
+          const customerBalance = item.customer?.balanceDue ?? item.customer?.creditBalance ?? 0;
         return (
           <span className={customerBalance > 0 ? 'font-medium text-red-600' : 'text-green-600'}>
             {formatCurrency(customerBalance)}
@@ -1427,6 +1430,9 @@ export default function BackofficeInvoicesPage() {
               bankName: businessSettings?.bankName || '',
               bankAccount: businessSettings?.bankAccount || '',
               bankBranch: businessSettings?.bankBranch || '',
+              paymentTill: businessSettings?.paymentTill || '',
+              sendMoneyPhoneNumber: businessSettings?.sendMoneyPhoneNumber || '',
+              acceptedPaymentMethods: businessSettings?.acceptedPaymentMethods || '',
               terms: businessSettings?.invoiceTerms || '',
               kraPin: businessSettings?.kraPin || '',
             }}
