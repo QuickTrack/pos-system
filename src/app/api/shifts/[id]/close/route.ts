@@ -36,14 +36,9 @@ export async function GET(
     let cashSales = 0;
     let mpesaSales = 0;
     let cardSales = 0;
-    let discounts = 0;
-    let returns = 0;
 
     for (const sale of sales) {
-      if (sale.isRefund) {
-        returns += sale.total;
-        continue;
-      }
+      if (sale.isRefund) continue;
       if (sale.status === 'voided') continue;
 
       if (sale.paymentMethod === 'cash') {
@@ -57,8 +52,6 @@ export async function GET(
         mpesaSales += sale.paymentDetails?.filter((p: any) => p.method === 'mpesa').reduce((sum: number, p: any) => sum + p.amount, 0) || 0;
         cardSales += sale.paymentDetails?.filter((p: any) => p.method === 'card').reduce((sum: number, p: any) => sum + p.amount, 0) || 0;
       }
-
-      discounts += sale.discountAmount || 0;
     }
 
     const cashDropsTotal = await CashDrop.aggregate([
@@ -144,14 +137,9 @@ export async function POST(
     let cashSales = 0;
     let mpesaSales = 0;
     let cardSales = 0;
-    let discounts = 0;
-    let returns = 0;
 
     for (const sale of sales) {
-      if (sale.isRefund) {
-        returns += sale.total;
-        continue;
-      }
+      if (sale.isRefund) continue;
       if (sale.status === 'voided') continue;
 
       if (sale.paymentMethod === 'cash') {
@@ -165,8 +153,6 @@ export async function POST(
         mpesaSales += sale.paymentDetails?.filter((p: any) => p.method === 'mpesa').reduce((sum: number, p: any) => sum + p.amount, 0) || 0;
         cardSales += sale.paymentDetails?.filter((p: any) => p.method === 'card').reduce((sum: number, p: any) => sum + p.amount, 0) || 0;
       }
-
-      discounts += sale.discountAmount || 0;
     }
 
     const cashReceived = cashSales + mpesaSales + cardSales;
