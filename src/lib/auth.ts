@@ -36,6 +36,8 @@ export const ALL_PERMISSIONS = [
   'manage_suppliers',
   'manage_sales',
   'manage_purchases',
+  'manage_expenses',
+  'manage_reconciliation',
   'manage_settings',
   'manage_branches',
   'view_reports',
@@ -47,7 +49,7 @@ export const ALL_PERMISSIONS = [
   'manage_activity_logs',
 ];
 
-export const PERMISSIONS: Record<Role, string[]> = {
+ export const PERMISSIONS: Record<Role, string[]> = {
   super_admin: ALL_PERMISSIONS, // Has all permissions
   admin: [
     'manage_users',
@@ -57,6 +59,8 @@ export const PERMISSIONS: Record<Role, string[]> = {
     'manage_suppliers',
     'manage_sales',
     'manage_purchases',
+    'manage_expenses',
+    'manage_reconciliation',
     'manage_settings',
     'manage_branches',
     'view_reports',
@@ -73,13 +77,17 @@ export const PERMISSIONS: Record<Role, string[]> = {
     'manage_suppliers',
     'manage_sales',
     'manage_purchases',
+    'manage_expenses',
+    'manage_reconciliation',
     'view_reports',
     'view_dashboard',
     'process_refunds',
     'view_customers',
+    'export_data',
   ],
   cashier: [
     'manage_sales',
+    'manage_reconciliation',
     'view_dashboard',
     'view_customers',
   ],

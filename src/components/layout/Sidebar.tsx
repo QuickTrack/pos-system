@@ -4,15 +4,15 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { 
-  LayoutDashboard, 
-  ShoppingCart, 
-  Package, 
-  Users, 
+import {
+  LayoutDashboard,
+  ShoppingCart,
+  Package,
+  Users,
   UserCog,
-  Truck, 
-  FileText, 
-  Settings, 
+  Truck,
+  FileText,
+  Settings,
   BarChart3,
   Store,
   Layout,
@@ -20,17 +20,24 @@ import {
   ArrowRightLeft,
   DollarSign,
   CreditCard,
+  Wallet,
   Shield,
   FilePlus,
   Receipt,
   Key,
   FileSearch,
+  Tag,
   X,
   LogOut,
   ChevronDown,
   ChevronRight,
   Star,
   Menu,
+  ClipboardList,
+  Calculator,
+  MonitorSmartphone,
+  AlertTriangle,
+  Users as UsersIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/lib/store';
@@ -73,11 +80,18 @@ const iconMap: Record<string, any> = {
   ArrowRightLeft,
   DollarSign,
   CreditCard,
+  Wallet,
   Shield,
   FilePlus,
   Receipt,
   Key,
   FileSearch,
+  Tag,
+  ClipboardList,
+  Calculator,
+  MonitorSmartphone,
+  AlertTriangle,
+  UsersIcon,
 };
 
 const menuGroups: MenuGroup[] = [
@@ -131,12 +145,37 @@ const menuGroups: MenuGroup[] = [
     ],
   },
   {
+    label: 'Expenses',
+    icon: Wallet,
+    permission: 'manage_expenses',
+    items: [
+      { label: 'Manage Expenses', href: '/expenses', icon: Wallet, permission: 'manage_expenses' },
+      { label: 'Record Payout', href: '/expenses/new', icon: Receipt, permission: 'manage_expenses' },
+      { label: 'Expense Categories', href: '/expense-categories', icon: Tag, permission: 'manage_expenses' },
+      { label: 'Expense Reports', href: '/expense-reports', icon: FileText, permission: 'view_reports' },
+    ],
+  },
+  {
     label: 'Reports & Analytics',
     icon: BarChart3,
     permission: 'view_reports',
     items: [
       { label: 'Reports', href: '/reports', icon: FileText, permission: 'view_reports' },
       { label: 'Analytics', href: '/analytics', icon: BarChart3, permission: 'view_reports' },
+    ],
+  },
+  {
+    label: 'Reconciliation',
+    icon: Calculator,
+    permission: 'manage_reconciliation',
+    items: [
+      { label: 'Shifts', href: '/reconciliation/shifts', icon: ClipboardList, permission: 'manage_reconciliation' },
+      { label: 'Cash Drops', href: '/reconciliation/cash-drops', icon: DollarSign, permission: 'manage_reconciliation' },
+      { label: 'Z-Read Reports', href: '/reconciliation/z-reads', icon: FileText, permission: 'manage_reconciliation' },
+      { label: 'X-Read Reports', href: '/reconciliation/x-reads', icon: FileSearch, permission: 'manage_reconciliation' },
+      { label: 'Variances', href: '/reconciliation/variance', icon: AlertTriangle, permission: 'manage_reconciliation' },
+      { label: 'Registers', href: '/reconciliation/registers', icon: MonitorSmartphone, permission: 'manage_settings' },
+      { label: 'Cashier Performance', href: '/reconciliation/cashier-performance', icon: UsersIcon, permission: 'view_reports' },
     ],
   },
   {

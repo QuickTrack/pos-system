@@ -19,6 +19,14 @@ function getCategoryIcon(category?: string) {
   }
 }
 
+function DevSettingsButton({ onToggle }: { onToggle: () => void }) {
+  return (
+    <button onClick={onToggle} className="text-xs text-gray-400 hover:text-gray-600">
+      <Settings className="w-4 h-4" />
+    </button>
+  );
+}
+
 function formatTimestamp(timestamp: number): string {
   const now = Date.now();
   const diff = now - timestamp;
@@ -228,7 +236,7 @@ export function Header({ title, subtitle }: HeaderProps) {
   }, [darkMode]);
 
   return (
-    <header className="sticky top-0 z-30 bg-white border-b border-gray-200">
+    <header className="sticky top-0 z-30 bg-white border-b border-gray-200" suppressHydrationWarning>
       <div className="flex items-center justify-between h-16 px-4 lg:px-6">
         <div className="flex items-center gap-4">
           <Link href="/dashboard" className="p-2 rounded-lg hover:bg-gray-100 text-emerald-600" title="Return to Dashboard">
@@ -242,7 +250,7 @@ export function Header({ title, subtitle }: HeaderProps) {
             {subtitle && <p className="text-sm text-gray-500">{subtitle}</p>}
           </div>
         </div>
-        <div className="hidden lg:flex flex-1 min-w-0 mx-8">
+        <div className="hidden lg:flex flex-1 min-w-0 mx-8" suppressHydrationWarning>
           {businessInfo.name ? (
             <div className="flex items-center gap-3 w-full min-w-0">
               {businessInfo.logo ? (
@@ -261,7 +269,7 @@ export function Header({ title, subtitle }: HeaderProps) {
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" suppressHydrationWarning>
           {effectiveLicense && (
             <div className="relative">
               <Link href="/license/activate" className={`hidden sm:flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity ${licenseDaysRemaining !== null && licenseDaysRemaining < 0 ? 'bg-red-50 text-red-700' : licenseDaysRemaining !== null && licenseDaysRemaining <= 14 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'}`} title={`License: ${effectiveLicense?.licenseType || 'Unknown'}`}>
@@ -280,9 +288,7 @@ export function Header({ title, subtitle }: HeaderProps) {
               )}
             </div>
           )}
-          {process.env.NODE_ENV === 'development' && (
-            <button onClick={() => setShowSettings(!showSettings)} className="text-xs text-gray-400 hover:text-gray-600">⚙️</button>
-          )}
+          <DevSettingsButton onToggle={() => setShowSettings(!showSettings)} />
           {financialYear && (
             <div className="hidden sm:flex items-center gap-1 px-2 py-1 bg-emerald-50 rounded-md text-emerald-700 text-xs font-medium">
               <Calendar className="w-3 h-3" /><span>FY: {financialYear}</span>

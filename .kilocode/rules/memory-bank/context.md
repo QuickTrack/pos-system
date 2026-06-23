@@ -2,7 +2,44 @@
 
 ## Current State
 
-**Template Status**: ✅ Multi-User Authentication with Session Management
+**Template Status**: ✅ End-of-Day Reconciliation & Z-Read Module
+
+Implemented comprehensive reconciliation module:
+- Shift management (open/close, cash float tracking)
+- Cash drop management with authorization
+- Z-Read report generation with sales/payment/tax breakdowns
+- X-Read interim reporting (snapshot without reset)
+- Variance tracking with shortage/overage detection
+- Register and till management
+- Cashier performance dashboard with KPIs
+- Reconciliation dashboard with real-time cash summary
+
+## Recently Completed
+
+- [x] End-of-Day Reconciliation & Z-Read Module
+  - Created MongoDB models: Shift, CashDrop, ZRead, Variance, Register
+  - Created `/api/shifts` GET list + POST open
+  - Created `/api/shifts/[id]/close` GET (expected cash calc) + POST (close)
+  - Created `/api/cash-drops` GET list + POST create
+  - Created `/api/z-reads` GET list + POST generate (auto-detects variances)
+  - Created `/api/variance` GET list + POST create + PATCH approve/reject
+  - Created `/api/x-reads` GET interim report
+  - Created `/api/reconciliation/dashboard` GET dashboard data
+  - Created `/api/reconciliation/cashier-performance` GET performance data
+  - Created `/api/registers` GET list + POST create
+  - Added `manage_reconciliation` permission to admin, manager, cashier roles
+  - Created `/reconciliation` layout with tabbed navigation
+  - Built dashboard with sales summary, payment breakdown, cash summary, active shifts, variance alerts
+  - Built shifts page with open shift modal and close shift page with cash count
+  - Built cash drops page with create modal
+  - Built z-reads page with auto-generation from closed shifts
+  - Built x-reads page with open shift selector and snapshot display
+  - Built variance page with approve/reject workflow
+  - Built registers page with CRUD
+  - Built cashier performance page with ranked KPIs
+  - Added Reconciliation sidebar menu group with 7 items
+  - Updated memory bank with module implementation details
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only</p>
 
 Implemented complete multi-user authentication system:
 - Session model for tracking active user sessions
@@ -19,6 +56,65 @@ Implemented complete multi-user authentication system:
 - After sale complete: Enter key triggers print receipt
 
 ## Recently Completed
+
+- [x] Expenses List API Fetch Fix
+  - Removed unnecessary `User` model population from `/api/expenses` because expense records already store `createdByName`, `approvedByName`, and `rejectedByName`.
+  - This avoids runtime population failures when the User model is not registered in the expenses route while keeping branch and category population intact.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Expense Creation API Serialization Fix
+  - Fixed `/api/expenses` POST/GET/PUT serialization for populated Mongoose results so lean query results serialize without calling `.toObject()` on plain objects.
+  - Normalized unauthorized/forbidden expense API responses to include `success: false` so the Record Payout form can display the real backend error.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Expense Categories Fit-to-Screen Layout
+  - Reworked `/expense-categories` into a fixed viewport layout with internal scrolling for the hierarchy sidebar and category table.
+  - Compacted stats, filters, table rows, and action buttons so the page fits within the app header height on desktop screens.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Expense Categories Delete Permission Fix
+  - Allowed users with the `manage_expenses` permission (`manager` role) to delete expense categories from the category management UI.
+  - Kept delete API responses consistent with `success: false` error payloads for clearer UI feedback.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Expense Categories Create Fix
+  - Fixed `/api/expense-categories` serialization for newly created and updated categories so lean Mongoose results serialize without calling `.toObject()` on plain objects.
+  - Improved frontend error messages to surface API validation/permission errors instead of the generic create/update/delete message.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Expense Categories Page Redesign
+  - Rebuilt `/expense-categories` with a fresh dashboard-style layout, summary cards, sticky hierarchy sidebar, modern table, status filtering, and improved create/edit modal.
+  - Added an authenticated sidebar layout for `/expense-categories` so the page matches other protected app routes.
+  - Kept existing CRUD behavior against `/api/expense-categories` for create, edit, delete, and active/inactive toggling.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Business Payout & Expense Management Module
+  - Created Expense and ExpenseCategory MongoDB models with full schema (attachments, payee info, approval workflow)
+  - Created `/api/expenses` route supporting GET/POST/PUT/DELETE with approval/rejection workflows, pagination, and filtering
+  - Created `/api/expense-categories` route supporting full CRUD for expense categories with parent/child hierarchy
+  - Created `/api/expense-dashboard` route returning summary cards, category/payment/branch/trend breakdowns
+  - Built Expense Dashboard page with summary cards, charts (category, payment method, branch, monthly trends)
+  - Built Expenses list page with search, filters, view details, approve/reject, delete, Excel export
+  - Built Record New Payout form page with branch, category, payee info, attachment upload, and approval flow
+  - Built Expense Categories management page with create/edit/delete/activate-deactivate
+  - Built Expense Reports & Analytics page with overview, category, payment method, branch reports and export
+  - Added Expenses menu group to sidebar navigation with Expense Dashboard, Manage Expenses, Record Payout, Categories, Reports
+  - Added `manage_expenses` permission to auth system (admin, manager, super_admin roles)
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only
+
+- [x] Profit & Loss Report
+  - Added API endpoint for profit report type calculating revenue from sales, cost from purchases, and profit margins
+  - Profit report shows: Total Revenue, Total Cost, Gross Profit, Net Profit summary cards
+  - Bar chart displays daily revenue, cost, and profit trends
+  - Detailed table shows daily breakdown with margin percentages
+  - Export support for PDF, Excel, and CSV formats
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only
+
+- [x] Customer and Inventory Reports
+  - Added `/api/reports` customer and inventory report data for `/reports`.
+  - Customer report now shows total customers, top customers by revenue, purchases, balance due, and last purchase date.
+  - Inventory report now shows total products, inventory value, low-stock/out-of-stock counts, and item stock/status table.
+  - `bun typecheck` passed; changed report files passed ESLint with no errors.
 
 - [x] Invoice Printout and Print Invoice Window Alignment
   - Reworked printing to use the current page with a temporary print-only root instead of a separate print window.
@@ -932,6 +1028,8 @@ const result = await printEngine.print({
 | 2026-06-14 | Fixed customer invoice Balance Due snapshots to include the newly generated invoice total so newly created invoices no longer print with a zero cumulative customer balance |
 | 2026-06-14 | Aligned printed invoice output with the print preview by printing the full preview A4 DOM with the active application stylesheets instead of using an external Tailwind CDN copy |
 | 2026-06-14 | Fixed print stylesheet collection to use indexed `StyleSheetList` access so invoice printing works under Next.js/Turbopack without iterable runtime errors |
+| 2026-06-15 | Fixed `/api/expenses` list loading by removing unnecessary User model population from the route |
+| 2026-06-15 | Fixed expense creation/update/list serialization in `/api/expenses` and normalized auth errors for clearer Record Payout feedback |
 | 2026-06-15 | Fixed invoice print-window formatting by printing from the active app DOM and live styles instead of reconstructing a separate print window document |
 | 2026-06-15 | Aligned invoice preview and print rendering by removing preview scaling and using the same A4 dimensions, zero page margin print CSS, and preview DOM for printing |
 | 2026-06-15 | Fixed customer invoice printing by switching print document replacement to `beforeprint`/`afterprint` lifecycle handling and passing `customerBalanceDue` into the print preview data |
@@ -944,6 +1042,12 @@ const result = await printEngine.print({
 | 2026-06-15 | Removed the accepted payment methods section from customer invoice print preview |
 | 2026-06-15 | Allowed quotation-to-invoice conversion to exceed customer credit limits while returning and displaying a warning |
 | 2026-06-15 | Opened the generated customer invoice view modal after successful quotation-to-invoice conversion |
+| 2026-06-15 | Fixed Product Performance report - updated API to return topProducts with revenue/profit from sales data, added conditional rendering for products report type in frontend, added product-specific summary cards and table view |
+| 2026-06-15 | Reworked the Expense Categories page into a fixed viewport layout with internal scrolling for the hierarchy sidebar and category table |
+| 2026-06-15 | Allowed manager users to delete expense categories and kept delete API errors consistent with the UI error handling |
+| 2026-06-15 | Fixed expense category creation/update serialization in `/api/expense-categories` and surfaced backend API errors in the category UI |
+| 2026-06-15 | Redesigned the Expense Categories page with summary cards, a sticky hierarchy sidebar, modern table UI, improved create/edit modal, and an authenticated sidebar layout; validation passed with existing lint warnings only |
+| 2026-06-15 | Added Customer Report and Inventory Report support to `/reports` with API aggregations, summary cards, tables, and export data |
 
 ## Notes
 

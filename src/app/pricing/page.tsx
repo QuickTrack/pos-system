@@ -76,20 +76,21 @@ const pricingPlans: PricingPlan[] = [
 export default function PricingPage() {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
-  const [purchasedPlan, setPurchasedPlan] = useState<string | null>(() => {
+  const [purchasedPlan, setPurchasedPlan] = useState<string | null>(null);
+
+  useEffect(() => {
     try {
       const storedLicense = localStorage.getItem('pos-license');
       if (storedLicense) {
         const license = JSON.parse(storedLicense);
         if (license.licenseKey) {
-          return license.licenseType || 'annual';
+          setPurchasedPlan(license.licenseType || 'annual');
         }
       }
     } catch (e) {
       // Continue
     }
-    return null;
-  });
+  }, []);
 
   const handlePurchase = async (planId: string) => {
     if (planId === 'trial') {
