@@ -32,11 +32,20 @@ export async function GET(request: NextRequest) {
     const shiftStart = new Date(shift.startTime);
     const now = new Date();
 
+    // Get branch ID - handle both populated and ObjectId/string cases
+    const shiftBranchId = (shift as any).branch?._id 
+      ? (shift as any).branch._id.toString() 
+      : (shift as any).branch?.toString();
+
     const salesQuery: any = {
       saleDate: { $gte: shiftStart, $lte: now },
       status: { $in: ['completed', 'pending', 'refunded'] },
-      branch: shift.branch,
     };
+
+    // Only add branch filter if we have a valid branch ID
+    if (shiftBranchId) {
+      salesQuery.branch = shiftBranchId;
+    }
 
     const Sale = (await import('@/models/Sale')).default;
     const CashDrop = (await import('@/models/CashDrop')).default;
@@ -52,6 +61,8 @@ export async function GET(request: NextRequest) {
       if (sale.isRefund) continue;
       if (sale.status === 'voided') continue;
 
+      // Only count cash, mpesa, and card payments towards expected cash
+      // Account and credit payments are NOT added to cash drawer
       if (sale.paymentMethod === 'cash') {
         cashSales += sale.total;
       } else if (sale.paymentMethod === 'mpesa') {
@@ -72,15 +83,19 @@ export async function GET(request: NextRequest) {
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]).then(r => r[0]?.total || 0);
 
+    const expensesQuery: any = {
+      dateTime: { $gte: shiftStart, $lte: now },
+      paymentSource: { $in: ['cash_drawer', 'main_till', 'petty_cash'] },
+      status: { $in: ['approved', 'pending'] },
+    };
+
+    // Only add branch filter if we have a valid branch ID
+    if (shiftBranchId) {
+      expensesQuery.branch = shiftBranchId;
+    }
+
     const expensesTotal = await Expense.aggregate([
-      {
-        $match: {
-          branch: shift.branch,
-          dateTime: { $gte: shiftStart, $lte: now },
-          paymentSource: { $in: ['cash_drawer', 'main_till', 'petty_cash'] },
-          status: { $in: ['approved', 'pending'] },
-        },
-      },
+      { $match: expensesQuery },
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]).then(r => r[0]?.total || 0);
 

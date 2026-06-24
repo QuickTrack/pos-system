@@ -14,6 +14,15 @@ import {
   FinancialYearConfig
 } from '@/lib/utils';
 
+async function getDefaultBranch(): Promise<string | null> {
+  try {
+    const mainBranch = await Branch.findOne({ isMain: true }).lean();
+    return mainBranch?._id?.toString() || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const user = await getAuthUser();
@@ -335,7 +344,7 @@ export async function POST(request: NextRequest) {
       customerPhone: data.customerPhone,
       customerEmail: data.customerEmail,
       customerAddress: data.customerAddress,
-      branch: user.branch || data.branchId,
+      branch: user.branch || data.branchId || await getDefaultBranch(),
       cashier: user.userId,
       cashierName: user.name,
       items,
