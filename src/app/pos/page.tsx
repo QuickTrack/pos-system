@@ -6,7 +6,7 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
-import { useCartStore, useHeldSalesStore, CartItem, HeldSale } from '@/lib/store';
+import { useCartStore, useHeldSalesStore, useShiftStore, CartItem, HeldSale } from '@/lib/store';
 import { formatCurrency, formatDateTime } from '@/lib/utils';
 import { generateThermalReceiptHTML, createReceiptData, ReceiptBusiness, printReceipt } from '@/lib/receipt-generator';
 import { useAuth } from '@/lib/auth-context';
@@ -156,8 +156,16 @@ export default function POSPage() {
   const [verifyingAdmin, setVerifyingAdmin] = useState(false);
   const [pendingProductToAdd, setPendingProductToAdd] = useState<{product: Product, unit?: UnitOption} | null>(null);
   
-  const { user } = useAuth();
+const { user } = useAuth();
   
+  // Shift store integration
+  const { activeShift, fetchActiveShift } = useShiftStore();
+
+  const checkShiftBeforePayment = async () => {
+    await fetchActiveShift();
+    return !!activeShift;
+  };
+
   const { 
     items, 
     addItem, 
@@ -180,6 +188,14 @@ export default function POSPage() {
     clearCart();
     setCustomer(undefined);
     setSelectedCustomer(null);
+  }, []);
+
+  // Focus search input on page load
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 100);
+    return () => clearTimeout(timer);
   }, []);
 
   // Focus search input on page load
@@ -571,6 +587,13 @@ export default function POSPage() {
   };
 
   const handlePayment = async () => {
+    // Check if there's an active shift before processing payment
+    const hasActiveShift = await checkShiftBeforePayment();
+    if (!hasActiveShift) {
+      alert('Please open a shift before processing sales. Click on "No Active Shift" in the header to open one.');
+      return;
+    }
+
     setProcessing(true);
     
     try {

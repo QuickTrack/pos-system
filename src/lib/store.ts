@@ -321,3 +321,98 @@ export const useHeldSalesStore = create<HeldSalesState>()(
     }
   )
 );
+
+// Shift Store for managing shift state in POS
+export interface ShiftInfo {
+  _id: string;
+  shiftId: string;
+  register: string;
+  registerNumber: string;
+  openingFloat: number;
+  startTime: string;
+  expectedCash: number;
+  actualCash: number;
+  variance: number;
+}
+
+interface ShiftState {
+  activeShift: ShiftInfo | null;
+  loading: boolean;
+  fetchActiveShift: () => Promise<void>;
+  openShift: (registerId: string, openingFloat: number) => Promise<boolean>;
+  closeShift: (actualCash: number, notes?: string) => Promise<boolean>;
+  clearShift: () => void;
+}
+
+export const useShiftStore = create<ShiftState>()(
+  persist(
+    (set, get) => ({
+      activeShift: null,
+      loading: false,
+
+      fetchActiveShift: async () => {
+        set({ loading: true });
+        try {
+          const res = await fetch('/api/shifts/active');
+          const json = await res.json();
+          if (json.success && json.shift) {
+            set({ activeShift: json.shift });
+          } else {
+            set({ activeShift: null });
+          }
+        } catch (err) {
+          console.error('Failed to fetch active shift:', err);
+          set({ activeShift: null });
+        } finally {
+          set({ loading: false });
+        }
+      },
+
+      openShift: async (registerId, openingFloat) => {
+        try {
+          const res = await fetch('/api/shifts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ registerId, openingFloat }),
+          });
+          const json = await res.json();
+          if (json.success) {
+            set({ activeShift: json.shift });
+            return true;
+          }
+          return false;
+        } catch (err) {
+          console.error('Failed to open shift:', err);
+          return false;
+        }
+      },
+
+      closeShift: async (actualCash, notes = '') => {
+        const { activeShift } = get();
+        if (!activeShift) return false;
+
+        try {
+          const res = await fetch(`/api/shifts/${activeShift._id}/close`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ actualCash, notes }),
+          });
+          const json = await res.json();
+          if (json.success) {
+            set({ activeShift: null });
+            return true;
+          }
+          return false;
+        } catch (err) {
+          console.error('Failed to close shift:', err);
+          return false;
+        }
+      },
+
+      clearShift: () => set({ activeShift: null }),
+    }),
+    {
+      name: 'pos-shift',
+    }
+  )
+);
