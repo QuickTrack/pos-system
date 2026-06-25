@@ -6,7 +6,6 @@ import { useLicense } from '@/lib/license-context';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { ModeToggle } from '@/components/ui/ModeToggle';
-import { ShiftStatusIndicator } from '@/components/pos/ShiftStatus';
 
 function getCategoryIcon(category?: string) {
   switch (category) {
@@ -300,7 +299,6 @@ export function Header({ title, subtitle }: HeaderProps & { showShiftStatus?: bo
             {darkMode ? <Sun className="w-5 h-5 text-gray-600" /> : <Moon className="w-5 h-5 text-gray-600" />}
           </button>
           <NotificationButton />
-          <ShiftStatusIndicator />
           <ModeToggle />
         </div>
       </div>

@@ -16,6 +16,30 @@ Implemented comprehensive reconciliation module:
 
 ## Recently Completed
 
+- [x] POS Shift Modal Fixes
+  - Fixed ShiftStatusIndicator component to use `createPortal` for modals, preventing them from being clipped by parent `overflow-hidden` containers in Next.js App Router.
+  - Moved `ShiftStatusIndicator` from global `Header.tsx` to `src/app/pos/page.tsx` so shift modals only appear within the POS module.
+  - Added `fetchRegisters`, `registers`, `selectedRegister`, `openingFloat` to Zustand shift store so the "Open New Shift" register dropdown works when triggered from the POS "No Active Shift" overlay.
+  - Fixed register dropdown bug where selecting a register had no effect because `fetchRegisters()` was only called in the component's own button, not the overlay button.
+  - Removed duplicate "Open New Shift" modal markup from ShiftStatusIndicator; modals now use a single shared store state.
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] Close Shift Expected Cash & M-Pesa Balance Calculation
+  - Updated Close Shift modal to calculate expected cash and expected M-Pesa balance separately.
+  - Expected Cash = openingFloatCash + cashSales - cashDropsTotal - expensesTotal
+  - Expected M-Pesa Balance = openingFloatMpesa + mpesaSales
+  - Updated `/api/shifts/[id]/close` GET to return expectedCash, expectedMpesa, cashReceived, mpesaReceived
+  - Updated `/api/shifts/active` GET to return expectedMpesa
+  - Updated Close Shift page UI to display both Expected Cash (blue card) and Expected M-Pesa Balance (purple card) with opening balances and received amounts
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [ ] Reconciliation Layout Sidebar Fix
+  - Bug: Expected Cash in Close Shift modal showed stale value (initial opening float) instead of recalculating from sales during the shift.
+  - Root cause: `fetchActiveShift()` was only called on component mount; `activeShift.expectedCash` in Zustand store was never refreshed when opening the Close Shift modal.
+  - Fix: Added a `useEffect` in `ShiftStatus.tsx` that re-fetches active shift data from `/api/shifts/active` whenever `showCloseModal` becomes `true`. The API recalculates `expectedCash` from sales, mpesa, card, cash drops, and expenses.
+  - File changed: `src/components/pos/ShiftStatus.tsx`
+  - `bun typecheck` passed; `bun lint` passed with no new warnings.
+
 - [x] End-of-Day Reconciliation & Z-Read Module
   - Created MongoDB models: Shift, CashDrop, ZRead, Variance, Register
   - Created `/api/shifts` GET list + POST open
@@ -1047,6 +1071,7 @@ const result = await printEngine.print({
 | 2026-06-15 | Allowed manager users to delete expense categories and kept delete API errors consistent with the UI error handling |
 | 2026-06-15 | Fixed expense category creation/update serialization in `/api/expense-categories` and surfaced backend API errors in the category UI |
 | 2026-06-15 | Redesigned the Expense Categories page with summary cards, a sticky hierarchy sidebar, modern table UI, improved create/edit modal, and an authenticated sidebar layout; validation passed with existing lint warnings only |
+| 2026-06-25 | Fixed Close Shift Expected Cash refresh - added useEffect to re-fetch active shift data when modal opens so expectedCash reflects current sales |
 | 2026-06-15 | Added Customer Report and Inventory Report support to `/reports` with API aggregations, summary cards, tables, and export data |
 
 ## Notes

@@ -329,26 +329,56 @@ export interface ShiftInfo {
   register: string;
   registerNumber: string;
   openingFloat: number;
+  openingFloatCash: number;
+  openingFloatMpesa: number;
+  closingFloat: number;
+  closingFloatCash: number;
+  closingFloatMpesa: number;
   startTime: string;
   expectedCash: number;
+  expectedMpesa: number;
+  cashReceived: number;
+  mpesaReceived: number;
   actualCash: number;
+  actualMpesa: number;
   variance: number;
 }
 
 interface ShiftState {
   activeShift: ShiftInfo | null;
   loading: boolean;
+  showOpenModal: boolean;
+  registers: any[];
+  selectedRegister: string;
+  openingFloatCash: string;
+  openingFloatMpesa: string;
+  closingFloatCash: string;
+  closingFloatMpesa: string;
   fetchActiveShift: () => Promise<void>;
-  openShift: (registerId: string, openingFloat: number) => Promise<boolean>;
-  closeShift: (actualCash: number, notes?: string) => Promise<boolean>;
+  fetchRegisters: () => Promise<void>;
+  openShift: (registerId: string, openingFloatCash: number, openingFloatMpesa: number) => Promise<boolean>;
+  closeShift: (actualCash: number, actualMpesa: number, notes?: string) => Promise<boolean>;
   clearShift: () => void;
+  setShowOpenModal: (open: boolean) => void;
+  setSelectedRegister: (register: string) => void;
+  setOpeningFloatCash: (value: string) => void;
+  setOpeningFloatMpesa: (value: string) => void;
+  setClosingFloatCash: (value: string) => void;
+  setClosingFloatMpesa: (value: string) => void;
 }
-
+ 
 export const useShiftStore = create<ShiftState>()(
   persist(
     (set, get) => ({
       activeShift: null,
       loading: false,
+      showOpenModal: false,
+      registers: [],
+      selectedRegister: '',
+      openingFloatCash: '',
+      openingFloatMpesa: '',
+      closingFloatCash: '',
+      closingFloatMpesa: '',
 
       fetchActiveShift: async () => {
         set({ loading: true });
@@ -368,12 +398,22 @@ export const useShiftStore = create<ShiftState>()(
         }
       },
 
-      openShift: async (registerId, openingFloat) => {
+      fetchRegisters: async () => {
+        try {
+          const res = await fetch('/api/registers?isOpen=false');
+          const json = await res.json();
+          if (json.success) set({ registers: json.registers });
+        } catch (err) {
+          console.error('Failed to fetch registers:', err);
+        }
+      },
+
+      openShift: async (registerId, openingFloatCash, openingFloatMpesa) => {
         try {
           const res = await fetch('/api/shifts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ registerId, openingFloat }),
+            body: JSON.stringify({ registerId, openingFloatCash, openingFloatMpesa }),
           });
           const json = await res.json();
           if (json.success) {
@@ -387,7 +427,7 @@ export const useShiftStore = create<ShiftState>()(
         }
       },
 
-      closeShift: async (actualCash, notes = '') => {
+      closeShift: async (actualCash, actualMpesa, notes = '') => {
         const { activeShift } = get();
         if (!activeShift) return false;
 
@@ -395,7 +435,7 @@ export const useShiftStore = create<ShiftState>()(
           const res = await fetch(`/api/shifts/${activeShift._id}/close`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ actualCash, notes }),
+            body: JSON.stringify({ actualCash, actualMpesa, notes }),
           });
           const json = await res.json();
           if (json.success) {
@@ -410,6 +450,13 @@ export const useShiftStore = create<ShiftState>()(
       },
 
       clearShift: () => set({ activeShift: null }),
+
+      setShowOpenModal: (open) => set({ showOpenModal: open }),
+      setSelectedRegister: (register) => set({ selectedRegister: register }),
+      setOpeningFloatCash: (value) => set({ openingFloatCash: value }),
+      setOpeningFloatMpesa: (value) => set({ openingFloatMpesa: value }),
+      setClosingFloatCash: (value) => set({ closingFloatCash: value }),
+      setClosingFloatMpesa: (value) => set({ closingFloatMpesa: value }),
     }),
     {
       name: 'pos-shift',

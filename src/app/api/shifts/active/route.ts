@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const cashReceived = cashSales + mpesaSales + cardSales;
+    const cashReceived = cashSales;
 
     const cashDropsTotal = await CashDrop.aggregate([
       { $match: { shift: (shift as any)._id, reason: { $in: ['safe_deposit', 'bank_deposit', 'security', 'float_transfer'] } } },
@@ -99,7 +99,8 @@ export async function GET(request: NextRequest) {
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]).then(r => r[0]?.total || 0);
 
-    const expectedCash = (shift as any).openingFloat + cashReceived - cashDropsTotal - expensesTotal;
+    const expectedCash = (shift as any).openingFloatCash + cashReceived - cashDropsTotal - expensesTotal;
+    const expectedMpesa = (shift as any).openingFloatMpesa + mpesaSales;
 
     return NextResponse.json({
       success: true,
@@ -109,8 +110,11 @@ export async function GET(request: NextRequest) {
         register: (shift as any).register?._id || shift.register,
         registerNumber: shift.registerNumber,
         openingFloat: shift.openingFloat,
+        openingFloatCash: shift.openingFloatCash,
+        openingFloatMpesa: shift.openingFloatMpesa,
         startTime: shift.startTime,
         expectedCash,
+        expectedMpesa,
         actualCash: (shift as any).actualCash || 0,
         variance: (shift as any).variance || 0,
       },

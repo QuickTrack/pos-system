@@ -8,10 +8,17 @@ export interface IShift extends Document {
   registerNumber: string;
   branch: mongoose.Types.ObjectId;
   openingFloat: number;
+  openingFloatCash: number;
+  openingFloatMpesa: number;
   closingFloat: number;
+  closingFloatCash: number;
+  closingFloatMpesa: number;
   expectedCash: number;
+  expectedMpesa: number;
   actualCash: number;
+  actualMpesa: number;
   variance: number;
+  mpesaVariance: number;
   status: 'open' | 'closed' | 'suspended';
   startTime: Date;
   endTime: Date;
@@ -34,10 +41,17 @@ const ShiftSchema = new Schema<IShift>(
     registerNumber: { type: String, required: true },
     branch: { type: Schema.Types.ObjectId, ref: 'Branch', required: true },
     openingFloat: { type: Number, required: true, min: 0 },
+    openingFloatCash: { type: Number, required: true, min: 0, default: 0 },
+    openingFloatMpesa: { type: Number, required: true, min: 0, default: 0 },
     closingFloat: { type: Number, default: 0 },
+    closingFloatCash: { type: Number, default: 0 },
+    closingFloatMpesa: { type: Number, default: 0 },
     expectedCash: { type: Number, default: 0 },
+    expectedMpesa: { type: Number, default: 0 },
     actualCash: { type: Number, default: 0 },
+    actualMpesa: { type: Number, default: 0 },
     variance: { type: Number, default: 0 },
+    mpesaVariance: { type: Number, default: 0 },
     status: { type: String, enum: ['open', 'closed', 'suspended'], default: 'open' },
     startTime: { type: Date, default: Date.now },
     endTime: { type: Date },

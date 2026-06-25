@@ -71,8 +71,10 @@ export async function GET(
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]).then(r => r[0]?.total || 0);
 
-    const cashReceived = cashSales + mpesaSales + cardSales;
-    const expectedCash = (shift as any).openingFloat + cashReceived - cashDropsTotal - expensesTotal;
+    const cashReceived = cashSales;
+    const mpesaReceived = mpesaSales;
+    const expectedCash = (shift as any).openingFloatCash + cashReceived - cashDropsTotal - expensesTotal;
+    const expectedMpesa = (shift as any).openingFloatMpesa + mpesaReceived;
     const actualCash = (shift as any).actualCash || 0;
     const variance = actualCash - expectedCash;
 
@@ -82,8 +84,13 @@ export async function GET(
       cashierName: (shift as any).cashierName,
       registerNumber: (shift as any).registerNumber,
       openingFloat: (shift as any).openingFloat,
+      openingFloatCash: (shift as any).openingFloatCash,
+      openingFloatMpesa: (shift as any).openingFloatMpesa,
       startTime: (shift as any).startTime,
       expectedCash,
+      expectedMpesa,
+      cashReceived,
+      mpesaReceived,
       actualCash,
       variance,
     });
@@ -112,7 +119,7 @@ export async function POST(
     const { id } = await params;
     const data = await request.json();
 
-    const { actualCash, notes, supervisorVerified, verifiedBy, verifiedByName } = data;
+    const { actualCash, actualMpesa, notes, supervisorVerified, verifiedBy, verifiedByName } = data;
 
     const shift = await Shift.findById(id);
     if (!shift) {
@@ -155,7 +162,7 @@ export async function POST(
       }
     }
 
-    const cashReceived = cashSales + mpesaSales + cardSales;
+    const cashReceived = cashSales;
     const cashDropsTotal = await CashDrop.aggregate([
       { $match: { shift: (shift as any)._id, reason: { $in: ['safe_deposit', 'bank_deposit', 'security', 'float_transfer'] } } },
       { $group: { _id: null, total: { $sum: '$amount' } } }
@@ -173,7 +180,9 @@ export async function POST(
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]).then(r => r[0]?.total || 0);
 
-    const expectedCash = shift.openingFloat + cashReceived - cashDropsTotal - expensesTotal;
+    const expectedCash = shift.openingFloatCash + cashReceived - cashDropsTotal - expensesTotal;
+    const expectedMpesa = shift.openingFloatMpesa + mpesaSales;
+    const mpesaVariance = actualMpesa - expectedMpesa;
     const closingFloat = actualCash;
     const variance = actualCash - expectedCash;
 
@@ -181,6 +190,8 @@ export async function POST(
     shift.expectedCash = expectedCash;
     shift.actualCash = actualCash;
     shift.variance = variance;
+    shift.actualMpesa = actualMpesa;
+    shift.mpesaVariance = mpesaVariance;
     shift.status = 'closed';
     shift.endTime = now;
     shift.closingCashCount = actualCash;

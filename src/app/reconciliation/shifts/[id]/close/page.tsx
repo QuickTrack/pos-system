@@ -11,8 +11,13 @@ interface Shift {
   cashierName: string;
   registerNumber: string;
   openingFloat: number;
+  openingFloatCash: number;
+  openingFloatMpesa: number;
   startTime: string;
   expectedCash: number;
+  expectedMpesa: number;
+  cashReceived: number;
+  mpesaReceived: number;
   actualCash: number;
   variance: number;
 }
@@ -22,6 +27,7 @@ export default function CloseShiftPage({ params }: { params: Promise<{ id: strin
   const router = useRouter();
   const [shift, setShift] = useState<Shift | null>(null);
   const [actualCash, setActualCash] = useState('');
+  const [actualMpesa, setActualMpesa] = useState('');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -40,8 +46,13 @@ export default function CloseShiftPage({ params }: { params: Promise<{ id: strin
             cashierName: data.cashierName || '',
             registerNumber: data.registerNumber || '',
             openingFloat: data.openingFloat || 0,
+            openingFloatCash: data.openingFloatCash || 0,
+            openingFloatMpesa: data.openingFloatMpesa || 0,
             startTime: data.startTime || '',
             expectedCash: data.expectedCash,
+            expectedMpesa: data.expectedMpesa || 0,
+            cashReceived: data.cashReceived || 0,
+            mpesaReceived: data.mpesaReceived || 0,
             actualCash: data.actualCash,
             variance: data.variance,
           });
@@ -58,7 +69,7 @@ export default function CloseShiftPage({ params }: { params: Promise<{ id: strin
       const res = await fetch(`/api/shifts/${resolvedParams.id}/close`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ actualCash: parseFloat(actualCash), notes }),
+        body: JSON.stringify({ actualCash: parseFloat(actualCash), actualMpesa: parseFloat(actualMpesa), notes }),
       });
       if (res.ok) router.push('/reconciliation/shifts');
     } catch (err) { console.error(err); } finally { setSubmitting(false); }
@@ -100,30 +111,68 @@ export default function CloseShiftPage({ params }: { params: Promise<{ id: strin
                 <p className="text-xs text-gray-500">Opening Float</p>
                 <p className="text-sm font-medium text-gray-900">{formatCurrency(shift.openingFloat)}</p>
               </div>
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-500">Cash Opening Float</p>
+                <p className="text-sm font-medium text-gray-900">{formatCurrency(shift.openingFloatCash)}</p>
+              </div>
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-500">M-Pesa Opening Balance</p>
+                <p className="text-sm font-medium text-gray-900">{formatCurrency(shift.openingFloatMpesa)}</p>
+              </div>
             </div>
 
-            <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
-              <p className="text-xs text-blue-600 mb-1">Expected Cash (Calculated)</p>
-              <p className="text-xl font-bold text-blue-700">{formatCurrency(shift.expectedCash)}</p>
-              <p className="text-xs text-blue-600 mt-1">Opening + Sales - Drops - Expenses</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
+                <p className="text-xs text-blue-600 mb-1">Expected Cash</p>
+                <p className="text-xl font-bold text-blue-700">{formatCurrency(shift.expectedCash)}</p>
+                <p className="text-xs text-blue-600 mt-1">Cash Float + Cash Sales - Drops - Expenses</p>
+              </div>
+              <div className="p-4 bg-purple-50 rounded-lg border border-purple-100">
+                <p className="text-xs text-purple-600 mb-1">Expected M-Pesa Balance</p>
+                <p className="text-xl font-bold text-purple-700">{formatCurrency(shift.expectedMpesa)}</p>
+                <p className="text-xs text-purple-600 mt-1">M-Pesa Opening + M-Pesa Sales</p>
+              </div>
             </div>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Actual Cash Count (KES)</label>
-            <input
-              type="number"
-              value={actualCash}
-              onChange={(e) => setActualCash(e.target.value)}
-              required
-              min="0"
-              step="0.01"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-              placeholder="Enter counted cash amount"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Actual Cash Count (KES)</label>
+              <input
+                type="number"
+                value={actualCash}
+                onChange={(e) => setActualCash(e.target.value)}
+                required
+                min="0"
+                step="0.01"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                placeholder="Enter counted cash amount"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Actual M-Pesa Balance (KES)</label>
+              <input
+                type="number"
+                value={actualMpesa}
+                onChange={(e) => setActualMpesa(e.target.value)}
+                required
+                min="0"
+                step="0.01"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                placeholder="Enter M-Pesa balance"
+              />
+            </div>
           </div>
+          {shift && actualMpesa && !isNaN(parseFloat(actualMpesa)) && (
+            <div className={`p-4 rounded-lg border ${parseFloat(actualMpesa) >= (shift?.expectedMpesa || 0) ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
+              <p className="text-sm font-medium">
+                M-Pesa: {parseFloat(actualMpesa) >= (shift?.expectedMpesa || 0) ? 'Over' : 'Short'} by{' '}
+                <span className="font-bold">{formatCurrency(Math.abs((parseFloat(actualMpesa) - (shift?.expectedMpesa || 0))))}</span>
+              </p>
+            </div>
+          )}
           {shift && actualCash && !isNaN(parseFloat(actualCash)) && (
             <div className={`p-4 rounded-lg border ${parseFloat(actualCash) >= (shift?.expectedCash || 0) ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
               <p className="text-sm font-medium">

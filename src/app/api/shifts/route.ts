@@ -75,11 +75,13 @@ export async function POST(request: NextRequest) {
     await dbConnect();
     const data = await request.json();
 
-    const { registerId, openingFloat } = data;
+    const { registerId, openingFloatCash, openingFloatMpesa } = data;
 
-    if (!registerId || openingFloat === undefined) {
-      return NextResponse.json({ error: 'Register and opening float are required' }, { status: 400 });
+    if (!registerId || openingFloatCash === undefined || openingFloatMpesa === undefined) {
+      return NextResponse.json({ error: 'Register, cash float, and M-Pesa balance are required' }, { status: 400 });
     }
+
+    const openingFloat = (parseFloat(openingFloatCash) || 0) + (parseFloat(openingFloatMpesa) || 0);
 
     const register = await Register.findById(registerId);
     if (!register) {
@@ -100,6 +102,8 @@ export async function POST(request: NextRequest) {
       registerNumber: register.registerNumber,
       branch: register.branch,
       openingFloat,
+      openingFloatCash: parseFloat(openingFloatCash) || 0,
+      openingFloatMpesa: parseFloat(openingFloatMpesa) || 0,
       status: 'open',
       startTime: new Date(),
     });

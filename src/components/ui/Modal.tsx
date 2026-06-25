@@ -2,6 +2,7 @@
 
 import { X } from 'lucide-react';
 import { ReactNode, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 
 interface ModalProps {
@@ -37,13 +38,13 @@ export function Modal({ isOpen, onClose, title, header, children, size = 'md', c
     full: 'modal-content-full',
   };
 
-  return (
-    <div 
-      className={size === 'full' ? 'fixed inset-0 z-50' : 'modal-overlay'} 
+  const modalContent = (
+    <div
+      className={size === 'full' ? 'fixed inset-0 z-[9999]' : 'modal-overlay'}
       onClick={closeOnOverlayClick ? onClose : undefined}
       style={size === 'full' ? { backgroundColor: 'rgba(0,0,0,0.5)' } : undefined}
     >
-      <div 
+      <div
         className={cn("modal-content animate-slide-up", sizeClasses[size], className)}
         onClick={(e) => e.stopPropagation()}
         style={size === 'full' ? { height: '100vh', overflow: 'auto' } : undefined}
@@ -54,7 +55,7 @@ export function Modal({ isOpen, onClose, title, header, children, size = 'md', c
             {header ? header : (
               <>
                 <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-                <button 
+                <button
                   onClick={onClose}
                   className="p-1 rounded-lg hover:bg-gray-100"
                 >
@@ -63,7 +64,7 @@ export function Modal({ isOpen, onClose, title, header, children, size = 'md', c
               </>
             )}
             {!header && title && (
-              <button 
+              <button
                 onClick={onClose}
                 className="p-1 rounded-lg hover:bg-gray-100"
               >
@@ -72,7 +73,7 @@ export function Modal({ isOpen, onClose, title, header, children, size = 'md', c
             )}
           </div>
         )}
-        
+
         {/* Content */}
         <div className={size === 'full' ? 'p-4 h-[calc(100vh-65px)]' : 'p-4'}>
           {children}
@@ -80,4 +81,9 @@ export function Modal({ isOpen, onClose, title, header, children, size = 'md', c
       </div>
     </div>
   );
+
+  if (typeof window !== 'undefined') {
+    return createPortal(modalContent, document.body);
+  }
+  return modalContent;
 }

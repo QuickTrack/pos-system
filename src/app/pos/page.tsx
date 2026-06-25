@@ -10,6 +10,7 @@ import { useCartStore, useHeldSalesStore, useShiftStore, CartItem, HeldSale } fr
 import { formatCurrency, formatDateTime } from '@/lib/utils';
 import { generateThermalReceiptHTML, createReceiptData, ReceiptBusiness, printReceipt } from '@/lib/receipt-generator';
 import { useAuth } from '@/lib/auth-context';
+import { ShiftStatusIndicator } from '@/components/pos/ShiftStatus';
 import { 
   Search, 
   Plus, 
@@ -159,12 +160,8 @@ export default function POSPage() {
 const { user } = useAuth();
   
   // Shift store integration
-  const { activeShift, fetchActiveShift } = useShiftStore();
-
-  const checkShiftBeforePayment = async () => {
-    await fetchActiveShift();
-    return !!activeShift;
-  };
+  const { activeShift, fetchActiveShift, showOpenModal, setShowOpenModal, fetchRegisters } = useShiftStore();
+  const hasActiveShift = !!activeShift;
 
   const { 
     items, 
@@ -179,6 +176,23 @@ const { user } = useAuth();
   } = useCartStore();
 
   const { heldSales, holdSale, recallSale, removeHeldSale } = useHeldSalesStore();
+
+  useEffect(() => {
+    fetchActiveShift();
+  }, [fetchActiveShift]);
+
+  useEffect(() => {
+    if (!activeShift) {
+      clearCart();
+      setCustomer(undefined);
+      setSelectedCustomer(null);
+    }
+  }, [activeShift, clearCart, setCustomer]);
+
+  const checkShiftBeforePayment = async () => {
+    await fetchActiveShift();
+    return !!activeShift;
+  };
 
   useEffect(() => {
     fetchProducts();
@@ -215,6 +229,10 @@ const { user } = useAuth();
 
       // When payment modal is open
       if (showPaymentModal) {
+        if (!hasActiveShift) {
+          setShowPaymentModal(false);
+          return;
+        }
         // Tab to cycle through payment methods
         if (e.key === 'Tab' && !isInput) {
           e.preventDefault();
@@ -244,7 +262,7 @@ const { user } = useAuth();
       }
 
       // Tab key to trigger checkout - only when not in an input and payment modal is closed
-      if (e.key === 'Tab' && !isInput && items.length > 0 && !showPaymentModal) {
+      if (e.key === 'Tab' && !isInput && items.length > 0 && !showPaymentModal && hasActiveShift) {
         e.preventDefault();
         const { total: checkoutTotal } = calculateTotals();
         setAmountPaid(checkoutTotal.toString());
@@ -265,7 +283,7 @@ const { user } = useAuth();
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [items, lastSale, showPaymentModal, selectedPaymentMethodIndex, saleComplete]);
+  }, [items, lastSale, showPaymentModal, selectedPaymentMethodIndex, saleComplete, hasActiveShift]);
 
   useEffect(() => {
     if (searchQuery || selectedCategory !== 'all') {
@@ -468,6 +486,11 @@ const { user } = useAuth();
   };
 
   const handleAddToCart = (product: Product, selectedUnit?: UnitOption, skipStockCheck = false) => {
+    if (!hasActiveShift) {
+      alert('Please open a shift before adding items to cart. Click on the shift indicator in the header to open a shift.');
+      return;
+    }
+
     // Check stock before adding (unless skipped for admin override)
     if (!skipStockCheck && product.stockQuantity <= 0) {
       setOutOfStockProduct(product);
@@ -1134,7 +1157,31 @@ const { user } = useAuth();
     <div>
       <Header title={`${businessName} - New Sale`} subtitle="Point of Sale System" />
       
-      <div className="flex flex-col h-[calc(100vh-64px)]">
+      <div className="flex flex-col h-[calc(100vh-64px)] relative">
+        {!hasActiveShift && (
+          <div className="absolute inset-0 z-50 bg-black/50 flex items-center justify-center">
+            <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md mx-4 text-center">
+              <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Clock className="w-8 h-8 text-amber-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">No Active Shift</h2>
+              <p className="text-gray-500 mb-6">You must open a shift before processing any sales. Please open a shift to continue.</p>
+              <Button
+                className="w-full"
+                onClick={() => {
+                  fetchRegisters();
+                  setShowOpenModal(true);
+                }}
+              >
+                <Clock className="w-4 h-4 mr-2" />
+                Open Shift
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <ShiftStatusIndicator />
+
         {/* Products Section */}
         <div className="flex-1 p-4 flex flex-col overflow-hidden">
           {/* Search Bar */}
