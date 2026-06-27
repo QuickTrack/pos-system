@@ -43,7 +43,7 @@ const CustomerPaymentSchema = new Schema<ICustomerPayment>(
     },
     paymentMethod: {
       type: String,
-      enum: ['cash', 'mpesa', 'card', 'bank_transfer', 'credit'],
+      enum: ['cash', 'mpesa', 'card', 'bank_transfer', 'cheque', 'credit'],
       default: 'cash',
     },
     referenceNumber: {

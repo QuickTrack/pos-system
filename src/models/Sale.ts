@@ -52,20 +52,21 @@ export interface ISale extends Document {
   taxRate: number;
   total: number;
   
-  // Payment
-  paymentMethod: 'cash' | 'mpesa' | 'card' | 'mixed' | 'credit' | 'account';
-  chargedToAccount?: boolean;
-  paymentDetails?: {
-    amount: number;
-    method: string;
-    reference?: string;
-    transactionId?: string;
-  }[];
-  amountPaid: number;
-  change: number;
-  
-  // Status
-  status: 'completed' | 'pending' | 'refunded' | 'voided';
+// Payment
+   paymentMethod: 'cash' | 'mpesa' | 'card' | 'mixed' | 'credit' | 'account';
+   chargedToAccount?: boolean;
+   paymentDetails?: {
+     amount: number;
+     method: string;
+     reference?: string;
+     transactionId?: string;
+   }[];
+   amountPaid: number;
+   change: number;
+   paymentStatus?: 'paid' | 'partial' | 'unpaid';
+   
+   // Status
+   status: 'completed' | 'pending' | 'refunded' | 'voided';
   isRefund: boolean;
   refundedSale?: mongoose.Types.ObjectId;
   refundReason?: string;
@@ -160,6 +161,11 @@ const SaleSchema = new Schema<ISale>(
     }],
     amountPaid: { type: Number, required: true },
     change: { type: Number, default: 0 },
+    paymentStatus: { 
+      type: String, 
+      enum: ['paid', 'partial', 'unpaid'],
+      default: 'unpaid'
+    },
     
     // Status
     status: { 

@@ -1,16 +1,23 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongodb';
-import CustomerPayment from '@/models/CustomerPayment';
-import Customer from '@/models/Customer';
-import CustomerInvoice from '@/models/CustomerInvoice';
 import { getAuthUser } from '@/lib/auth-server';
-import mongoose from 'mongoose';
 import { syncCustomerBalanceDue } from '@/lib/customer-balance';
 
 export async function GET(request: Request) {
   try {
     await connectDB();
-    
+
+    const customerModule = await import('@/models/Customer');
+    const Customer = customerModule.default;
+    const userModule = await import('@/models/User');
+    const User = userModule.default;
+    const customerPaymentModule = await import('@/models/CustomerPayment');
+    const CustomerPayment = customerPaymentModule.default;
+    const customerInvoiceModule = await import('@/models/CustomerInvoice');
+    const CustomerInvoice = customerInvoiceModule.default;
+    const mongooseModule = await import('mongoose');
+    const mongoose = mongooseModule.default;
+
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search');
     const status = searchParams.get('status');
@@ -60,8 +67,10 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     console.error('Error fetching customer payments:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : undefined;
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch customer payments' },
+      { success: false, error: errorMessage, stack: errorStack },
       { status: 500 }
     );
   }
@@ -70,6 +79,14 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     await connectDB();
+
+    const { default: User } = await import('@/models/User');
+    const { default: Customer } = await import('@/models/Customer');
+    const { default: CustomerInvoice } = await import('@/models/CustomerInvoice');
+    const { default: CustomerPayment } = await import('@/models/CustomerPayment');
+    const { default: Sale } = await import('@/models/Sale');
+    const mongooseModule = await import('mongoose');
+    const mongoose = mongooseModule.default;
     
     // Get authenticated user
     const user = await getAuthUser();

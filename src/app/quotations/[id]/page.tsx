@@ -357,7 +357,7 @@ export default function QuotationDetailPage() {
   const handleWhatsApp = () => {
     if (!quotation) return;
     const message = encodeURIComponent(
-      `Dear ${quotation.customerName},\n\nPlease find attached your quotation ${quotation.quotationNumber} for ${formatCurrency(quotation.grandTotal)}.\n\nValid until: ${formatDate(quotation.validUntil)}\n\nKind regards,`
+      `Dear ${quotation.customerName},\n\nHere is your quotation ${quotation.quotationNumber} for ${formatCurrency(quotation.grandTotal)}.\n\nValid until: ${formatDate(quotation.validUntil)}\n\nKind regards,`
     );
     window.open(`https://wa.me/${quotation.customerPhone.replace(/[^0-9]/g, '')}?text=${message}`, '_blank');
   };
@@ -366,7 +366,7 @@ export default function QuotationDetailPage() {
     if (!quotation?.customerEmail) return;
     const subject = encodeURIComponent(`Quotation ${quotation.quotationNumber}`);
     const body = encodeURIComponent(
-      `Dear ${quotation.customerName},\n\nPlease find your quotation ${quotation.quotationNumber} attached.\n\nTotal: ${formatCurrency(quotation.grandTotal)}\nValid until: ${formatDate(quotation.validUntil)}\n\nKind regards,`
+      `Dear ${quotation.customerName},\n\nPlease find your quotation ${quotation.quotationNumber} below.\n\nTotal: ${formatCurrency(quotation.grandTotal)}\nValid until: ${formatDate(quotation.validUntil)}\n\nKind regards,`
     );
     window.location.href = `mailto:${quotation.customerEmail}?subject=${subject}&body=${body}`;
   };

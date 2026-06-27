@@ -93,13 +93,13 @@ export default function CustomerPaymentsPage() {
     fetchPayments();
     fetchCustomers();
     fetchCustomerInvoices();
-  }, [status, startDate, endDate]);
+  }, [status, startDate, endDate, searchQuery]);
 
-  // Handle URL query parameters for pre-loading customer and invoice
-  useEffect(() => {
+// Handle URL query parameters for pre-loading customer and invoice
+   useEffect(() => {
     const customerId = searchParams.get('customerId');
     const invoiceNumber = searchParams.get('invoiceNumber');
-    const amount = searchParams.get('amount');
+    const urlAmount = searchParams.get('amount');
 
     if (customerId && customerInvoices.length > 0) {
       // Find the customer in customerInvoices
@@ -110,7 +110,7 @@ export default function CustomerPaymentsPage() {
         setFormData(prev => ({
           ...prev,
           customerId,
-          amount: amount ? parseFloat(amount) : 0,
+          amount: urlAmount ? parseFloat(urlAmount) : 0,
         }));
         
         // Find customer name from customers array
@@ -119,13 +119,15 @@ export default function CustomerPaymentsPage() {
           setCustomerSearchQuery(customer.name);
         }
         
-        // Pre-select the invoice if provided
+        // Pre-select the invoice if provided via URL, otherwise invoices stay deselected
         if (invoiceNumber) {
           setSelectedInvoices([invoiceNumber]);
           setPreloadedInvoice(invoiceNumber);
-        } else if (customerData.invoices.length > 0) {
-          // Select all invoices for the customer
-          setSelectedInvoices(customerData.invoices.map(i => i.invoiceNumber));
+          // Auto-populate amount from pre-selected invoice
+          const invoice = customerData.invoices.find(i => i.invoiceNumber === invoiceNumber);
+          if (invoice) {
+            setFormData(prev => ({ ...prev, amount: invoice.balance || 0 }));
+          }
         }
         
         // Open the create modal
@@ -147,8 +149,8 @@ export default function CustomerPaymentsPage() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
-  // Reset form when modal closes
-  useEffect(() => {
+// Reset form when modal closes
+   useEffect(() => {
     if (!showCreateModal) {
       setCustomerSearchQuery('');
       setSearchedCustomers([]);
@@ -164,6 +166,18 @@ export default function CustomerPaymentsPage() {
     }
   }, [showCreateModal]);
 
+// Set default payment date when modal opens (only once)
+  const defaultDateSet = useRef(false);
+  useEffect(() => {
+    if (showCreateModal && !defaultDateSet.current) {
+      setFormData(prev => ({ ...prev, paymentDate: new Date().toISOString().split('T')[0] }));
+      defaultDateSet.current = true;
+    }
+    if (!showCreateModal) {
+      defaultDateSet.current = false;
+    }
+  }, [showCreateModal]);
+
   const fetchPayments = async () => {
     try {
       const params = new URLSearchParams();
@@ -175,7 +189,12 @@ export default function CustomerPaymentsPage() {
       const response = await fetch(`/api/customer-payments?${params}`);
       const data = await response.json();
 
-      if (data.success) setPayments(data.payments);
+      if (!response.ok || !data.success) {
+        console.error('Failed to fetch payments:', data.error || 'Unknown error');
+        return;
+      }
+
+      setPayments(data.payments || []);
     } catch (error) {
       console.error('Failed to fetch payments:', error);
     } finally {
@@ -206,7 +225,7 @@ export default function CustomerPaymentsPage() {
   const handleCustomerChange = (customerId: string) => {
     setFormData({ ...formData, customerId });
     const customerData = customerInvoices.find(c => c.customerId === customerId);
-    setSelectedInvoices(customerData?.invoices.map(i => i.invoiceNumber) || []);
+    // Outstanding Invoices are not pre-selected
   };
 
   const searchCustomers = async (query: string) => {
@@ -248,9 +267,7 @@ export default function CustomerPaymentsPage() {
     setCustomerSearchQuery(customer.name);
     setShowCustomerDropdown(false);
     setSearchedCustomers([]);
-    
-    const customerData = customerInvoices.find(c => c.customerId === customer._id);
-    setSelectedInvoices(customerData?.invoices.map(i => i.invoiceNumber) || []);
+    // Outstanding Invoices are not pre-selected
   };
 
   const openCustomerSelect = async () => {
@@ -284,11 +301,23 @@ export default function CustomerPaymentsPage() {
   };
 
   const toggleInvoice = (invoiceNumber: string) => {
-    setSelectedInvoices(prev => 
-      prev.includes(invoiceNumber) 
+    setSelectedInvoices(prev => {
+      const newSelection = prev.includes(invoiceNumber) 
         ? prev.filter(n => n !== invoiceNumber)
-        : [...prev, invoiceNumber]
-    );
+        : [...prev, invoiceNumber];
+      
+      // Auto-populate Payment Amount with sum of selected invoice balances
+      const selectedCustomerData = customerInvoices.find(c => c.customerId === formData.customerId);
+      if (selectedCustomerData) {
+        const totalBalance = newSelection.reduce((sum, invNum) => {
+          const invoice = selectedCustomerData.invoices.find(i => i.invoiceNumber === invNum);
+          return sum + (invoice?.balance || 0);
+        }, 0);
+        setFormData(fd => ({ ...fd, amount: totalBalance }));
+      }
+      
+      return newSelection;
+    });
   };
 
   const createPayment = async (e: React.FormEvent) => {
@@ -616,8 +645,16 @@ export default function CustomerPaymentsPage() {
               <Input
                 label="Payment Amount"
                 type="number"
-                value={formData.amount}
-                onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
+                value={formData.amount === 0 ? '' : formData.amount}
+                onFocus={() => {
+                  if (formData.amount === 0) {
+                    setFormData(fd => ({ ...fd, amount: '' as unknown as number }));
+                  }
+                }}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setFormData(fd => ({ ...fd, amount: val === '' ? 0 : parseFloat(val) || 0 }));
+                }}
                 required
               />
             </div>
@@ -628,7 +665,7 @@ export default function CustomerPaymentsPage() {
               <Input
                 label="Payment Date"
                 type="date"
-                value={formData.paymentDate}
+                value={formData.paymentDate || new Date().toISOString().split('T')[0]}
                 onChange={(e) => setFormData({ ...formData, paymentDate: e.target.value })}
               />
             </div>
@@ -642,6 +679,7 @@ export default function CustomerPaymentsPage() {
                   { value: 'mpesa', label: 'M-Pesa' },
                   { value: 'card', label: 'Card' },
                   { value: 'bank_transfer', label: 'Bank Transfer' },
+                  { value: 'cheque', label: 'Cheque' },
                   { value: 'credit', label: 'Credit' },
                 ]}
               />
@@ -680,7 +718,7 @@ export default function CustomerPaymentsPage() {
           <Input
             label="Reference Number"
             value={formData.referenceNumber}
-            onChange={(e) => setFormData({ ...formData, referenceNumber: e.target.value })}
+            onChange={(e) => setFormData({ ...formData, referenceNumber: e.target.value.toUpperCase() })}
             placeholder="Transaction ID, receipt number, etc."
           />
 
@@ -897,8 +935,7 @@ export default function CustomerPaymentsPage() {
                         onClick={() => {
                           setFormData({ ...formData, customerId: customer._id });
                           setCustomerSearchQuery(customer.name);
-                          const custData = customerInvoices.find(c => String(c.customerId) === customerIdStr);
-                          setSelectedInvoices(custData?.invoices.map(i => i.invoiceNumber) || []);
+                          // Outstanding Invoices are not pre-selected
                           setShowCustomerSelectModal(false);
                         }}
                       >
@@ -917,11 +954,9 @@ export default function CustomerPaymentsPage() {
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
-                              const custIdStr = String(customer._id);
                               setFormData({ ...formData, customerId: customer._id });
                               setCustomerSearchQuery(customer.name);
-                              const custData = customerInvoices.find(c => String(c.customerId) === custIdStr);
-                              setSelectedInvoices(custData?.invoices.map(i => i.invoiceNumber) || []);
+                              // Outstanding Invoices are not pre-selected
                               setShowCustomerSelectModal(false);
                             }}
                           >

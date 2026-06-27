@@ -39,11 +39,15 @@ export async function POST(
       });
     }
 
-    // Update the linked sales invoices
+    // Update the linked sales and customer invoices
     if (payment.invoiceNumbers && payment.invoiceNumbers.length > 0) {
       const Sale = (await import('@/models/Sale')).default;
+      const CustomerInvoice = (await import('@/models/CustomerInvoice')).default;
+      const mongooseModule = await import('mongoose');
+      const mongoose = mongooseModule.default;
       
       for (const invoiceNumber of payment.invoiceNumbers) {
+        // Update Sale invoices
         const sale = await Sale.findOne({ invoiceNumber });
         if (sale) {
           const newAmountPaid = sale.amountPaid + payment.amount;
@@ -52,6 +56,39 @@ export async function POST(
           await Sale.findByIdAndUpdate(sale._id, {
             amountPaid: newAmountPaid,
             paymentStatus: newStatus,
+          });
+        }
+        
+        // Update CustomerInvoice records
+        const customerInvoice = await CustomerInvoice.findOne({ invoiceNumber });
+        if (customerInvoice) {
+          const newAmountPaid = customerInvoice.amountPaid + payment.amount;
+          const newBalanceDue = Math.max(0, customerInvoice.total - newAmountPaid);
+          
+          let newStatus: 'draft' | 'sent' | 'partial' | 'paid' | 'overdue' | 'cancelled' = customerInvoice.status;
+          if (newBalanceDue <= 0 && newAmountPaid >= customerInvoice.total) {
+            newStatus = 'paid';
+          } else if (newAmountPaid > 0) {
+            newStatus = 'partial';
+          }
+          
+          // Add payment record to invoice and update amounts/status
+          await CustomerInvoice.findByIdAndUpdate(customerInvoice._id, {
+            $push: {
+              payments: {
+                amount: payment.amount,
+                date: payment.paymentDate,
+                method: payment.paymentMethod as 'cash' | 'mpesa' | 'bank' | 'cheque' | 'other',
+                reference: payment.referenceNumber,
+                notes: payment.notes,
+                recordedBy: new mongoose.Types.ObjectId(payment.recordedBy || payment.customer),
+              },
+            },
+            $set: {
+              amountPaid: newAmountPaid,
+              balanceDue: newBalanceDue,
+              status: newStatus,
+            },
           });
         }
       }

@@ -156,6 +156,16 @@ export default function CreateInvoicePage() {
     fetchData();
   }, [searchQuery, statusFilter]);
 
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchData();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
   // Load settings from localStorage for immediate display
   const loadSettingsFromLocalStorage = () => {
     if (typeof window === 'undefined') return null;

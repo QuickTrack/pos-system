@@ -23,7 +23,7 @@ export async function GET(request: Request) {
       status: 'completed',
       customer: { $exists: true, $ne: null },
     })
-      .select('invoiceNumber customer customerName customerPhone total amountPaid saleDate')
+      .select('invoiceNumber customer customerName customerPhone total amountPaid saleDate paymentStatus')
       .sort({ saleDate: -1 })
       .lean();
 
@@ -66,8 +66,8 @@ export async function GET(request: Request) {
       const amountPaid = sale.amountPaid || 0;
       const balance = total - amountPaid;
 
-      // Skip if already in map (avoid duplicates) or if no customer
-      if (balance <= 0 || !invoiceNumber) continue;
+      // Skip if already in map (avoid duplicates) or if no customer, or if paid
+      if (balance <= 0 || !invoiceNumber || sale.paymentStatus === 'paid') continue;
 
       // Only add if not already present (prefer backoffice invoice if exists)
       if (!invoiceMap.has(invoiceNumber)) {
