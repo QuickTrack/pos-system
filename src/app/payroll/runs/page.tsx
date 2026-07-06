@@ -87,6 +87,9 @@ export default function PayrollRunsPage() {
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  const [departments, setDepartments] = useState<{ value: string; label: string }[]>([]);
+  const [departmentsLoading, setDepartmentsLoading] = useState(false);
+
   const [createForm, setCreateForm] = useState({
     name: '', description: '', periodStart: '', periodEnd: '', payPeriod: 'monthly', branch: '', department: '',
   });
@@ -113,6 +116,21 @@ export default function PayrollRunsPage() {
       setError(err instanceof Error ? err.message : 'Network error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchDepartments = async () => {
+    try {
+      setDepartmentsLoading(true);
+      const response = await fetch('/api/departments');
+      const result = await response.json();
+      if (result.success) {
+        setDepartments((result.departments || []).map((d: string) => ({ value: d, label: d })));
+      }
+    } catch {
+      setDepartments([]);
+    } finally {
+      setDepartmentsLoading(false);
     }
   };
 
@@ -159,6 +177,8 @@ export default function PayrollRunsPage() {
 
   const openCreateModal = () => {
     setCreateForm({ name: '', description: '', periodStart: '', periodEnd: '', payPeriod: 'monthly', branch: '', department: '' });
+    setDepartments([]);
+    fetchDepartments();
     setShowCreateModal(true);
   };
 
@@ -394,7 +414,7 @@ export default function PayrollRunsPage() {
           <div className="space-y-4 max-h-[60vh] overflow-y-auto">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input label="Name" value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })} required />
-              <Input label="Department" value={createForm.department} onChange={(e) => setCreateForm({ ...createForm, department: e.target.value })} />
+              <Select label="Department" value={createForm.department} onChange={(e) => setCreateForm({ ...createForm, department: e.target.value })} options={departmentsLoading ? [{ value: '', label: 'Loading...' }] : [{ value: '', label: 'Select Department' }, ...departments]} />
               <Input label="Period Start" value={createForm.periodStart} onChange={(e) => setCreateForm({ ...createForm, periodStart: e.target.value })} type="date" required />
               <Input label="Period End" value={createForm.periodEnd} onChange={(e) => setCreateForm({ ...createForm, periodEnd: e.target.value })} type="date" required />
               <Select label="Pay Period" value={createForm.payPeriod} onChange={(e) => setCreateForm({ ...createForm, payPeriod: e.target.value })} options={[{ value: 'monthly', label: 'Monthly' }, { value: 'weekly', label: 'Weekly' }, { value: 'bi_weekly', label: 'Bi-Weekly' }, { value: 'custom', label: 'Custom' }]} />
