@@ -289,14 +289,14 @@ export default function SalaryStructuresPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input label="Name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
               <Input label="Description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
-              <Input label="Category" value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} as="select" options={CATEGORY_OPTIONS} />
-              <Input label="Payment Frequency" value={formData.paymentFrequency} onChange={(e) => setFormData({ ...formData, paymentFrequency: e.target.value })} as="select" options={PAYMENT_FREQUENCY_OPTIONS} />
+              <Select label="Category" value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} options={CATEGORY_OPTIONS} />
+              <Select label="Payment Frequency" value={formData.paymentFrequency} onChange={(e) => setFormData({ ...formData, paymentFrequency: e.target.value })} options={PAYMENT_FREQUENCY_OPTIONS} />
               <Input label="Amount" value={formData.amount.toString()} onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })} type="number" />
               <Input label="Rate" value={formData.rate.toString()} onChange={(e) => setFormData({ ...formData, rate: parseFloat(e.target.value) || 0 })} type="number" />
               <Input label="Overtime (Normal)" value={formData.overtimeMultiplierNormal.toString()} onChange={(e) => setFormData({ ...formData, overtimeMultiplierNormal: parseFloat(e.target.value) || 1.5 })} type="number" step="0.1" />
               <Input label="Overtime (Weekend)" value={formData.overtimeMultiplierWeekend.toString()} onChange={(e) => setFormData({ ...formData, overtimeMultiplierWeekend: parseFloat(e.target.value) || 1.5 })} type="number" step="0.1" />
               <Input label="Overtime (Holiday)" value={formData.overtimeMultiplierHoliday.toString()} onChange={(e) => setFormData({ ...formData, overtimeMultiplierHoliday: parseFloat(e.target.value) || 2 })} type="number" step="0.1" />
-              <Input label="Is Default" value={formData.isDefault} onChange={(e) => setFormData({ ...formData, isDefault: e.target.value })} as="select" options={YES_NO_OPTIONS} />
+              <Select label="Is Default" value={formData.isDefault} onChange={(e) => setFormData({ ...formData, isDefault: e.target.value })} options={YES_NO_OPTIONS} />
             </div>
           </div>
           <div className="flex justify-end gap-2 mt-6 pt-4 border-t">

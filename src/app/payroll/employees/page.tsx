@@ -22,7 +22,7 @@ interface PayrollProfile {
   basicSalary: number;
   bankName: string;
   status: string;
-  branch: { name: string; code: string } | null;
+  branch: { _id: string; name: string; code: string } | null;
   nationalId?: string;
   kraPin?: string;
   nssfNumber?: string;
@@ -32,7 +32,7 @@ interface PayrollProfile {
   email?: string;
   contractType?: string;
   employmentDate?: string;
-  salaryStructure?: { name: string } | null;
+  salaryStructure?: { _id: string; name: string } | null;
   housingAllowance?: number;
   transportAllowance?: number;
   medicalAllowance?: number;
@@ -88,7 +88,7 @@ export default function PayrollEmployeesPage() {
     employmentDate: '', salaryStructure: '', paymentFrequency: 'monthly',
     basicSalary: 0, housingAllowance: 0, transportAllowance: 0, medicalAllowance: 0,
     responsibilityAllowance: 0, communicationAllowance: 0, otherAllowances: 0,
-    overtimeEligible: false, overtimeRateMultiplier: 1.5, weeklyOffDays: '',
+    overtimeEligible: false, overtimeRateMultiplier: 1.5, weeklyOffDays: '', status: 'active',
   });
 
   const fetchProfiles = async () => {
@@ -132,7 +132,7 @@ export default function PayrollEmployeesPage() {
       employmentDate: '', salaryStructure: '', paymentFrequency: 'monthly',
       basicSalary: 0, housingAllowance: 0, transportAllowance: 0, medicalAllowance: 0,
       responsibilityAllowance: 0, communicationAllowance: 0, otherAllowances: 0,
-      overtimeEligible: false, overtimeRateMultiplier: 1.5, weeklyOffDays: '',
+      overtimeEligible: false, overtimeRateMultiplier: 1.5, weeklyOffDays: '', status: 'active',
     });
     setModalTab('personal');
     setShowModal(true);
@@ -155,6 +155,7 @@ export default function PayrollEmployeesPage() {
       responsibilityAllowance: profile.responsibilityAllowance || 0, communicationAllowance: profile.communicationAllowance || 0,
       otherAllowances: profile.otherAllowances || 0, overtimeEligible: profile.overtimeEligible || false,
       overtimeRateMultiplier: profile.overtimeRateMultiplier || 1.5, weeklyOffDays: profile.weeklyOffDays?.join(',') || '',
+      status: profile.status || 'active',
     });
     setModalTab('personal');
     setShowModal(true);
@@ -330,7 +331,7 @@ export default function PayrollEmployeesPage() {
                 <Input label="NSSF Number" value={formData.nssfNumber} onChange={(e) => setFormData({ ...formData, nssfNumber: e.target.value })} />
                 <Input label="SHIF Number" value={formData.shifNumber} onChange={(e) => setFormData({ ...formData, shifNumber: e.target.value })} />
                 <Input label="Email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
-                <Input label="Employment Type" value={formData.employmentType} onChange={(e) => setFormData({ ...formData, employmentType: e.target.value })} as="select" options={EMPLOYMENT_TYPE_OPTIONS} />
+                <Select label="Employment Type" value={formData.employmentType} onChange={(e) => setFormData({ ...formData, employmentType: e.target.value })} options={EMPLOYMENT_TYPE_OPTIONS} />
               </div>
             )}
             {modalTab === 'employment' && (
@@ -339,8 +340,8 @@ export default function PayrollEmployeesPage() {
                 <Input label="Position" value={formData.position} onChange={(e) => setFormData({ ...formData, position: e.target.value })} />
                 <Input label="Employment Date" value={formData.employmentDate} onChange={(e) => setFormData({ ...formData, employmentDate: e.target.value })} type="date" />
                 <Input label="Contract Type" value={formData.contractType} onChange={(e) => setFormData({ ...formData, contractType: e.target.value })} />
-                <Input label="Payment Frequency" value={formData.paymentFrequency} onChange={(e) => setFormData({ ...formData, paymentFrequency: e.target.value })} as="select" options={PAYMENT_FREQUENCY_OPTIONS} />
-                <Input label="Status" value={formData.status || 'active'} onChange={(e) => setFormData({ ...formData, status: e.target.value })} as="select" options={STATUS_OPTIONS} />
+                <Select label="Payment Frequency" value={formData.paymentFrequency} onChange={(e) => setFormData({ ...formData, paymentFrequency: e.target.value })} options={PAYMENT_FREQUENCY_OPTIONS} />
+                <Select label="Status" value={formData.status || 'active'} onChange={(e) => setFormData({ ...formData, status: e.target.value })} options={STATUS_OPTIONS} />
               </div>
             )}
             {modalTab === 'salary' && (
@@ -352,7 +353,7 @@ export default function PayrollEmployeesPage() {
                 <Input label="Responsibility Allowance" value={formData.responsibilityAllowance.toString()} onChange={(e) => setFormData({ ...formData, responsibilityAllowance: parseFloat(e.target.value) || 0 })} type="number" />
                 <Input label="Communication Allowance" value={formData.communicationAllowance.toString()} onChange={(e) => setFormData({ ...formData, communicationAllowance: parseFloat(e.target.value) || 0 })} type="number" />
                 <Input label="Other Allowances" value={formData.otherAllowances.toString()} onChange={(e) => setFormData({ ...formData, otherAllowances: parseFloat(e.target.value) || 0 })} type="number" />
-                <Input label="Overtime Eligible" value={formData.overtimeEligible.toString()} onChange={(e) => setFormData({ ...formData, overtimeEligible: e.target.value === 'true' })} as="select" options={[{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }]} />
+                <Select label="Overtime Eligible" value={formData.overtimeEligible.toString()} onChange={(e) => setFormData({ ...formData, overtimeEligible: e.target.value === 'true' })} options={[{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }]} />
                 <Input label="Overtime Rate Multiplier" value={formData.overtimeRateMultiplier.toString()} onChange={(e) => setFormData({ ...formData, overtimeRateMultiplier: parseFloat(e.target.value) || 1.5 })} type="number" step="0.1" />
                 <Input label="Weekly Off Days (comma separated)" value={formData.weeklyOffDays} onChange={(e) => setFormData({ ...formData, weeklyOffDays: e.target.value })} />
               </div>

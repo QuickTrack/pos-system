@@ -397,7 +397,7 @@ export default function PayrollRunsPage() {
               <Input label="Department" value={createForm.department} onChange={(e) => setCreateForm({ ...createForm, department: e.target.value })} />
               <Input label="Period Start" value={createForm.periodStart} onChange={(e) => setCreateForm({ ...createForm, periodStart: e.target.value })} type="date" required />
               <Input label="Period End" value={createForm.periodEnd} onChange={(e) => setCreateForm({ ...createForm, periodEnd: e.target.value })} type="date" required />
-              <Input label="Pay Period" value={createForm.payPeriod} onChange={(e) => setCreateForm({ ...createForm, payPeriod: e.target.value })} as="select" options={[{ value: 'monthly', label: 'Monthly' }, { value: 'weekly', label: 'Weekly' }, { value: 'bi_weekly', label: 'Bi-Weekly' }, { value: 'custom', label: 'Custom' }]} />
+              <Select label="Pay Period" value={createForm.payPeriod} onChange={(e) => setCreateForm({ ...createForm, payPeriod: e.target.value })} options={[{ value: 'monthly', label: 'Monthly' }, { value: 'weekly', label: 'Weekly' }, { value: 'bi_weekly', label: 'Bi-Weekly' }, { value: 'custom', label: 'Custom' }]} />
               <Input label="Branch" value={createForm.branch} onChange={(e) => setCreateForm({ ...createForm, branch: e.target.value })} />
             </div>
             <Textarea label="Description" value={createForm.description} onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })} />
