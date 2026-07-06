@@ -164,9 +164,9 @@ export default function PayrollEmployeesPage() {
   const handleSave = async () => {
     try {
       setSaving(true);
-      const url = selectedProfile ? '/api/payroll/profile' : '/api/payroll/profile';
+      const url = selectedProfile ? `/api/payroll/profile/${selectedProfile._id}` : '/api/payroll/profile';
       const method = selectedProfile ? 'PUT' : 'POST';
-      const body = selectedProfile ? { ...formData, id: selectedProfile._id } : formData;
+      const body = selectedProfile ? formData : formData;
 
       const response = await fetch(url, {
         method,
@@ -191,7 +191,7 @@ export default function PayrollEmployeesPage() {
     if (!selectedProfile) return;
     try {
       setSaving(true);
-      const response = await fetch(`/api/payroll/profile?id=${selectedProfile._id}`, { method: 'DELETE' });
+      const response = await fetch(`/api/payroll/profile/${selectedProfile._id}`, { method: 'DELETE' });
       const result = await response.json();
       if (result.success) {
         setShowDeleteModal(false);

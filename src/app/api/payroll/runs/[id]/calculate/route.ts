@@ -66,11 +66,13 @@ export async function POST(
       totalDeductions += (item.totalDeductions || 0);
       totalNet += item.netPay || 0;
       totalPAYE += item.paye || 0;
-      totalNSSF += item.nssf || 0;
-      totalSHIF += item.shif || 0;
+      totalNSSF += item.nssfEmployee || 0;
+      totalSHIF += item.shifEmployee || 0;
       totalHousingLevy += item.housingLevy || 0;
-      totalAdvancesRecovered += item.advanceRecovery || 0;
-      totalLoanRecovered += item.loanRecovery || 0;
+      const advanceTotals = (item.advanceDeductions || []).reduce((sum: number, a: any) => sum + (a.amount || 0), 0);
+      const loanTotals = (item.loanDeductions || []).reduce((sum: number, l: any) => sum + (l.amount || 0), 0);
+      totalAdvancesRecovered += advanceTotals;
+      totalLoanRecovered += loanTotals;
     }
 
     run.totalEmployees = totalEmployees;

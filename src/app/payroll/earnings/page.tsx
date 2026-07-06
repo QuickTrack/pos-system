@@ -181,10 +181,10 @@ export default function PayrollEarningsPage() {
     try {
       setSaving(true);
       setError(null);
-      const url = '/api/payroll/earnings';
+      const url = selectedEarning ? `/api/payroll/earnings/${selectedEarning._id}` : '/api/payroll/earnings';
       const method = selectedEarning ? 'PUT' : 'POST';
       const body = selectedEarning
-        ? { ...formData, id: selectedEarning._id, appliesToEmploymentTypes: formData.appliesToEmploymentTypes.split(',').map((s) => s.trim()).filter(Boolean) }
+        ? { ...formData, appliesToEmploymentTypes: formData.appliesToEmploymentTypes.split(',').map((s) => s.trim()).filter(Boolean) }
         : { ...formData, appliesToEmploymentTypes: formData.appliesToEmploymentTypes.split(',').map((s) => s.trim()).filter(Boolean) };
 
       const response = await fetch(url, {
@@ -210,7 +210,7 @@ export default function PayrollEarningsPage() {
     if (!selectedEarning) return;
     try {
       setSaving(true);
-      const response = await fetch(`/api/payroll/earnings?id=${selectedEarning._id}`, { method: 'DELETE' });
+      const response = await fetch(`/api/payroll/earnings/${selectedEarning._id}`, { method: 'DELETE' });
       const result = await response.json();
       if (result.success) {
         setShowDeleteModal(false);

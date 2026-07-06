@@ -194,7 +194,7 @@ export default function PayrollDeductionsPage() {
     try {
       setSaving(true);
       setError(null);
-      const url = '/api/payroll/deductions';
+      const url = selectedDeduction ? `/api/payroll/deductions/${selectedDeduction._id}` : '/api/payroll/deductions';
       const method = selectedDeduction ? 'PUT' : 'POST';
       let parsedTieredRates: any[] = [];
       try {
@@ -203,7 +203,7 @@ export default function PayrollDeductionsPage() {
         parsedTieredRates = [];
       }
       const body = selectedDeduction
-        ? { ...formData, id: selectedDeduction._id, appliesToEmploymentTypes: formData.appliesToEmploymentTypes.split(',').map((s) => s.trim()).filter(Boolean), tieredRates: parsedTieredRates }
+        ? { ...formData, appliesToEmploymentTypes: formData.appliesToEmploymentTypes.split(',').map((s) => s.trim()).filter(Boolean), tieredRates: parsedTieredRates }
         : { ...formData, appliesToEmploymentTypes: formData.appliesToEmploymentTypes.split(',').map((s) => s.trim()).filter(Boolean), tieredRates: parsedTieredRates };
 
       const response = await fetch(url, {
@@ -229,7 +229,7 @@ export default function PayrollDeductionsPage() {
     if (!selectedDeduction) return;
     try {
       setSaving(true);
-      const response = await fetch(`/api/payroll/deductions?id=${selectedDeduction._id}`, { method: 'DELETE' });
+      const response = await fetch(`/api/payroll/deductions/${selectedDeduction._id}`, { method: 'DELETE' });
       const result = await response.json();
       if (result.success) {
         setShowDeleteModal(false);
