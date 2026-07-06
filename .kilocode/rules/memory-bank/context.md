@@ -2,7 +2,38 @@
 
 ## Current State
 
-**Template Status**: ✅ End-of-Day Reconciliation & Z-Read Module
+**Template Status**: ✅ Payroll Management Module API Routes
+
+Implemented complete Payroll Management Module backend API:
+- Kenyan tax calculator utility (PAYE brackets 2024/2025, NSSF, SHIF, Housing Levy)
+- Payroll runs: create, list, get single (with payroll items), update status transitions
+- Payroll calculation engine (earnings, deductions, advances, loans, statutory)
+- Approval & finalize workflows (payslips + journals generation)
+- Profiles, salary structures, earnings, deductions CRUD
+- Advances & loans with approval workflows
+- Payslips, journals, and aggregated reports endpoints
+
+## Recently Completed
+
+- [x] Payroll Management Module API Routes
+  - Created `src/app/api/payroll/utils/kenyan-tax-calculator.ts` with `calculatePAYE`, `calculateNSSF`, `calculateSHIF`, `calculateHousingLevy`, `calculateFullPayroll`
+  - Created `src/app/api/payroll/runs/route.ts` (GET list + POST create)
+  - Created `src/app/api/payroll/runs/[id]/route.ts` (GET single w/ items, PUT status transitions, DELETE)
+  - Created `src/app/api/payroll/runs/[id]/calculate/route.ts` (full calculation engine)
+  - Created `src/app/api/payroll/runs/[id]/approve/route.ts` (approval workflow)
+  - Created `src/app/api/payroll/runs/[id]/finalize/route.ts` (payslips + journal creation)
+  - Created `src/app/api/payroll/runs/[id]/payslips/route.ts` (generate payslips)
+  - Created `src/app/api/payroll/profile/route.ts` + `profile/[id]/route.ts` (CRUD + filters)
+  - Created `src/app/api/payroll/salary-structures/route.ts` (CRUD)
+  - Created `src/app/api/payroll/earnings/route.ts` (CRUD + category filter)
+  - Created `src/app/api/payroll/deductions/route.ts` (CRUD + category/statutoryType filter)
+  - Created `src/app/api/payroll/advances/route.ts` (CRUD + PATCH approve/reject/disburse/complete)
+  - Created `src/app/api/payroll/loans/route.ts` (CRUD + PATCH approve/reject/activate/complete)
+  - Created `src/app/api/payroll/payslips/route.ts` (list w/ filters)
+  - Created `src/app/api/payroll/journals/route.ts` (list w/ filters)
+  - Created `src/app/api/payroll/reports/route.ts` (aggregated report data)
+  - All routes follow existing pattern: getAuthUser, hasPermission, dbConnect, serializePopulated, success/error responses, branch filtering for non-admin, pagination
+  - `bun typecheck` passed; `bun lint` passed for payroll files (2 pre-existing errors in `src/app/pricing/page.tsx` unrelated)
 
 Implemented comprehensive reconciliation module:
 - Shift management (open/close, cash float tracking)
@@ -15,6 +46,71 @@ Implemented comprehensive reconciliation module:
 - Reconciliation dashboard with real-time cash summary
 
 ## Recently Completed
+
+- [x] Open New Shift Cash Float Fields Fix
+  - Fixed opening cash float fields remaining 0 when opening a new shift
+  - Added immediate state reset when clicking "No Active Shift" button before modal opens
+  - Updated handleOpenShift to treat empty strings as 0 values
+  - Added closingFloatCash and closingFloatMpesa to close shift API response for next shift auto-load
+
+- [x] Shift Summary PDF Template Redesign
+  - Restructured shift summary PDF template with professional layout
+  - Added business header with name, address, phone, email at top
+  - Added two-column shift information and business details section
+  - Separated data into three distinct tables: Opening Balance, Transaction Summary, Closing Reconciliation
+  - Added signature section with lines for cashier and supervisor signatures
+  - Added View Summary button in shifts page for closed shifts
+  - Added Shift Summary modal with detailed breakdown and Print Summary action
+  - Improved data transformation to use separate arrays (openingItems, transactionItems, closingItems)
+  - Fixed table right-alignment for proper decimal alignment
+  - TypeScript typecheck passed; lint passed with existing warnings only
+
+- [x] Cashier Logout Preserves Original Session
+  - Super admin can now log in at `/login`, enter POS, log in as cashier, and when cashier logs out/shift ends, return to `/dashboard` with the original super admin session intact
+  - Added `/api/auth/restore-session` endpoint that accepts a `preserveToken` and restores the original `auth-token` httpOnly cookie
+  - Modified `/api/auth/cashier-login` to return `preserveToken` (the existing auth-token) in the JSON response before overwriting the cookie
+  - Updated `POSAuthModal.tsx` and `/pos/login/page.tsx` to store `preserveToken` in `sessionStorage['pos-preserve-token']`
+  - Updated `ShiftStatus.tsx` Logout button to call `/api/auth/restore-session` with the preserved token, then redirect to `/dashboard` with a hard reload so the server reads the restored cookie
+  - The "Switch Cashier" button still performs a full logout to `/pos/login`
+  - TypeScript typecheck passed; `bun lint` passed with existing warnings only
+
+- [x] License Context 401 Auth Error Fix
+  - Fixed `src/lib/license-context.tsx` to gracefully handle 401 Unauthorized responses from `/api/auth/me` and `/api/licenses/validate-hardware` when the user is not authenticated
+  - When `/api/auth/me` returns non-ok, license check now stops early instead of continuing to call the protected license validation endpoint
+  - When `/api/licenses/validate-hardware` returns non-ok, the error is handled gracefully instead of being parsed as a valid license response
+  - Prevents console 401 errors and incorrect redirects to `/license/activate` when user is logged out
+  - TypeScript typecheck passed; bun lint passed with existing warnings only
+
+- [x] Cashier Auto-Logout After Shift End
+  - Implemented automatic POS logout when a shift is closed (either by the cashier or by a supervisor)
+  - Updated `/api/shifts/active` GET to include `cashier` and `cashierName` in the response for ownership verification
+  - Updated `useShiftStore.closeShift` to return the full API response including the `autoLogout` flag
+  - Updated `ShiftStatusIndicator` to call `logout('/dashboard')` when closing a shift with `autoLogout: true`
+  - Added a 30-second polling interval in `POSPage` that checks if the current user's active shift has been externally closed; when detected, it automatically redirects the cashier to `/dashboard`
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
+
+- [x] POS Shift Status Enhancement
+  - Added X-Report button to POS ShiftStatusIndicator, linking to `/reconciliation/x-reads`
+  - Added POS session info section on far right showing: computer name (Monitor icon), logged-in user with role badge (User icon), and current date/time (Calendar icon)
+  - User role displays "Super-Admin" for super_admin role, otherwise shows the role name
+  - Changed End Shift button outline to `!border-red-400` for red styling (overrides btn-outline base)
+  - Changed X-Report button outline to `!border-blue-400` for blue styling
+  - `bun typecheck` passed
+
+- [x] Customer Payment validation fix
+  - Fixed `paymentId` validation error by generating paymentId explicitly in the route before creating CustomerPayment document
+  - Removed faulty pre-save hook from CustomerPayment model that wasn't executing before validation
+  - Added `getNextPaymentNumber()` helper function to generate sequential `CPAY-XXXXXX` format
+
+- [x] POS UI Styling Updates
+  - Changed search bar border to `border-2 border-emerald-400` for bolder green outline
+  - Changed cart section border to `border-t-2 border-red-400` for bolder red outline
+  - `bun typecheck` passed
+
+- [x] Branches Page Sidebar Layout
+  - Created `src/app/branches/layout.tsx` to add Sidebar navigation to `/branches` route
+  - Follows same pattern as other authenticated pages (suppliers, customers, etc.)
+  - `bun typecheck` passed
 
 - [x] POS Shift Modal Fixes
   - Fixed ShiftStatusIndicator component to use `createPortal` for modals, preventing them from being clipped by parent `overflow-hidden` containers in Next.js App Router.
@@ -314,7 +410,20 @@ Implemented complete multi-user authentication system:
     - text-[10px] → text-[11px] (Invoice Summary, Terms, Notes, Payment Info, Status)
     - text-[8px] → text-[9px] (KRA QR caption)
   - Applied to PrintPreview receipt template
-- [x] POS Cart Section Fixed Height
+- [x] POS Customer Selection Button and Modal Improvements
+  - Customer button now shows selected state with green border, green background, and green text when a customer is selected; unselected state uses neutral gray styling
+  - Added small green indicator dot next to selected customer name for quick visual confirmation
+  - Customer modal now includes two dropdown filters above the results list:
+    - Customer Type filter: All Types, Retail, Wholesale, Distributor
+    - Customer Category filter: All Categories, Individual, Company
+  - Customer list cards now display avatar initials circle, name, phone, email, type badge, and category badge
+  - Added `Check` icon import for selected-state affordances
+  - Added `customerFilter` and `customerCategoryFilter` state to POS page
+  - Updated `handleSearchCustomer` to pass `customerType` to `/api/customers` and apply `customerCategory` filtering client-side
+  - Modal close and customer selection now reset both filters and clear the results list
+  - Search placeholder updated to "Search by name, phone or email..."
+  - Empty state copy updated to "Type to search customers" and "No customers found"
+  - `bun typecheck` passed; `bun lint` passed with existing warnings only
   - Removed dynamic resize functionality (isDragging, resize handle)
   - Applied fixed height CSS rule: `h-[calc(100vh-150px)]`
   - Cart fills remaining vertical space below search/filter area
@@ -755,10 +864,44 @@ Implemented complete multi-user authentication system:
   - Link redirects to `/supplier-payments` using Next.js `Link` and matches existing outline button styling.
   - `bun typecheck` passed; `bun lint` passed with existing warnings only.
 
+- [x] Sales Page Receipt Template Enhancement
+  - Added business information fields from settings to PrintPreview for sales receipts: businessName, businessTagline, businessAddress, businessPhone, businessEmail, vatNumber, logo, receiptFooter
+  - Fixed invoice number to use actual sale invoiceNumber instead of _id or receiptNumber
+  - Added cashier name to receipt footer in PrintPreview
+  - Added Unit of Measure column to view receipt modal items table
+  - `bun typecheck` passed
+
+- [x] Quick Cashier Login Feature
+  - Added `/pos/login` page with numeric PIN keypad interface
+  - Added `/api/auth/cashier-login` endpoint for PIN-based authentication
+  - Searches all active cashiers and validates PIN against stored bcrypt hash
+  - Creates session record with `isQuickLogin` flag
+  - Logs activity for successful and failed PIN attempts
+  - POS layout redirects unauthenticated users to `/pos/login`
+  - Added `isQuickLogin` field to Session model
+  - Modified ActivityLog to allow null user for failed attempts
+  - Added "Cashier Quick Login" link to main login page
+  - `bun typecheck` passed
+
+- [x] POS Exclusive Login & Role Separation
+  - Modified POS layout to restrict access to cashiers only
+  - Super admins and other roles redirected to `/dashboard` when accessing POS
+  - Logout from POS redirects to `/dashboard` instead of `/login`
+  - Added `router` import and logout redirect logic to auth-context
+  - Sidebar logout button detects POS path and redirects to dashboard
+  - Ensures sales transactions are attributed to the logged-in cashier
+  - `bun typecheck` passed
+
+- [x] Sidebar Sales Link Addition
+  - Added "Sales" menu item to Sales group in Sidebar.tsx to navigate to `/sales` page
+  - Uses BarChart3 icon and `manage_sales` permission
+  - `bun typecheck` passed
+
+- [x] Receipt Template Column Order Change
+  - Changed receipt table columns to: Item, Qty, Unit, Price, Amount order
+  - `bun typecheck` passed
+
 - [x] Supplier Invoice Supplier Filter
-  - Supplier invoice page now fetches all suppliers on mount so the "All Suppliers" filter is populated from the database.
-  - Selecting an individual supplier filters the displayed invoice list by that supplier ID.
-  - `bun typecheck` passed; `bun lint` passed with existing warnings only.
 
 - [x] Supplier Invoice Inventory Updates
   - Supplier invoice creation now increments `stockQuantity` and `shopStock` for each received item using base-unit conversion.
@@ -1072,6 +1215,13 @@ const result = await printEngine.print({
 | 2026-06-15 | Fixed expense category creation/update serialization in `/api/expense-categories` and surfaced backend API errors in the category UI |
 | 2026-06-15 | Redesigned the Expense Categories page with summary cards, a sticky hierarchy sidebar, modern table UI, improved create/edit modal, and an authenticated sidebar layout; validation passed with existing lint warnings only |
 | 2026-06-25 | Fixed Close Shift Expected Cash refresh - added useEffect to re-fetch active shift data when modal opens so expectedCash reflects current sales |
+| 2026-06-28 | Added POS Exclusive Login - POS layout restricts to cashiers only, super admins redirected to dashboard; logout from POS redirects to dashboard |
+| 2026-07-03 | Fixed LicenseProvider 401 Unauthorized errors - added graceful auth check handling in license-context.tsx so unauthenticated users don't trigger protected license API calls or incorrect redirects |
+| 2026-07-03 | Added cashier logout session preservation - `/api/auth/cashier-login` returns original auth token, `/api/auth/restore-session` restores it, POS Logout button in ShiftStatus now returns to dashboard with original super admin session intact |
+| 2026-06-28 | Added Quick Cashier Login page with numeric PIN keypad; `/api/auth/cashier-login` validates PIN and creates session |
+| 2026-07-05 | Fixed POS-created expenses not properly deducted in shift calculations - added shift field to Expense model, updated API endpoints to link expenses to shifts and filter by shift in expected cash/M-Pesa calculations |
+| 2026-07-05 | Added automatic cashier summary report printing upon shift close - ShiftSummary document type with detailed breakdown, triggered via print preview in POS and reconciliation close shift pages |
+| 2026-07-06 | Implemented Payroll Management Module API: Kenyan tax calculator + 18 payroll route files (runs, calculate, approve, finalize, payslips, profile, salary-structures, earnings, deductions, advances, loans, payslips, journals, reports). `bun typecheck` passed |
 | 2026-06-15 | Added Customer Report and Inventory Report support to `/reports` with API aggregations, summary cards, tables, and export data |
 
 ## Notes
