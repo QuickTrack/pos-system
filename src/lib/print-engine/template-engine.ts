@@ -461,25 +461,8 @@ export class TemplateEngine {
   /**
    * Render to PDF
    */
-  renderToPDF(): string {
+  renderToPDF(): Uint8Array {
     return generatePDF(this.template, this.data);
-  }
-
-  /**
-   * Get rendered preview as base64
-   */
-  getPreviewBase64(format: OutputFormat = 'pdf'): string {
-    const output = this.render(format);
-    
-    if (output instanceof Uint8Array) {
-      let binary = '';
-      for (let i = 0; i < output.length; i++) {
-        binary += String.fromCharCode(output[i]);
-      }
-      return btoa(binary);
-    }
-    
-    return btoa(output);
   }
 }
 
@@ -537,6 +520,8 @@ export class DocumentHandler {
         return this.prepareStatementData(document, baseData, options);
       case 'transaction':
         return this.prepareTransactionData(document, baseData, options);
+      case 'shiftSummary':
+        return this.prepareShiftSummaryData(document, baseData, options);
       default:
         return baseData;
     }
@@ -884,6 +869,45 @@ export class DocumentHandler {
   }
 
   /**
+   * Prepare shift summary data
+   */
+  private static prepareShiftSummaryData(doc: any, base: PrintDataContext, options?: any): PrintDataContext {
+    const data = { ...base };
+
+    data.shiftSummary = {
+      shiftId: doc.shiftId || '',
+      date: this.formatDate(doc.date || doc.endTime || new Date()),
+      startTime: this.formatDateTime(doc.startTime),
+      endTime: this.formatDateTime(doc.endTime),
+      cashierName: doc.cashierName || '',
+      registerNumber: doc.registerNumber || '',
+      openingFloat: this.formatCurrency(doc.openingFloat || 0),
+      openingFloatCash: this.formatCurrency(doc.openingFloatCash || 0),
+      openingFloatMpesa: this.formatCurrency(doc.openingFloatMpesa || 0),
+      cashReceived: this.formatCurrency(doc.cashReceived || 0),
+      mpesaReceived: this.formatCurrency(doc.mpesaReceived || 0),
+      cashDrops: this.formatCurrency(doc.cashDrops || 0),
+      expenses: this.formatCurrency(doc.expenses || 0),
+      expectedCash: this.formatCurrency(doc.expectedCash || 0),
+      expectedMpesa: this.formatCurrency(doc.expectedMpesa || 0),
+      actualCash: this.formatCurrency(doc.actualCash || 0),
+      actualMpesa: this.formatCurrency(doc.actualMpesa || 0),
+      variance: this.formatCurrency(doc.variance || 0),
+      mpesaVariance: this.formatCurrency(doc.mpesaVariance || 0),
+      totalSales: this.formatCurrency(doc.totalSales || 0),
+      totalTransactions: String(doc.totalTransactions || 0),
+      notes: doc.notes || ''
+    };
+
+    // Preserve items arrays that were added in the print route
+    if (doc.openingItems) data.openingItems = doc.openingItems;
+    if (doc.transactionItems) data.transactionItems = doc.transactionItems;
+    if (doc.closingItems) data.closingItems = doc.closingItems;
+
+    return data;
+  }
+
+  /**
    * Format date
    */
   private static formatDate(date: string | Date): string {
@@ -896,6 +920,24 @@ export class DocumentHandler {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
+    });
+  }
+
+  /**
+   * Format datetime
+   */
+  private static formatDateTime(date: string | Date): string {
+    if (!date) return '';
+    
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return String(date);
+    
+    return d.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
   }
 

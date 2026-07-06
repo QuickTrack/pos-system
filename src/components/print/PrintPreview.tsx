@@ -164,8 +164,8 @@ export default function PrintPreview({
           transform: none !important;
           width: 210mm !important;
           min-height: 297mm !important;
-          padding: 15mm !important;
-          padding-bottom: 80px !important;
+          padding: 12mm !important;
+          padding-bottom: 70px !important;
         }
       }
     `;
@@ -213,7 +213,7 @@ export default function PrintPreview({
         {/* Preview */}
         <div className="flex-1 overflow-auto p-6 bg-gray-600">
           <div className="flex justify-center">
-            <div ref={documentRef} className="print-page bg-white" style={{ width: '210mm', minHeight: '297mm', padding: '15mm', paddingBottom: '80px', position: 'relative' }}>
+            <div ref={documentRef} className="print-page bg-white" style={{ width: '210mm', minHeight: '297mm', padding: '12mm', paddingBottom: '70px', position: 'relative' }}>
               {/* Header */}
               <div className="flex justify-between items-start mb-6 pb-4 border-b-2 border-emerald-600">
                 <div className="flex items-start gap-4">
@@ -240,28 +240,40 @@ export default function PrintPreview({
                 </div>
               </div>
 
-              {/* Customer / Supplier */}
-              <div className="grid grid-cols-2 gap-8 mb-8">
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{documentType === 'purchase-order' ? 'Supplier' : documentType === 'delivery-note' ? 'Delivery To' : 'Bill To'}</p>
-                  <p className="font-semibold text-gray-900 text-lg">{doc.supplier?.name || doc.customer?.name || 'Name'}</p>
-                  <div className="mt-2 text-sm text-gray-600 space-y-1">
-                    {(doc.supplier?.phone || doc.customer?.phone) && <div>📞 {doc.supplier?.phone || doc.customer?.phone}</div>}
-                    {(doc.supplier?.email || doc.customer?.email) && <div>✉️ {doc.supplier?.email || doc.customer?.email}</div>}
-                  </div>
-                </div>
-                <div className="bg-emerald-50 p-3 rounded-lg">
-                  <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wide mb-1">{documentType === 'purchase-order' ? 'Order Summary' : documentType === 'delivery-note' ? 'Delivery Details' : 'Invoice Summary'}</p>
-                  <div className="grid grid-cols-2 gap-2 mt-1">
-                    <div><p className="text-[11px] text-gray-500">Subtotal</p><p className="font-semibold text-gray-900 text-[11px]">{formatCurrency(doc.subtotal)}</p></div>
-                    <div><p className="text-[11px] text-gray-500">VAT ({doc.taxRate || 16}%)</p><p className="font-semibold text-gray-900 text-[11px]">{formatCurrency(doc.tax)}</p></div>
-                    <div className="col-span-2 pt-1 border-t border-emerald-200">
-                      <p className="text-[11px] text-gray-500">Total Amount</p>
-                      <p className="font-bold text-lg text-emerald-600">{formatCurrency(doc.total)}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+{/* Customer / Supplier - Compact for Receipts */}
+               <div className={(documentType === 'receipt' ? 'mb-3' : 'mb-8') + ' ' + (documentType !== 'receipt' ? 'grid grid-cols-2 gap-8' : 'flex items-start gap-3')}>
+                 {documentType !== 'receipt' && (
+                   <div className="bg-gray-50 p-4 rounded-lg">
+                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{documentType === 'purchase-order' ? 'Supplier' : documentType === 'delivery-note' ? 'Delivery To' : 'Bill To'}</p>
+                     <p className="font-semibold text-gray-900 text-lg">{doc.supplier?.name || doc.customer?.name || 'Name'}</p>
+                     <div className="mt-2 text-sm text-gray-600 space-y-1">
+                       {(doc.supplier?.phone || doc.customer?.phone) && <div>📞 {doc.supplier?.phone || doc.customer?.phone}</div>}
+                       {(doc.supplier?.email || doc.customer?.email) && <div>✉️ {doc.supplier?.email || doc.customer?.email}</div>}
+                     </div>
+                   </div>
+                 )}
+                 <div className={(documentType === 'receipt' ? 'flex-1 flex items-center justify-between' : '')}>
+                   {documentType === 'receipt' ? (
+                     <div>
+                       <p className="text-[10px] font-semibold text-gray-500 uppercase">Bill To</p>
+                       <p className="text-sm font-medium text-gray-900">{doc.customer?.name || 'Walk-in Customer'}</p>
+                       {(doc.customer?.phone) && <p className="text-[10px] text-gray-600">📞 {doc.customer?.phone}</p>}
+                     </div>
+                   ) : (
+                     <div className="bg-emerald-50 p-3 rounded-lg">
+                       <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wide mb-1">{documentType === 'purchase-order' ? 'Order Summary' : documentType === 'delivery-note' ? 'Delivery Details' : 'Invoice Summary'}</p>
+                       <div className="grid grid-cols-2 gap-2 mt-1">
+                         <div><p className="text-[11px] text-gray-500">Subtotal</p><p className="font-semibold text-gray-900 text-[11px]">{formatCurrency(doc.subtotal)}</p></div>
+                         <div><p className="text-[11px] text-gray-500">VAT ({doc.taxRate || 16}%)</p><p className="font-semibold text-gray-900 text-[11px]">{formatCurrency(doc.tax)}</p></div>
+                         <div className="col-span-2 pt-1 border-t border-emerald-200">
+                           <p className="text-[11px] text-gray-500">Total Amount</p>
+                           <p className="font-bold text-lg text-emerald-600">{formatCurrency(doc.total)}</p>
+                         </div>
+                       </div>
+                     </div>
+                   )}
+                 </div>
+               </div>
 
               {/* Delivery Address - Only for delivery notes */}
               {documentType === 'delivery-note' && doc.deliveryAddress && (
@@ -271,168 +283,144 @@ export default function PrintPreview({
                 </div>
               )}
 
-              {/* Items */}
-              <div className="mb-6">
-                <h3 className="text-xs font-semibold text-gray-700 mb-2">Item Details</h3>
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-gray-100">
-                      <th className="text-left p-2 text-[11px] font-semibold text-gray-600 uppercase">ITEM</th>
-                      <th className="text-center p-2 text-[11px] font-semibold text-gray-600 uppercase">UNIT</th>
-                      <th className="text-center p-2 text-[11px] font-semibold text-gray-600 uppercase">QTY</th>
-                      <th className="text-right p-2 text-[11px] font-semibold text-gray-600 uppercase">{documentType === 'purchase-order' ? 'COST' : 'RATE'}</th>
-                      <th className="text-right p-2 text-[11px] font-semibold text-gray-600 uppercase">AMOUNT</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {doc.items?.map((item: any, idx: number) => (
-                      <tr key={idx} className="border-b border-gray-100">
-                        <td className="p-2 text-[11px] text-gray-900">{item.name}</td>
-                        <td className="p-2 text-[11px] text-gray-600 text-center">{item.unit || '-'}</td>
-                        <td className="p-2 text-[11px] text-gray-600 text-center">{item.quantity}</td>
-                        <td className="p-2 text-[11px] text-gray-600 text-right">{formatCurrency(item.price ?? item.unitPrice)}</td>
-                        <td className="p-2 text-[11px] text-gray-900 text-right font-medium">{formatCurrency(item.total)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+{/* Items - Compact for Receipts */}
+               <div className={(documentType === 'receipt' ? 'mb-3' : 'mb-6')}>
+                 <table className="w-full">
+                   <thead>
+                     <tr className={(documentType === 'receipt' ? 'border-b border-gray-300' : 'bg-gray-100')}>
+                       <th className={(documentType === 'receipt' ? 'text-left p-1 text-[10px] font-bold text-gray-800 uppercase' : 'text-left p-2 text-[11px] font-semibold text-gray-600 uppercase')}>ITEM</th>
+                       <th className={(documentType === 'receipt' ? 'text-center p-1 w-10 text-[10px] font-bold text-gray-800 uppercase' : 'text-center p-2 text-[11px] font-semibold text-gray-600 uppercase')}>QTY</th>
+                       <th className={(documentType === 'receipt' ? 'text-center p-1 w-8 text-[10px] font-bold text-gray-800 uppercase' : 'text-center p-2 text-[11px] font-semibold text-gray-600 uppercase')}>UNIT</th>
+                       <th className={(documentType === 'receipt' ? 'text-right p-1 text-[10px] font-bold text-gray-800 uppercase' : 'text-right p-2 text-[11px] font-semibold text-gray-600 uppercase')}>PRICE</th>
+                       <th className={(documentType === 'receipt' ? 'text-right p-1 text-[10px] font-bold text-gray-800 uppercase' : 'text-right p-2 text-[11px] font-semibold text-gray-600 uppercase')}>{documentType === 'receipt' ? 'AMOUNT' : (documentType === 'purchase-order' ? 'COST' : 'RATE')}</th>
+                       {documentType !== 'receipt' && <th className="text-right p-2 text-[11px] font-semibold text-gray-600 uppercase">AMOUNT</th>}
+                     </tr>
+                   </thead>
+                   <tbody>
+                     {doc.items?.map((item: any, idx: number) => (
+                       <tr key={idx} className="border-b border-gray-200">
+                         <td className={(documentType === 'receipt' ? 'p-1 text-[10px] font-bold text-gray-900' : 'p-2 text-[11px] text-gray-900')}>{item.name}</td>
+                         <td className={(documentType === 'receipt' ? 'p-1 w-10 text-[10px] font-bold text-gray-700 text-center' : 'p-2 text-[11px] text-gray-600 text-center')}>{item.quantity}</td>
+                         <td className={(documentType === 'receipt' ? 'p-1 w-8 text-[10px] font-bold text-gray-800 text-center' : 'p-2 text-[11px] text-gray-600 text-center')}>{item.unit || '-'}</td>
+                         <td className={(documentType === 'receipt' ? 'p-1 text-[10px] font-bold text-gray-700 text-right' : 'p-2 text-[11px] text-gray-600 text-right')}>{formatCurrency(item.price ?? item.unitPrice)}</td>
+                         <td className={(documentType === 'receipt' ? 'p-1 text-[10px] font-bold text-gray-900 text-right' : 'p-2 text-[11px] text-gray-900 text-right font-medium')}>{formatCurrency(item.total)}</td>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+               </div>
 
-              {/* Payment */}
-              {doc.payment && documentType !== 'delivery-note' && (
-                <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide mb-2">Payment Details</p>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div><p className="text-[11px] text-gray-500">Amount Paid</p><p className="font-semibold text-green-600 text-sm">{doc.payment.amount?.toLocaleString()}</p></div>
-                    <div><p className="text-[11px] text-gray-500">Payment Method</p><p className="font-semibold text-gray-900 text-[11px] capitalize">{doc.payment.method || 'Cash'}</p></div>
-                    {doc.payment.change > 0 && <div><p className="text-[11px] text-gray-500">Change</p><p className="font-semibold text-gray-900 text-sm">{doc.payment.change?.toLocaleString()}</p></div>}
-                  </div>
-                </div>
-              )}
+{/* Payment - Compact Row for Receipts */}
+               {doc.payment && documentType === 'receipt' && (
+                 <div className="mb-3 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1.5">
+                   <div className="flex items-center justify-between text-[11px]">
+                     <div className="flex items-center gap-3">
+                       <span className="font-bold text-blue-600 uppercase">Payment:</span>
+                       <span className="font-bold text-gray-900">Paid: <span className="font-bold text-green-700">{doc.payment.amount?.toLocaleString()}</span></span>
+                       <span className="font-bold text-gray-900">Method: <span className="font-bold capitalize">{doc.payment.method || 'Cash'}</span></span>
+                       {doc.payment.change > 0 && <span className="font-bold text-gray-900">Change: <span className="font-bold">{doc.payment.change?.toLocaleString()}</span></span>}
+                     </div>
+                   </div>
+                 </div>
+               )}
+               {doc.payment && documentType !== 'receipt' && documentType !== 'delivery-note' && (
+                 <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                   <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide mb-2">Payment Details</p>
+                   <div className="grid grid-cols-3 gap-4">
+                     <div><p className="text-[11px] text-gray-500">Amount Paid</p><p className="font-semibold text-green-600 text-sm">{doc.payment.amount?.toLocaleString()}</p></div>
+                     <div><p className="text-[11px] text-gray-500">Payment Method</p><p className="font-semibold text-gray-900 text-[11px] capitalize">{doc.payment.method || 'Cash'}</p></div>
+                     {doc.payment.change > 0 && <div><p className="text-[11px] text-gray-500">Change</p><p className="font-semibold text-gray-900 text-sm">{doc.payment.change?.toLocaleString()}</p></div>}
+                   </div>
+                 </div>
+               )}
 
-              {/* Invoice Totals and Tax Summary */}
-              <div className="mb-6">
-                <div className="flex justify-end">
-                  <div className="w-64">
-                    <div className="flex justify-between py-2 border-b border-gray-100">
-                      <span className="text-[11px] text-gray-600 align-middle">Subtotal</span>
-                      <span className="text-[11px] font-medium text-gray-900 align-middle">{formatCurrency(doc.subtotal)}</span>
-                    </div>
-                    {doc.discount > 0 && (
-                      <div className="flex justify-between py-2 border-b border-gray-100">
-                        <span className="text-[11px] text-gray-600 align-middle">Discount</span>
-                        <span className="text-[11px] font-medium text-gray-900 align-middle">-{formatCurrency(doc.discount)}</span>
-                      </div>
+{/* Invoice Totals - Compact for Receipts */}
+               <div className={(documentType === 'receipt' ? 'mb-3' : 'mb-6')}>
+                 <div className="flex justify-end">
+                   <div className={(documentType === 'receipt' ? 'w-48' : 'w-64')}>
+                     {(documentType === 'receipt') && (
+                       <div className="flex justify-between text-[10px] py-1 border-b border-gray-300">
+                         <span className="font-bold text-gray-800">Subtotal</span>
+                         <span className="font-bold text-gray-900">{formatCurrency(doc.subtotal)}</span>
+                       </div>
+                     )}
+                     {doc.discount > 0 && (
+                       <div className="flex justify-between text-[10px] py-1 border-b border-gray-300">
+                         <span className="font-bold text-gray-800">Discount</span>
+                         <span className="font-bold text-gray-900">-{formatCurrency(discountAmount)}</span>
+                       </div>
+                     )}
+                     <div className="flex justify-between py-1.5 bg-gray-200 rounded px-2 mt-1">
+                       <span className="text-[11px] font-bold text-gray-900">Total</span>
+                       <span className="text-[11px] font-bold text-emerald-700">{formatCurrency(doc.total)}</span>
+                     </div>
+                   </div>
+                 </div>
+               </div>
+
+{/* Status - Hidden for receipts */}
+               {doc.status && doc.status !== 'draft' && documentType !== 'receipt' && (
+                 <div className="mb-4 text-center">
+                   <span className={`inline-block px-2 py-0.5 text-[11px] font-semibold rounded-full ${
+                     doc.status === 'paid' ? 'bg-green-100 text-green-800' :
+                     doc.status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
+                     doc.status === 'sent' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                   }`}>{doc.status.toUpperCase()}</span>
+                 </div>
+               )}
+
+               {/* Invoice Notes - Hidden for receipts */}
+               {doc.notes && documentType !== 'receipt' && (
+                 <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                   <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Invoice Notes</p>
+                   <p className="text-[11px] text-gray-700 whitespace-pre-wrap leading-relaxed">{doc.notes}</p>
+                 </div>
+               )}
+
+               {/* Terms and Conditions - Hidden for receipts */}
+               {doc.terms && documentType !== 'receipt' && (
+                 <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                   <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Terms and Conditions</p>
+                   <p className="text-[11px] text-gray-700 whitespace-pre-wrap leading-relaxed">{doc.terms}</p>
+                 </div>
+               )}
+
+               {/* Bank - Compact for receipts */}
+               {(doc.bankName && doc.bankName !== 'N/A') || doc.paymentTill || doc.sendMoneyPhoneNumber || doc.bankAccount ? (
+                 <div className={(documentType === 'receipt' ? 'mb-2' : 'mb-4') + ' p-2 bg-gray-50 rounded-lg'}>
+                   <p className="text-[10px] font-semibold text-gray-500 uppercase mb-1">Payment Information</p>
+                   <div className="flex flex-wrap gap-2 text-[10px]">
+                     {doc.paymentTill && <span className="text-gray-500">Till: <span className="font-medium text-gray-900">{doc.paymentTill}</span></span>}
+                     {doc.sendMoneyPhoneNumber && <span className="text-gray-500">Send Money: <span className="font-medium text-gray-900">{doc.sendMoneyPhoneNumber}</span></span>}
+                     {doc.bankName && doc.bankName !== 'N/A' && <span className="text-gray-500">Bank: <span className="font-medium text-gray-900">{doc.bankName}</span></span>}
+                     {doc.bankAccount && <span className="text-gray-500">Acc: <span className="font-medium text-gray-900">{doc.bankAccount}</span></span>}
+                   </div>
+                 </div>
+               ) : null}
+
+{/* Footer - Always at bottom */}
+                <div className="print-footer absolute bottom-0 left-0 right-0 flex justify-between items-center py-3 px-15mm border-t border-gray-300 bg-white" style={{ paddingLeft: '15mm', paddingRight: '15mm' }}>
+                  <div className="text-left">
+                    {doc.cashier && (
+                      <p className="text-xs font-bold text-gray-600 mb-0.5">Cashier: {doc.cashier}</p>
                     )}
-                    <div className="flex justify-between py-3 bg-gray-100 rounded px-3 mt-2">
-                      <span className="text-sm font-semibold text-gray-900 align-middle">Total</span>
-                      <span className="text-base font-bold text-emerald-600 align-middle">{formatCurrency(doc.total)}</span>
-                    </div>
+                    <p className="font-bold text-gray-800">{doc.receiptFooter || 'Thank you for your business!'}</p>
                   </div>
+                  {qrCodeUrl && (
+                    <div className="flex items-center gap-2">
+                      <div className="text-right">
+                        <p className="text-[8px] font-bold text-gray-600">KRA Tax Compliance</p>
+                        <p className="text-[8px] text-gray-500">Scan to verify</p>
+                      </div>
+                      <img 
+                        src={qrCodeUrl} 
+                        alt="KRA QR Code" 
+                        className="w-16 h-16"
+                        style={{ width: '55px', height: '55px' }}
+                      />
+                    </div>
+                  )}
                 </div>
-
-                <div className="mt-3 bg-gray-50 rounded-lg p-3 border border-gray-200">
-                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Detailed Tax Summary</p>
-                  <div className="grid grid-cols-4 gap-2">
-                    <div className="rounded-lg bg-white p-2 border border-gray-100">
-                      <p className="text-[9px] text-gray-500">Subtotal</p>
-                      <p className="text-[10px] font-semibold text-gray-900 mt-0.5">{formatCurrency(doc.subtotal)}</p>
-                    </div>
-                    <div className="rounded-lg bg-white p-2 border border-gray-100">
-                      <p className="text-[9px] text-gray-500">Discount</p>
-                      <p className="text-[10px] font-semibold text-gray-900 mt-0.5">-{formatCurrency(discountAmount)}</p>
-                    </div>
-                    <div className="rounded-lg bg-white p-2 border border-gray-100">
-                      <p className="text-[9px] text-gray-500">Taxable Amount</p>
-                      <p className="text-[10px] font-semibold text-gray-900 mt-0.5">{formatCurrency(taxableAmount)}</p>
-                    </div>
-                    <div className="rounded-lg bg-white p-2 border border-gray-100">
-                      <p className="text-[9px] text-gray-500">Tax Rate</p>
-                      <p className="text-[10px] font-semibold text-gray-900 mt-0.5">{taxRate}%</p>
-                    </div>
-                    <div className="rounded-lg bg-white p-2 border border-gray-100">
-                      <p className="text-[9px] text-gray-500">VAT Amount</p>
-                      <p className="text-[10px] font-semibold text-gray-900 mt-0.5">{formatCurrency(taxAmount)}</p>
-                    </div>
-                    <div className="rounded-lg bg-white p-2 border border-gray-100">
-                      <p className="text-[9px] text-gray-500">Pricing</p>
-                      <p className="text-[10px] font-semibold text-gray-900 mt-0.5">{doc.includeInPrice ? 'Tax Included' : 'Tax Exclusive'}</p>
-                    </div>
-                    <div className="rounded-lg bg-white p-2 border border-gray-100">
-                      <p className="text-[9px] text-gray-500">Amount Paid</p>
-                      <p className="text-[10px] font-semibold text-gray-900 mt-0.5">{formatCurrency(doc.amountPaid ?? 0)}</p>
-                    </div>
-                    <div className="rounded-lg bg-white p-2 border border-gray-100">
-                      <p className="text-[9px] text-gray-500">Balance Due</p>
-                      <p className="text-[10px] font-semibold text-amber-600 mt-0.5">{formatCurrency(customerBalanceDue)}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Status */}
-              {doc.status && doc.status !== 'draft' && (
-                <div className="mb-4 text-center">
-                  <span className={`inline-block px-2 py-0.5 text-[11px] font-semibold rounded-full ${
-                    doc.status === 'paid' ? 'bg-green-100 text-green-800' :
-                    doc.status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
-                    doc.status === 'sent' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
-                  }`}>{doc.status.toUpperCase()}</span>
-                </div>
-              )}
-
-              {/* Invoice Notes */}
-              {doc.notes && (
-                <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Invoice Notes</p>
-                  <p className="text-[11px] text-gray-700 whitespace-pre-wrap leading-relaxed">{doc.notes}</p>
-                </div>
-              )}
-
-              {/* Terms and Conditions */}
-              {doc.terms && (
-                <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Terms and Conditions</p>
-                  <p className="text-[11px] text-gray-700 whitespace-pre-wrap leading-relaxed">{doc.terms}</p>
-                </div>
-              )}
-
-              {/* Bank */}
-              {(doc.bankName && doc.bankName !== 'N/A') || doc.paymentTill || doc.sendMoneyPhoneNumber || doc.bankAccount ? (
-                <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Payment Information</p>
-                  <div className="grid grid-cols-3 gap-2 text-[11px]">
-                    {doc.paymentTill && <div><p className="text-gray-500">Till</p><p className="font-medium text-gray-900">{doc.paymentTill}</p></div>}
-                    {doc.paymentTill && <div><p className="text-gray-500">Till</p><p className="font-medium text-gray-900">{doc.paymentTill}</p></div>}
-                    {doc.sendMoneyPhoneNumber && <div><p className="text-gray-500">Send Money Phone</p><p className="font-medium text-gray-900">{doc.sendMoneyPhoneNumber}</p></div>}
-                    {doc.bankName && doc.bankName !== 'N/A' && <div><p className="text-gray-500">Bank Name</p><p className="font-medium text-gray-900">{doc.bankName}</p></div>}
-                    {doc.bankAccount && <div><p className="text-gray-500">Account Number</p><p className="font-medium text-gray-900">{doc.bankAccount}</p></div>}
-                    {doc.bankBranch && <div><p className="text-gray-500">Branch</p><p className="font-medium text-gray-900">{doc.bankBranch}</p></div>}
-                  </div>
-                </div>
-              ) : null}
-
-              {/* Footer - Always at bottom */}
-              <div className="print-footer absolute bottom-0 left-0 right-0 flex justify-between items-center py-4 px-15mm border-t border-gray-200 bg-white" style={{ paddingLeft: '15mm', paddingRight: '15mm' }}>
-                <div className="text-left">
-                  <p className="text-gray-600 font-medium">Thank you for your business!</p>
-                  <p className="text-xs text-gray-400 mt-1">Powered by POS System</p>
-                </div>
-                {qrCodeUrl && (
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <p className="text-[9px] text-gray-500">KRA Tax Compliance</p>
-                      <p className="text-[9px] text-gray-400">Scan to verify</p>
-                    </div>
-                    <img 
-                      src={qrCodeUrl} 
-                      alt="KRA QR Code" 
-                      className="w-16 h-16"
-                      style={{ width: '60px', height: '60px' }}
-                    />
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         </div>

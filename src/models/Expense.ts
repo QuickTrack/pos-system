@@ -20,6 +20,7 @@ export interface IPayeeInfo {
 
 export interface IExpense extends Document {
   transactionNumber: string;
+  shift?: mongoose.Types.ObjectId;
   dateTime: Date;
   branch: mongoose.Types.ObjectId;
   branchName?: string;
@@ -86,6 +87,7 @@ const ExpenseAttachmentSchema = new Schema<IExpenseAttachment>(
 const ExpenseSchema = new Schema<IExpense>(
   {
     transactionNumber: { type: String, required: true, unique: true },
+    shift: { type: Schema.Types.ObjectId, ref: 'Shift' },
     dateTime: { type: Date, default: Date.now },
     branch: { type: Schema.Types.ObjectId, ref: 'Branch', required: true },
     branchName: { type: String },
@@ -134,6 +136,7 @@ const ExpenseSchema = new Schema<IExpense>(
 );
 
 ExpenseSchema.index({ transactionNumber: 1 });
+ExpenseSchema.index({ shift: 1 });
 ExpenseSchema.index({ branch: 1, dateTime: -1 });
 ExpenseSchema.index({ expenseCategory: 1, dateTime: -1 });
 ExpenseSchema.index({ status: 1, dateTime: -1 });

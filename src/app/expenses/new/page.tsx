@@ -17,8 +17,11 @@ import {
   FileText,
   CheckCircle2,
   XCircle,
+  Store,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { useShiftStore } from '@/lib/store';
 
 interface Branch {
   _id: string;
@@ -67,6 +70,18 @@ export default function NewExpensePage() {
     payeeSupplierId: '',
     notes: '',
   });
+
+  const searchParams = useSearchParams();
+  const fromPos = searchParams.get('fromPos') === 'true';
+  const posBranchId = searchParams.get('branchId') || '';
+  const posShiftId = searchParams.get('shiftId') || '';
+  const posCashierId = searchParams.get('cashierId') || '';
+
+  useEffect(() => {
+    if (fromPos && posBranchId && !formData.branch) {
+      setFormData((prev) => ({ ...prev, branch: posBranchId }));
+    }
+  }, [fromPos, posBranchId, formData.branch]);
 
   const [attachments, setAttachments] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState<Record<number, number>>({});
@@ -129,6 +144,7 @@ export default function NewExpensePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
+          shift: fromPos && posShiftId ? posShiftId : undefined,
           amount: parseFloat(formData.amount),
           attachments: uploadedAttachments,
         }),
@@ -140,28 +156,9 @@ export default function NewExpensePage() {
       }
 
       setSuccess(true);
-      setTimeout(() => {
-        setSuccess(false);
-        setFormData({
-          dateTime: new Date().toISOString().slice(0, 16),
-          branch: '',
-          department: '',
-          expenseCategory: '',
-          expenseSubcategory: '',
-          description: '',
-          amount: '',
-          paymentSource: 'cash_drawer',
-          paymentSourceDetail: '',
-          bankAccountName: '',
-          payeeType: 'other',
-          payeeName: '',
-          payeePhoneNumber: '',
-          payeeReferenceNumber: '',
-          payeeSupplierId: '',
-          notes: '',
-        });
-        setAttachments([]);
-      }, 2000);
+      if (fromPos && posShiftId) {
+        localStorage.setItem('shift-refresh', Date.now().toString());
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create expense');
     } finally {
@@ -201,12 +198,49 @@ export default function NewExpensePage() {
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Expense Recorded Successfully</h3>
             <p className="text-gray-500 mb-6">The payout has been recorded and is pending approval.</p>
             <div className="flex justify-center gap-3">
-              <Link href="/expenses/new">
-                <Button variant="outline">Record Another</Button>
-              </Link>
-              <Link href="/expenses">
-                <Button>View All Expenses</Button>
-              </Link>
+              {fromPos ? (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSuccess(false);
+                      setFormData({
+                        dateTime: new Date().toISOString().slice(0, 16),
+                        branch: posBranchId || '',
+                        department: '',
+                        expenseCategory: '',
+                        expenseSubcategory: '',
+                        description: '',
+                        amount: '',
+                        paymentSource: 'cash_drawer',
+                        paymentSourceDetail: '',
+                        bankAccountName: '',
+                        payeeType: 'other',
+                        payeeName: '',
+                        payeePhoneNumber: '',
+                        payeeReferenceNumber: '',
+                        payeeSupplierId: '',
+                        notes: '',
+                      });
+                      setAttachments([]);
+                    }}
+                  >
+                    Record Another
+                  </Button>
+                  <Link href="/pos">
+                    <Button>Return to POS</Button>
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link href="/expenses/new">
+                    <Button variant="outline">Record Another</Button>
+                  </Link>
+                  <Link href="/expenses">
+                    <Button>View All Expenses</Button>
+                  </Link>
+                </>
+              )}
             </div>
           </Card>
         </div>
@@ -214,12 +248,21 @@ export default function NewExpensePage() {
     );
   }
 
-  return (
+   return (
     <div>
       <Header title="Record New Payout" subtitle="Create a new business expense entry" />
 
       <div className="p-6">
         <div className="max-w-4xl mx-auto space-y-6">
+          {fromPos && (
+            <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-lg">
+              <Store className="w-5 h-5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Petty Cash Entry</p>
+                <p className="text-xs text-emerald-700">This payout will be recorded against the current POS session and included in the end-of-shift summary.</p>
+              </div>
+            </div>
+          )}
           <div className="flex items-center gap-4">
             <Link href="/expenses">
               <Button variant="outline" className="gap-2">

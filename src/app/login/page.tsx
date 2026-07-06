@@ -161,6 +161,9 @@ export default function LoginPage() {
           </button>
         </p>
         <p className="text-center text-sm text-gray-500 mt-2">
+          <a href="/pos/login" className="text-emerald-600 hover:underline">Cashier Quick Login</a>
+        </p>
+        <p className="text-center text-sm text-gray-500 mt-2">
           Cloud POS System for Kenyan Businesses
         </p>
       </div>

@@ -13,6 +13,7 @@ export interface ISession extends Document {
   lastActivity: Date;
   expiresAt: Date;
   createdAt: Date;
+  isQuickLogin?: boolean;
 }
 
 const SessionSchema = new Schema<ISession>(
@@ -28,6 +29,7 @@ const SessionSchema = new Schema<ISession>(
     isActive: { type: Boolean, default: true },
     lastActivity: { type: Date, default: Date.now },
     expiresAt: { type: Date, required: true },
+    isQuickLogin: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

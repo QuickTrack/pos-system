@@ -140,6 +140,8 @@ interface UIState {
   darkMode: boolean;
   activeBranch: string | null;
   favoriteLinks: FavoriteItem[];
+  showPOSAuthModal: boolean;
+  pendingPOSRedirect: boolean;
   setSidebarOpen: (open: boolean) => void;
   toggleSidebar: () => void;
   setDarkMode: (mode: boolean) => void;
@@ -147,6 +149,8 @@ interface UIState {
   setActiveBranch: (branchId: string | null) => void;
   toggleFavorite: (item: { href: string; label: string; iconName?: string }) => void;
   isFavorite: (href: string) => boolean;
+  setShowPOSAuthModal: (show: boolean) => void;
+  setPendingPOSRedirect: (pending: boolean) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -156,6 +160,8 @@ export const useUIStore = create<UIState>()(
       darkMode: false,
       activeBranch: null,
       favoriteLinks: [],
+      showPOSAuthModal: false,
+      pendingPOSRedirect: false,
 
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
@@ -171,6 +177,8 @@ export const useUIStore = create<UIState>()(
         }
       },
       isFavorite: (href) => get().favoriteLinks.some(f => f.href === href),
+      setShowPOSAuthModal: (show) => set({ showPOSAuthModal: show }),
+      setPendingPOSRedirect: (pending) => set({ pendingPOSRedirect: pending }),
     }),
     {
       name: 'pos-ui',
@@ -326,7 +334,9 @@ export const useHeldSalesStore = create<HeldSalesState>()(
 export interface ShiftInfo {
   _id: string;
   shiftId: string;
-  register: string;
+  cashier: string;
+  branch: string;
+  branchName: string;
   registerNumber: string;
   openingFloat: number;
   openingFloatCash: number;
@@ -339,6 +349,7 @@ export interface ShiftInfo {
   expectedMpesa: number;
   cashReceived: number;
   mpesaReceived: number;
+  cardSales: number;
   actualCash: number;
   actualMpesa: number;
   variance: number;
@@ -357,7 +368,7 @@ interface ShiftState {
   fetchActiveShift: () => Promise<void>;
   fetchRegisters: () => Promise<void>;
   openShift: (registerId: string, openingFloatCash: number, openingFloatMpesa: number) => Promise<boolean>;
-  closeShift: (actualCash: number, actualMpesa: number, notes?: string) => Promise<boolean>;
+  closeShift: (actualCash: number, actualMpesa: number, notes?: string) => Promise<{ success: boolean; autoLogout?: boolean }>;
   clearShift: () => void;
   setShowOpenModal: (open: boolean) => void;
   setSelectedRegister: (register: string) => void;
@@ -429,7 +440,7 @@ export const useShiftStore = create<ShiftState>()(
 
       closeShift: async (actualCash, actualMpesa, notes = '') => {
         const { activeShift } = get();
-        if (!activeShift) return false;
+        if (!activeShift) return { success: false };
 
         try {
           const res = await fetch(`/api/shifts/${activeShift._id}/close`, {
@@ -440,12 +451,12 @@ export const useShiftStore = create<ShiftState>()(
           const json = await res.json();
           if (json.success) {
             set({ activeShift: null });
-            return true;
+            return json;
           }
-          return false;
+          return { success: false };
         } catch (err) {
           console.error('Failed to close shift:', err);
-          return false;
+          return { success: false };
         }
       },
 

@@ -20,6 +20,18 @@ export { default as CashDrop } from './CashDrop';
 export { default as ZRead } from './ZRead';
 export { default as Variance } from './Variance';
 export { default as Register } from './Register';
+export { default as PayrollProfile } from './PayrollProfile';
+export { default as SalaryStructure } from './SalaryStructure';
+export { default as Earning } from './Earning';
+export { default as Deduction } from './Deduction';
+export { default as Advance } from './Advance';
+export { default as Loan } from './Loan';
+export { default as PayrollRun } from './PayrollRun';
+export { default as PayrollItem } from './PayrollItem';
+export { default as Payslip } from './Payslip';
+export { default as PayrollJournal } from './PayrollJournal';
+export { default as PayrollReport } from './PayrollReport';
+export { default as PayrollApproval } from './PayrollApproval';
 
 // Re-export types from each model
 export type { IQuotation, IQuotationItem } from './Quotation';
@@ -29,3 +41,30 @@ export type { IShift } from './Shift';
 export type { ISalesBreakdown, IPaymentBreakdown, ITaxSummary, ICashSummary, IZRead } from './ZRead';
 export type { IVariance } from './Variance';
 export type { IRegister } from './Register';
+
+// Payroll module types
+export type { IPayrollProfile } from './PayrollProfile';
+export type { ISalaryStructure } from './SalaryStructure';
+export type { IEarning } from './Earning';
+export type { IDeduction, ITieredRate } from './Deduction';
+export type { IAdvance } from './Advance';
+export type { ILoan } from './Loan';
+export type { IPayrollRun, IPayrollApprovalEntry } from './PayrollRun';
+export type {
+  IPayrollItem,
+  IPayrollItemEarning,
+  IPayrollItemDeduction,
+  IAdvanceDeduction,
+  ILoanDeduction,
+  IAttendanceAdjustment,
+} from './PayrollItem';
+export type {
+  IPayslip,
+  IPayslipAllowance,
+  IPayslipDeduction,
+  IPayslipAdvanceDeduction,
+  IPayslipLoanDeduction,
+} from './Payslip';
+export type { IPayrollJournal, IPayrollJournalEntry } from './PayrollJournal';
+export type { IPayrollReport } from './PayrollReport';
+export type { IPayrollApproval, IPayrollApprovalHistoryEntry } from './PayrollApproval';

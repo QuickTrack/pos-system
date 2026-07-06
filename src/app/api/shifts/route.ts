@@ -17,6 +17,8 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const cashier = searchParams.get('cashier');
     const branch = searchParams.get('branch');
+    const register = searchParams.get('register');
+    const last = searchParams.get('last') === 'true';
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const page = parseInt(searchParams.get('page') || '1');
@@ -27,6 +29,26 @@ export async function GET(request: NextRequest) {
     if (status) query.status = status;
     if (cashier) query.cashier = cashier;
     if (branch) query.branch = branch;
+    if (register) query.register = register;
+
+    if (last) {
+      // Get last closed shift for the register
+      const lastShift = await Shift.findOne({ ...query, status: 'closed' })
+        .sort({ endTime: -1 })
+        .lean();
+      
+      if (lastShift) {
+        return NextResponse.json({ 
+          success: true, 
+          shift: { 
+            closingFloat: lastShift.closingFloat,
+            closingFloatCash: lastShift.closingFloatCash,
+            closingFloatMpesa: lastShift.closingFloatMpesa
+          } 
+        });
+      }
+      return NextResponse.json({ success: true, shift: { closingFloat: 0, closingFloatCash: 0, closingFloatMpesa: 0 } });
+    }
 
     if (startDate && endDate) {
       query.startTime = {
@@ -53,7 +75,26 @@ export async function GET(request: NextRequest) {
       Shift.countDocuments(query),
     ]);
 
-    return NextResponse.json({ success: true, shifts, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
+    // Transform shifts to include summary fields
+    const transformedShifts = shifts.map((shift: any) => ({
+      ...shift,
+      openingFloatCash: shift.openingFloatCash || 0,
+      openingFloatMpesa: shift.openingFloatMpesa || 0,
+      cashReceived: shift.cashReceived || 0,
+      mpesaReceived: shift.mpesaReceived || 0,
+      cardSales: shift.cardSales || 0,
+      cashDrops: shift.cashDrops || 0,
+      expenses: shift.expenses || 0,
+      expectedCash: shift.expectedCash || 0,
+      expectedMpesa: shift.expectedMpesa || 0,
+      actualCash: shift.actualCash || 0,
+      actualMpesa: shift.actualMpesa || 0,
+      mpesaVariance: shift.mpesaVariance || 0,
+      totalSales: shift.totalSales || 0,
+      totalTransactions: shift.totalTransactions || 0,
+    }));
+
+    return NextResponse.json({ success: true, shifts: transformedShifts, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
   } catch (error) {
     console.error('Get shifts error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -128,7 +169,27 @@ export async function POST(request: NextRequest) {
       .populate('register', 'name registerNumber')
       .lean();
 
-    return NextResponse.json({ success: true, shift: populated }, { status: 201 });
+    if (!populated) {
+      return NextResponse.json({ error: 'Failed to load opened shift' }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      shift: {
+        _id: (populated as any)._id,
+        shiftId: populated.shiftId,
+        cashier: (populated as any).cashier?._id ? (populated as any).cashier._id.toString() : populated.cashier,
+        cashierName: populated.cashierName,
+        register: (populated as any).register?._id || populated.register,
+        registerNumber: populated.registerNumber,
+        branch: (populated as any).branch?._id ? (populated as any).branch._id.toString() : populated.branch,
+        branchName: (populated as any).branch?.name || '',
+        openingFloat: populated.openingFloat,
+        openingFloatCash: populated.openingFloatCash,
+        openingFloatMpesa: populated.openingFloatMpesa,
+        startTime: populated.startTime,
+      },
+    }, { status: 201 });
   } catch (error) {
     console.error('Open shift error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

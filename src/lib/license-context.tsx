@@ -107,6 +107,9 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
       if (response.ok) {
         const userData = await response.json();
         isSuperAdminUser = userData.user?.role === 'super_admin';
+      } else {
+        setError(null);
+        return;
       }
 
       // Validate license with hardware binding
@@ -117,6 +120,11 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
       const validateResponse = await fetch(validateUrl, {
         credentials: 'include',
       });
+      
+      if (!validateResponse.ok) {
+        setError('Failed to validate license');
+        return;
+      }
       
       const data = await validateResponse.json();
       

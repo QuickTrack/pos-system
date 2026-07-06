@@ -75,6 +75,31 @@ export interface ISettings extends Document {
   // Multi-branch settings
   allowMultiBranch: boolean;
   
+  // Payroll Settings
+  payrollEnabled: boolean;
+  payrollPrefix: string;
+  payrollNumber: number;
+  payrollNumbersByYear: { [year: string]: number };
+  defaultPayrollDay: number;
+  overtimeMultiplier: number;
+  weekendOvertimeMultiplier: number;
+  holidayOvertimeMultiplier: number;
+  maxOvertimeHours: number;
+  defaultPaymentFrequency: string;
+  autoProcessPayroll: boolean;
+  payrollApprovalRequired: boolean;
+  payslipTemplate: string;
+  salaryAdvanceLimit: number;
+  salaryAdvanceInterestRate: number;
+  loanInterestRate: number;
+  nssfRate: number;
+  shifRate: number;
+  housingLevyRate: number;
+  payeRates: { min: number; max: number; rate: number; fixed: number }[];
+  nssfPensionablePayMax: number;
+  shifPensionablePayMax: number;
+  housingLevyIncomeMax: number;
+  
   createdAt: Date;
   updatedAt: Date;
 }
@@ -162,6 +187,37 @@ const SettingsSchema = new Schema<ISettings>(
     
     // Multi-branch settings
     allowMultiBranch: { type: Boolean, default: false },
+    
+    // Payroll Settings
+    payrollEnabled: { type: Boolean, default: false },
+    payrollPrefix: { type: String, default: 'PAY' },
+    payrollNumber: { type: Number, default: 1 },
+    payrollNumbersByYear: { type: Map, of: Number, default: {} },
+    defaultPayrollDay: { type: Number, default: 25, min: 1, max: 31 },
+    overtimeMultiplier: { type: Number, default: 1.5 },
+    weekendOvertimeMultiplier: { type: Number, default: 2.0 },
+    holidayOvertimeMultiplier: { type: Number, default: 2.5 },
+    maxOvertimeHours: { type: Number, default: 40 },
+    defaultPaymentFrequency: { type: String, default: 'monthly' },
+    autoProcessPayroll: { type: Boolean, default: false },
+    payrollApprovalRequired: { type: Boolean, default: true },
+    payslipTemplate: { type: String, default: 'standard' },
+    salaryAdvanceLimit: { type: Number, default: 50000 },
+    salaryAdvanceInterestRate: { type: Number, default: 0 },
+    loanInterestRate: { type: Number, default: 5 },
+    nssfRate: { type: Number, default: 6 }, // 6% employee
+    shifRate: { type: Number, default: 2.75 },
+    housingLevyRate: { type: Number, default: 1.5 },
+    payeRates: { type: Schema.Types.Mixed, default: [
+      { min: 0, max: 24000, rate: 10, fixed: 0 },
+      { min: 24001, max: 32333, rate: 25, fixed: 2400 },
+      { min: 32334, max: 500000, rate: 30, fixed: 5258.33 },
+      { min: 500001, max: 800000, rate: 32.5, fixed: 122650 },
+      { min: 800001, max: Infinity, rate: 35, fixed: 265475 },
+    ]},
+    nssfPensionablePayMax: { type: Number, default: 72000 },
+    shifPensionablePayMax: { type: Number, default: null },
+    housingLevyIncomeMax: { type: Number, default: null },
   },
   { timestamps: true }
 );

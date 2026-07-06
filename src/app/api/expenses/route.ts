@@ -3,6 +3,7 @@ import dbConnect from '@/lib/db/mongodb';
 import Expense from '@/models/Expense';
 import ExpenseCategory from '@/models/ExpenseCategory';
 import Branch from '@/models/Branch';
+import Shift from '@/models/Shift';
 import { getAuthUser } from '@/lib/auth-server';
 import mongoose from 'mongoose';
 
@@ -137,28 +138,29 @@ export async function POST(request: NextRequest) {
 
     await dbConnect();
 
-    const body = await request.json();
-    const {
-      dateTime,
-      branch,
-      department,
-      expenseCategory,
-      expenseSubcategory,
-      description,
-      amount,
-      paymentSource,
-      paymentSourceDetail,
-      bankAccountId,
-      bankAccountName,
-      payeeType,
-      payeeName,
-      payeePhoneNumber,
-      payeeReferenceNumber,
-      payeeSupplierId,
-      payeeEmployeeId,
-      attachments,
-      notes,
-    } = body;
+const body = await request.json();
+     const {
+       shift,
+       dateTime,
+       branch,
+       department,
+       expenseCategory,
+       expenseSubcategory,
+       description,
+       amount,
+       paymentSource,
+       paymentSourceDetail,
+       bankAccountId,
+       bankAccountName,
+       payeeType,
+       payeeName,
+       payeePhoneNumber,
+       payeeReferenceNumber,
+       payeeSupplierId,
+       payeeEmployeeId,
+       attachments,
+       notes,
+     } = body;
 
     if (!branch || !expenseCategory || !description || !amount || !paymentSource || !payeeType || !payeeName) {
       return NextResponse.json(
@@ -182,7 +184,13 @@ export async function POST(request: NextRequest) {
       branchName = branchDoc.name;
     }
 
-    let expenseBranch = user.role !== 'admin' ? user.branch : branch;
+    let expenseBranch: any = null;
+    if (branch && mongoose.Types.ObjectId.isValid(branch)) {
+      expenseBranch = new mongoose.Types.ObjectId(branch);
+    }
+    if (!expenseBranch && user.branch) {
+      expenseBranch = new mongoose.Types.ObjectId(user.branch);
+    }
     if (!expenseBranch) {
       const branches = await mongoose.model('Branch').find({}).limit(1);
       if (branches.length > 0) {
@@ -200,8 +208,14 @@ export async function POST(request: NextRequest) {
     const year = new Date().getFullYear();
     const transactionNumber = `PAY-${year}-${String(count + 1).padStart(5, '0')}`;
 
+    let expenseShift = null;
+    if (shift && mongoose.Types.ObjectId.isValid(shift)) {
+      expenseShift = new mongoose.Types.ObjectId(shift);
+    }
+
     const expense = new Expense({
       transactionNumber,
+      shift: expenseShift,
       dateTime: dateTime ? new Date(dateTime) : new Date(),
       branch: expenseBranch,
       branchName,
@@ -305,6 +319,7 @@ export async function PUT(request: NextRequest) {
     } else {
       const updateFields: any = {};
       if (body.dateTime) updateFields.dateTime = new Date(body.dateTime);
+      if (body.shift !== undefined) updateFields.shift = body.shift;
       if (body.department !== undefined) updateFields.department = body.department;
       if (body.expenseCategory) updateFields.expenseCategory = body.expenseCategory;
       if (body.expenseSubcategory !== undefined) updateFields.expenseSubcategory = body.expenseSubcategory;

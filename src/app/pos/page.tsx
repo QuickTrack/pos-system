@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import Link from 'next/link';
 import { Header } from '@/components/layout/Header';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
-import { useCartStore, useHeldSalesStore, useShiftStore, CartItem, HeldSale } from '@/lib/store';
+import { useCartStore, useHeldSalesStore, useShiftStore, CartItem, HeldSale, useUIStore } from '@/lib/store';
 import { formatCurrency, formatDateTime } from '@/lib/utils';
 import { generateThermalReceiptHTML, createReceiptData, ReceiptBusiness, printReceipt } from '@/lib/receipt-generator';
 import { useAuth } from '@/lib/auth-context';
@@ -32,7 +33,8 @@ import {
   FileText,
   AlertTriangle,
   UserPlus,
-  Lock
+  Lock,
+  Check
 } from 'lucide-react';
 
 interface Product {
@@ -94,6 +96,9 @@ export default function POSPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerSearch, setCustomerSearch] = useState('');
+  const customerSearchRef = useRef<HTMLInputElement>(null);
+  const [customerFilter, setCustomerFilter] = useState('all');
+  const [customerCategoryFilter, setCustomerCategoryFilter] = useState('all');
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [newCustomer, setNewCustomer] = useState({
     name: '',
@@ -157,11 +162,12 @@ export default function POSPage() {
   const [verifyingAdmin, setVerifyingAdmin] = useState(false);
   const [pendingProductToAdd, setPendingProductToAdd] = useState<{product: Product, unit?: UnitOption} | null>(null);
   
-const { user } = useAuth();
-  
+  const { user, logout } = useAuth();
+   
   // Shift store integration
   const { activeShift, fetchActiveShift, showOpenModal, setShowOpenModal, fetchRegisters } = useShiftStore();
   const hasActiveShift = !!activeShift;
+  const previousMyShiftIdRef = useRef<string | null>(null);
 
   const { 
     items, 
@@ -175,11 +181,59 @@ const { user } = useAuth();
     getTotalDiscount,
   } = useCartStore();
 
-  const { heldSales, holdSale, recallSale, removeHeldSale } = useHeldSalesStore();
+  const { 
+    heldSales, 
+    holdSale, 
+    recallSale, 
+    removeHeldSale 
+  } = useHeldSalesStore();
 
-  useEffect(() => {
+useEffect(() => {
     fetchActiveShift();
   }, [fetchActiveShift]);
+
+  useEffect(() => {
+    const refreshShift = () => {
+      const refresh = localStorage.getItem('shift-refresh');
+      if (refresh) {
+        const refreshTime = parseInt(refresh);
+        const now = Date.now();
+        if (now - refreshTime < 10000) {
+          fetchActiveShift();
+        }
+        localStorage.removeItem('shift-refresh');
+      }
+    };
+    refreshShift();
+    const interval = setInterval(refreshShift, 2000);
+    return () => clearInterval(interval);
+  }, [fetchActiveShift]);
+
+  useEffect(() => {
+    const checkMyShift = async () => {
+      const { activeShift: currentShift } = useShiftStore.getState();
+      const isMyShift = currentShift && currentShift.cashier === user?.userId;
+
+      if (isMyShift) {
+        previousMyShiftIdRef.current = currentShift._id;
+        return;
+      }
+
+      if (previousMyShiftIdRef.current && !isMyShift) {
+        await logout('/dashboard');
+        return;
+      }
+
+      if (!currentShift) {
+        previousMyShiftIdRef.current = null;
+      }
+    };
+
+    checkMyShift();
+
+    const interval = setInterval(checkMyShift, 30000);
+    return () => clearInterval(interval);
+  }, [user, logout]);
 
   useEffect(() => {
     if (!activeShift) {
@@ -219,6 +273,16 @@ const { user } = useAuth();
     }, 100);
     return () => clearTimeout(timer);
   }, []);
+
+  // Auto-focus customer search when modal opens
+  useEffect(() => {
+    if (showCustomerModal) {
+      const timer = setTimeout(() => {
+        customerSearchRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [showCustomerModal]);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -863,12 +927,26 @@ const { user } = useAuth();
 
   const handleSearchCustomer = async (query: string) => {
     setCustomerSearch(query);
-    if (query.length >= 2) {
-      const response = await fetch(`/api/customers?search=${query}`);
+    if (query.length >= 2 || customerFilter !== 'all') {
+      const url = new URL('/api/customers', window.location.origin);
+      if (query.length >= 2) {
+        url.searchParams.set('search', query);
+      }
+      if (customerFilter !== 'all') {
+        url.searchParams.set('customerType', customerFilter);
+      }
+      
+      const response = await fetch(url.toString());
       const data = await response.json();
       if (data.success) {
-        setCustomers(data.customers);
+        let filtered = data.customers;
+        if (customerCategoryFilter !== 'all') {
+          filtered = filtered.filter((c: Customer) => c.customerCategory === customerCategoryFilter);
+        }
+        setCustomers(filtered);
       }
+    } else if (query.length < 2) {
+      setCustomers([]);
     }
   };
 
@@ -877,6 +955,9 @@ const { user } = useAuth();
     setCustomer({ id: customer._id, name: customer.name, phone: customer.phone });
     setShowCustomerModal(false);
     setCustomerSearch('');
+    setCustomerFilter('all');
+    setCustomerCategoryFilter('all');
+    setCustomers([]);
     // Reset credit applied when customer changes
     setCreditApplied(0);
   };
@@ -1183,16 +1264,16 @@ const { user } = useAuth();
         <ShiftStatusIndicator />
 
         {/* Products Section */}
-        <div className="flex-1 p-4 flex flex-col overflow-hidden">
+        <div className="px-4 pt-4 flex flex-col overflow-hidden">
           {/* Search Bar */}
-          <div className="flex gap-3 mb-3">
-            <div className="flex-1 relative">
+          <div className="flex gap-3 items-center">
+            <div className="flex-1 max-w-xl relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 ref={searchInputRef}
                 type="text"
                 placeholder="Search products by name, SKU, or barcode..."
-                className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full pl-10 pr-4 py-1.5 bg-white border-2 border-emerald-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={handleProductKeyDown}
@@ -1235,44 +1316,58 @@ const { user } = useAuth();
                 </div>
               )}
             </div>
-            <button 
-              onClick={() => setShowCustomerModal(true)}
-              className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-200 rounded-lg hover:border-emerald-400 transition-colors bg-white"
-            >
-              <User className="w-4 h-4 text-gray-400" />
-              {customer ? (
-                <span className="text-gray-900">{customer.name}</span>
-              ) : (
-                <span className="text-gray-400">Customer</span>
-              )}
-            </button>
-            {selectedCustomer && (
-              <button
-                onClick={() => fetchCustomerDebt(selectedCustomer._id)}
-                className="flex items-center gap-1 px-3 py-2 text-sm border border-amber-200 rounded-lg hover:border-amber-400 transition-colors bg-amber-50 text-amber-700"
-                title="View Outstanding Debt"
+            <div className="flex items-center gap-2 ml-auto">
+              <button 
+                onClick={() => setShowCustomerModal(true)}
+                className={`flex items-center gap-2 px-3 py-2 text-sm border rounded-lg transition-colors ${
+                  customer
+                    ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
+                    : 'border-gray-200 hover:border-emerald-400 bg-white text-gray-400'
+                }`}
               >
-                <FileText className="w-4 h-4" />
-                Debt
+                <User className="w-4 h-4" />
+                {customer ? (
+                  <span className="font-medium">{customer.name}</span>
+                ) : (
+                  <span>Customer</span>
+                )}
+                {customer && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
               </button>
-            )}
-            <Button variant="outline" className="gap-2">
-              <ScanBarcode className="w-4 h-4" />
-              Scan
-            </Button>
-            <Button 
-              variant="outline" 
-              className="gap-2"
-              onClick={() => setShowHeldSalesModal(true)}
-            >
-              <ClipboardList className="w-4 h-4" />
-              Held ({heldSales.length})
-            </Button>
+              {selectedCustomer && (
+                <button
+                  onClick={() => fetchCustomerDebt(selectedCustomer._id)}
+                  className="flex items-center gap-1 px-3 py-1 text-xs border border-amber-200 rounded-lg hover:border-amber-400 transition-colors bg-amber-50 text-amber-700"
+                  title="View Outstanding Debt"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  Debt
+                </button>
+              )}
+              <Button variant="outline" className="gap-1.5 px-2.5 py-1 text-xs">
+                <ScanBarcode className="w-3.5 h-3.5" />
+                Scan
+              </Button>
+              <Button 
+                variant="outline" 
+                className="gap-1.5 px-2.5 py-1 text-xs"
+                onClick={() => setShowHeldSalesModal(true)}
+              >
+                <ClipboardList className="w-3.5 h-3.5" />
+                Held ({heldSales.length})
+              </Button>
+              <Link 
+                href={`/expenses/new?fromPos=true&branchId=${activeShift?.branch || ''}&shiftId=${activeShift?._id || ''}`}
+                className="btn btn-outline gap-1.5 px-2.5 py-1 text-xs"
+              >
+                <Wallet className="w-3.5 h-3.5" />
+                Record New Payout
+              </Link>
+            </div>
           </div>
 
           {/* Category Filter })
           {categories.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-3 overflow-x-auto pb-2">
+            <div className="flex flex-wrap gap-2 overflow-x-auto pb-2">
               <button
                 onClick={() => setSelectedCategory('all')}
                 className={`px-3 py-1.5 text-xs rounded-md border transition-colors whitespace-nowrap ${
@@ -1302,10 +1397,10 @@ const { user } = useAuth();
           {/* Products Section - Empty - Removed for cart space */}
         </div>
 
-        {/* Cart Section - Fixed Height */}
-        <div 
-          className="bg-white border-t border-gray-200 flex flex-col h-[calc(100vh-150px)]"
-        >
+{/* Cart Section - Fixed Height */}
+         <div 
+           className="bg-white border-t-2 border-red-400 flex flex-col flex-1 min-h-0"
+         >
 
           {/* Cart Items - Table Format */}
           <div className="flex-1 overflow-y-auto p-3 min-h-0">
@@ -1506,21 +1601,63 @@ const { user } = useAuth();
         onClose={() => {
           setShowCustomerModal(false);
           setCustomerSearch('');
+          setCustomerFilter('all');
+          setCustomerCategoryFilter('all');
+          setCustomers([]);
         }}
         title="Select Customer"
       >
         <div className="space-y-4">
           <div className="flex gap-2">
-            <Input
-              placeholder="Search by name or phone..."
-              value={customerSearch}
-              onChange={(e) => handleSearchCustomer(e.target.value)}
-              className="flex-1"
-            />
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                ref={customerSearchRef}
+                placeholder="Search by name, phone or email..."
+                value={customerSearch}
+                onChange={(e) => handleSearchCustomer(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && customers.length > 0) {
+                    e.preventDefault();
+                    selectCustomer(customers[0]);
+                  }
+                }}
+                className="pl-9"
+              />
+            </div>
           </div>
-          <div className="max-h-64 overflow-y-auto space-y-2">
+
+          <div className="flex gap-2 flex-wrap">
+            <select
+              value={customerFilter}
+              onChange={(e) => {
+                setCustomerFilter(e.target.value);
+                handleSearchCustomer(customerSearch);
+              }}
+              className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="all">All Types</option>
+              <option value="retail">Retail</option>
+              <option value="wholesale">Wholesale</option>
+              <option value="distributor">Distributor</option>
+            </select>
+            <select
+              value={customerCategoryFilter}
+              onChange={(e) => {
+                setCustomerCategoryFilter(e.target.value);
+                handleSearchCustomer(customerSearch);
+              }}
+              className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="all">All Categories</option>
+              <option value="individual">Individual</option>
+              <option value="company">Company</option>
+            </select>
+          </div>
+
+          <div className="max-h-72 overflow-y-auto space-y-2">
             {customers.length === 0 && customerSearch.length >= 2 ? (
-              <div className="text-center py-4 text-gray-500">
+              <div className="text-center py-6 text-gray-500">
                 <p>No customers found</p>
                 <Button
                   onClick={() => {
@@ -1528,26 +1665,52 @@ const { user } = useAuth();
                     setShowAddCustomerModal(true);
                   }}
                   variant="outline"
-                  className="mt-2"
+                  className="mt-3"
                 >
-                  <UserPlus className="w-4 h-4 mr-1" />
+                  <UserPlus className="w-4 h-4 mr-2" />
                   Create New Customer
                 </Button>
               </div>
             ) : customers.length === 0 ? (
-              <div className="text-center py-4 text-gray-500">
+              <div className="text-center py-6 text-gray-500">
                 <p>Type to search customers</p>
               </div>
             ) : (
-              customers.map((customer) => (
+              customers.map((c) => (
                 <button
-                  key={customer._id}
-                  onClick={() => selectCustomer(customer)}
-                  className="w-full p-3 text-left bg-gray-50 rounded-lg hover:bg-emerald-50 transition-colors"
+                  key={c._id}
+                  onClick={() => selectCustomer(c)}
+                  className="w-full p-3 text-left bg-gray-50 rounded-lg hover:bg-emerald-50 transition-colors border border-transparent hover:border-emerald-200"
                 >
-                  <div className="font-medium">{customer.name}</div>
-                  <div className="text-sm text-gray-500">
-                    {customer.phone} • {customer.customerType}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-semibold text-sm">
+                        {c.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="font-medium text-gray-900">{c.name}</div>
+                        <div className="text-sm text-gray-500">
+                          {c.phone} • {c.email}
+                        </div>
+                        <div className="flex gap-2 mt-1">
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            c.customerType === 'retail' ? 'bg-blue-50 text-blue-700' :
+                            c.customerType === 'wholesale' ? 'bg-purple-50 text-purple-700' :
+                            'bg-orange-50 text-orange-700'
+                          }`}>
+                            {c.customerType}
+                          </span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            c.customerCategory === 'individual' ? 'bg-gray-100 text-gray-700' : 'bg-amber-50 text-amber-700'
+                          }`}>
+                            {c.customerCategory}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-emerald-600">
+                      <Check className="w-5 h-5 opacity-0" />
+                    </div>
                   </div>
                 </button>
               ))
@@ -1891,7 +2054,6 @@ const { user } = useAuth();
                       </p>
                     )}
                   </div>
-                  
                   {selectedCustomer.creditBalance > 0 && (
                     <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-200">
                       <div className="flex justify-between items-center text-sm">

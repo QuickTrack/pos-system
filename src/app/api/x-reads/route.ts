@@ -3,6 +3,7 @@ import dbConnect from '@/lib/db/mongodb';
 import { Shift, Sale, CashDrop, Expense, User, Branch, ActivityLog } from '@/models';
 import { getAuthUser } from '@/lib/auth-server';
 import { hasPermission } from '@/lib/auth';
+import mongoose from 'mongoose';
 
 export async function GET(request: NextRequest) {
   try {
@@ -102,9 +103,13 @@ export async function GET(request: NextRequest) {
     const expensesTotal = await Expense.aggregate([
       {
         $match: {
-          branch: shift.branch,
-          dateTime: { $gte: shiftStart, $lte: now },
+          branch: new mongoose.Types.ObjectId((shift as any).branch),
+          paymentSource: { $in: ['cash_drawer', 'main_till', 'petty_cash'] },
           status: { $in: ['approved', 'pending'] },
+          $or: [
+            { shift: (shift as any)._id },
+            { $and: [{ shift: null }, { dateTime: { $gte: shiftStart, $lte: now } }] },
+          ],
         },
       },
       { $group: { _id: null, total: { $sum: '$amount' } } },

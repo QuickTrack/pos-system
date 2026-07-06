@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { useAuth } from '@/lib/auth-context';
@@ -9,13 +9,39 @@ import { LicenseProvider } from '@/lib/license-context';
 function AuthCheck({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const [hasPosAuth, setHasPosAuth] = useState(() => {
+    // Initialize state with sessionStorage value during first render
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('pos-auth-success') === 'true';
+    }
+    return false;
+  });
+  const initializedRef = useRef(false);
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
+    // Clean up the flag after use once user is loaded
+    if (!loading && hasPosAuth) {
+      sessionStorage.removeItem('pos-auth-success');
     }
-  }, [user, loading, router]);
+  }, [loading, hasPosAuth]);
 
+  useEffect(() => {
+    // Allow access if:
+    // 1. User is a cashier (normal flow)
+    // 2. User has been authenticated via POS modal (indicated by sessionStorage flag)
+    
+    if (!loading && !user && !hasPosAuth) {
+      router.push('/pos/login');
+      return;
+    }
+    
+    if (!loading && user && user.role !== 'cashier' && !hasPosAuth) {
+      router.push('/dashboard');
+      return;
+    }
+  }, [user, loading, router, hasPosAuth]);
+
+  // Show loading while checking auth
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -24,7 +50,8 @@ function AuthCheck({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!user) {
+  // Don't render if no user (or wrong role without success flag)
+  if (!user && !hasPosAuth) {
     return null;
   }
 

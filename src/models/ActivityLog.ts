@@ -15,7 +15,7 @@ export interface IActivityLog extends Document {
 
 const ActivityLogSchema = new Schema<IActivityLog>(
   {
-    user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    user: { type: Schema.Types.ObjectId, ref: 'User' },
     userName: { type: String, required: true },
     action: { type: String, required: true },
     module: { 
@@ -27,7 +27,7 @@ const ActivityLogSchema = new Schema<IActivityLog>(
     ipAddress: { type: String },
     userAgent: { type: String },
     branch: { type: Schema.Types.ObjectId, ref: 'Branch' },
-    metadata: { type: Schema.Types.Mixed },
+    metadata: { type: mongoose.Schema.Types.Mixed },
   },
   { timestamps: true }
 );

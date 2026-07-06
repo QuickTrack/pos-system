@@ -7,6 +7,7 @@ import { TrainingBanner } from '@/components/ui/TrainingBanner';
 import { TutorialOverlay } from '@/components/tutorial/TutorialOverlay';
 import { RestrictedActionModal } from '@/components/training/RestrictedActionModal';
 import { NotificationManager } from '@/lib/use-notifications';
+import { POSAuthModal } from '@/components/pos/POSAuthModal';
 
 export const metadata: Metadata = {
   title: 'POS System',
@@ -30,6 +31,7 @@ export default function RootLayout({
               {children}
               <TutorialOverlay />
               <RestrictedActionModal />
+              <POSAuthModal />
             </TutorialProvider>
           </TrainingProvider>
         </AuthProvider>

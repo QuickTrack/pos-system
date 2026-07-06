@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/mongodb';
 import { Shift } from '@/models';
 import { getAuthUser } from '@/lib/auth-server';
+import mongoose from 'mongoose';
 
 export async function GET(request: NextRequest) {
   try {
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
 
     // Only add branch filter if we have a valid branch ID
     if (shiftBranchId) {
-      salesQuery.branch = shiftBranchId;
+      salesQuery.branch = new mongoose.Types.ObjectId(shiftBranchId);
     }
 
     const Sale = (await import('@/models/Sale')).default;
@@ -83,15 +84,17 @@ export async function GET(request: NextRequest) {
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]).then(r => r[0]?.total || 0);
 
-    const expensesQuery: any = {
-      dateTime: { $gte: shiftStart, $lte: now },
+const expensesQuery: any = {
       paymentSource: { $in: ['cash_drawer', 'main_till', 'petty_cash'] },
       status: { $in: ['approved', 'pending'] },
+      $or: [
+        { shift: (shift as any)._id },
+        { shift: null, dateTime: { $gte: shiftStart, $lte: now } },
+      ],
     };
 
-    // Only add branch filter if we have a valid branch ID
     if (shiftBranchId) {
-      expensesQuery.branch = shiftBranchId;
+      expensesQuery.branch = new mongoose.Types.ObjectId(shiftBranchId);
     }
 
     const expensesTotal = await Expense.aggregate([
@@ -107,16 +110,23 @@ export async function GET(request: NextRequest) {
       shift: {
         _id: (shift as any)._id,
         shiftId: shift.shiftId,
+        branch: shiftBranchId,
+        branchName: (shift as any).branch?.name || '',
+        cashier: (shift as any).cashier?._id ? (shift as any).cashier._id.toString() : shift.cashier,
+        cashierName: shift.cashierName,
         register: (shift as any).register?._id || shift.register,
         registerNumber: shift.registerNumber,
         openingFloat: shift.openingFloat,
         openingFloatCash: shift.openingFloatCash,
         openingFloatMpesa: shift.openingFloatMpesa,
         startTime: shift.startTime,
-        expectedCash,
-        expectedMpesa,
-        actualCash: (shift as any).actualCash || 0,
-        variance: (shift as any).variance || 0,
+      expectedCash,
+      expectedMpesa,
+      cashReceived,
+      mpesaReceived: mpesaSales,
+      cardSales,
+      actualCash: (shift as any).actualCash || 0,
+      variance: (shift as any).variance || 0,
       },
     });
   } catch (error) {

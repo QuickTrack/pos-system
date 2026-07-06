@@ -71,13 +71,4 @@ const CustomerPaymentSchema = new Schema<ICustomerPayment>(
   }
 );
 
-// Generate unique payment ID
-CustomerPaymentSchema.pre('save', async function (next) {
-  if (!this.paymentId) {
-    const count = await mongoose.model('CustomerPayment').countDocuments();
-    this.paymentId = `CPAY-${String(count + 1).padStart(6, '0')}`;
-  }
-  next();
-});
-
 export default mongoose.models.CustomerPayment || mongoose.model<ICustomerPayment>('CustomerPayment', CustomerPaymentSchema);

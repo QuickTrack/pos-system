@@ -3,6 +3,7 @@ import dbConnect from '@/lib/db/mongodb';
 import { Shift, Register, Sale, CashDrop, Expense, ActivityLog } from '@/models';
 import { getAuthUser } from '@/lib/auth-server';
 import { hasPermission } from '@/lib/auth';
+import mongoose from 'mongoose';
 
 export async function GET(
   request: NextRequest,
@@ -22,14 +23,21 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid or closed shift' }, { status: 404 });
     }
 
+    const shiftBranchId = (shift as any).branch?._id 
+      ? (shift as any).branch._id.toString() 
+      : (shift as any).branch?.toString();
+
     const shiftStart = new Date(shift.startTime);
     const now = new Date();
 
     const salesQuery: any = {
       saleDate: { $gte: shiftStart, $lte: now },
       status: { $in: ['completed', 'pending', 'refunded'] },
-      branch: shift.branch,
     };
+
+    if (shiftBranchId) {
+      salesQuery.branch = new mongoose.Types.ObjectId(shiftBranchId);
+    }
 
     const sales = await Sale.find(salesQuery).lean();
 
@@ -59,16 +67,22 @@ export async function GET(
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]).then(r => r[0]?.total || 0);
 
+    const expensesQuery: any = {
+      paymentSource: { $in: ['cash_drawer', 'main_till', 'petty_cash'] },
+      status: { $in: ['approved', 'pending'] },
+      $or: [
+        { shift: (shift as any)._id },
+        { $and: [{ shift: null }, { dateTime: { $gte: shiftStart, $lte: now } }] },
+      ],
+    };
+
+    if (shiftBranchId) {
+      expensesQuery.branch = new mongoose.Types.ObjectId(shiftBranchId);
+    }
+
     const expensesTotal = await Expense.aggregate([
-      {
-        $match: {
-          branch: shift.branch,
-          dateTime: { $gte: shiftStart, $lte: now },
-          paymentSource: { $in: ['cash_drawer', 'main_till', 'petty_cash'] },
-          status: { $in: ['approved', 'pending'] },
-        },
-      },
-      { $group: { _id: null, total: { $sum: '$amount' } } },
+      { $match: expensesQuery },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
     ]).then(r => r[0]?.total || 0);
 
     const cashReceived = cashSales;
@@ -91,6 +105,7 @@ export async function GET(
       expectedMpesa,
       cashReceived,
       mpesaReceived,
+      cardSales,
       actualCash,
       variance,
     });
@@ -130,14 +145,25 @@ export async function POST(
       return NextResponse.json({ error: 'Shift is not open' }, { status: 400 });
     }
 
+    const shiftBranchId = (shift as any).branch?._id 
+      ? (shift as any).branch._id.toString() 
+      : (shift as any).branch?.toString();
+
     const shiftStart = new Date(shift.startTime);
     const now = new Date();
 
     const salesQuery: any = {
       saleDate: { $gte: shiftStart, $lte: now },
       status: { $in: ['completed', 'pending', 'refunded'] },
-      branch: shift.branch,
     };
+
+    if (shiftBranchId) {
+      salesQuery.branch = new mongoose.Types.ObjectId(shiftBranchId);
+    }
+
+    const Sale = (await import('@/models/Sale')).default;
+    const CashDrop = (await import('@/models/CashDrop')).default;
+    const Expense = (await import('@/models/Expense')).default;
 
     const sales = await Sale.find(salesQuery).lean();
 
@@ -163,35 +189,52 @@ export async function POST(
     }
 
     const cashReceived = cashSales;
+    const mpesaReceived = mpesaSales;
     const cashDropsTotal = await CashDrop.aggregate([
       { $match: { shift: (shift as any)._id, reason: { $in: ['safe_deposit', 'bank_deposit', 'security', 'float_transfer'] } } },
       { $group: { _id: null, total: { $sum: '$amount' } } }
     ]).then(r => r[0]?.total || 0);
 
+    const expensesQuery: any = {
+      paymentSource: { $in: ['cash_drawer', 'main_till', 'petty_cash'] },
+      status: { $in: ['approved', 'pending'] },
+      $or: [
+        { shift: (shift as any)._id },
+        { shift: null, dateTime: { $gte: shiftStart, $lte: now } },
+      ],
+    };
+
+    if (shiftBranchId) {
+      expensesQuery.branch = new mongoose.Types.ObjectId(shiftBranchId);
+    }
+
     const expensesTotal = await Expense.aggregate([
-      {
-        $match: {
-          branch: shift.branch,
-          dateTime: { $gte: shiftStart, $lte: now },
-          paymentSource: { $in: ['cash_drawer', 'main_till', 'petty_cash'] },
-          status: { $in: ['approved', 'pending'] },
-        },
-      },
+      { $match: expensesQuery },
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]).then(r => r[0]?.total || 0);
 
-    const expectedCash = shift.openingFloatCash + cashReceived - cashDropsTotal - expensesTotal;
-    const expectedMpesa = shift.openingFloatMpesa + mpesaSales;
+    const expectedCash = (shift as any).openingFloatCash + cashReceived - cashDropsTotal - expensesTotal;
+    const expectedMpesa = (shift as any).openingFloatMpesa + mpesaReceived;
     const mpesaVariance = actualMpesa - expectedMpesa;
     const closingFloat = actualCash;
     const variance = actualCash - expectedCash;
 
     shift.closingFloat = closingFloat;
+    shift.closingFloatCash = actualCash;
+    shift.closingFloatMpesa = actualMpesa;
+    shift.cashReceived = cashReceived;
+    shift.mpesaReceived = mpesaReceived;
+    shift.cardSales = cardSales;
+    shift.cashDrops = cashDropsTotal;
+    shift.expenses = expensesTotal;
     shift.expectedCash = expectedCash;
+    shift.expectedMpesa = expectedMpesa;
     shift.actualCash = actualCash;
-    shift.variance = variance;
     shift.actualMpesa = actualMpesa;
+    shift.variance = variance;
     shift.mpesaVariance = mpesaVariance;
+    shift.totalSales = cashReceived + mpesaReceived + cardSales;
+    shift.totalTransactions = sales.filter((s: any) => !s.isRefund && s.status !== 'voided').length;
     shift.status = 'closed';
     shift.endTime = now;
     shift.closingCashCount = actualCash;
@@ -221,7 +264,36 @@ export async function POST(
       branch: shift.branch,
     });
 
-    return NextResponse.json({ success: true, shift }, { status: 200 });
+    return NextResponse.json({ 
+      success: true, 
+      shift, 
+      autoLogout: true,
+      shiftSummary: {
+        shiftId: shift.shiftId,
+        date: now,
+        startTime: shift.startTime,
+        endTime: now,
+        cashierName: shift.cashierName,
+        registerNumber: shift.registerNumber,
+        openingFloat: shift.openingFloat || 0,
+        openingFloatCash: shift.openingFloatCash || 0,
+        openingFloatMpesa: shift.openingFloatMpesa || 0,
+        cashReceived: cashReceived,
+        mpesaReceived: mpesaReceived,
+        cashDrops: cashDropsTotal,
+        expenses: expensesTotal,
+        expectedCash: expectedCash,
+        expectedMpesa: expectedMpesa,
+        actualCash: actualCash,
+        actualMpesa: actualMpesa,
+        variance: variance,
+        mpesaVariance: mpesaVariance,
+        totalSales: cashReceived + mpesaReceived + cardSales,
+        totalTransactions: sales.filter((s: any) => !s.isRefund && s.status !== 'voided').length,
+        cardSales: cardSales,
+        notes: notes || ''
+      }
+    }, { status: 200 });
   } catch (error) {
     console.error('Close shift error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

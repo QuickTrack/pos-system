@@ -4,6 +4,7 @@ import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Calculator } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
+import { useAuth } from '@/lib/auth-context';
 
 interface Shift {
   _id: string;
@@ -62,6 +63,8 @@ export default function CloseShiftPage({ params }: { params: Promise<{ id: strin
       .finally(() => setLoading(false));
   }, [resolvedParams.id]);
 
+  const { logout, user } = useAuth();
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -71,7 +74,92 @@ export default function CloseShiftPage({ params }: { params: Promise<{ id: strin
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ actualCash: parseFloat(actualCash), actualMpesa: parseFloat(actualMpesa), notes }),
       });
-      if (res.ok) router.push('/reconciliation/shifts');
+      if (res.ok) {
+        const data = await res.json();
+        
+        // Auto-print shift summary report
+        if (data.shiftSummary) {
+          try {
+            const printRes = await fetch('/api/print', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                documentType: 'shiftSummary',
+                document: data.shiftSummary,
+                format: 'pdf',
+                paperSize: 'A4',
+                preview: true
+              })
+            });
+            
+if (printRes.ok) {
+               const printData = await printRes.json();
+               if (printData.preview?.data) {
+                 const pdfUrl = 'data:application/pdf;base64,' + printData.preview.data;
+                 // Open print preview in new window
+                 const printWindow = window.open('', '_blank');
+                 if (printWindow) {
+                   printWindow.document.write(`
+                     <html>
+                       <head>
+                         <title>Shift Summary - ${data.shiftSummary.shiftId}</title>
+                         <style>
+                           body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+                           .page { width: 210mm; min-height: 297mm; padding: 15mm; margin: 0 auto; background: white; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+                           @media print { body { padding: 0; } .page { box-shadow: none; width: auto; min-height: auto; } }
+                           iframe { width: 100%; height: 100vh; border: none; }
+                         </style>
+                       </head>
+                       <body>
+                         <iframe id="pdfFrame" src="${pdfUrl}" type="application/pdf"></iframe>
+                         <script>
+                           window.onload = function() {
+                             var iframe = document.getElementById('pdfFrame');
+                             if (iframe) {
+                               iframe.onload = function() { window.print(); };
+                               setTimeout(function() { window.print(); }, 1000);
+                             }
+                           };
+                         </script>
+                       </body>
+                     </html>
+                   `);
+                   printWindow.document.close();
+                 } else {
+                   const link = document.createElement('a');
+                   link.href = pdfUrl;
+                   link.download = `shift-summary-${data.shiftSummary.shiftId}.pdf`;
+                   link.click();
+                 }
+               }
+             }
+          } catch (e) {
+            console.error('Shift summary print failed:', e);
+          }
+        }
+        
+        // Auto-logout for cashiers after shift end - restore original session and redirect to dashboard
+        if (data.autoLogout && user?.role === 'cashier') {
+          setTimeout(async () => {
+            const preserveToken = sessionStorage.getItem('pos-preserve-token');
+            if (preserveToken) {
+              try {
+                await fetch('/api/auth/restore-session', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ preserveToken }),
+                });
+              } catch {
+                // Ignore restore errors
+              }
+              sessionStorage.removeItem('pos-preserve-token');
+            }
+            sessionStorage.removeItem('pos-auth-success');
+            window.location.href = '/dashboard';
+          }, 2000);
+        }
+        router.push('/reconciliation/shifts');
+      }
     } catch (err) { console.error(err); } finally { setSubmitting(false); }
   };
 

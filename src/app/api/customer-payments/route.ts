@@ -76,6 +76,18 @@ export async function GET(request: Request) {
   }
 }
 
+async function getNextPaymentNumber(): Promise<string> {
+  const { default: CustomerPayment } = await import('@/models/CustomerPayment');
+  const lastPayment = await CustomerPayment.findOne().sort({ paymentId: -1 });
+  if (lastPayment?.paymentId) {
+    const match = lastPayment.paymentId.match(/CPAY-(\d+)/);
+    if (match) {
+      return `CPAY-${String(parseInt(match[1], 10) + 1).padStart(6, '0')}`;
+    }
+  }
+  return 'CPAY-000001';
+}
+
 export async function POST(request: Request) {
   try {
     await connectDB();
@@ -111,7 +123,6 @@ export async function POST(request: Request) {
 
     // Validate that invoices are not already fully paid
     if (invoiceNumbers && invoiceNumbers.length > 0) {
-      const Sale = (await import('@/models/Sale')).default;
       const paidInvoices: string[] = [];
 
       for (const invoiceNumber of invoiceNumbers) {
@@ -144,11 +155,10 @@ export async function POST(request: Request) {
       }
     }
 
+    // Generate paymentId before creating the payment record
+    const paymentId = await getNextPaymentNumber();
+
     // Create payment record
-    // Generate payment ID
-    const count = await CustomerPayment.countDocuments();
-    const paymentId = `CPAY-${String(count + 1).padStart(6, '0')}`;
-    
     const payment = new CustomerPayment({
       paymentId,
       customer: customerId,
@@ -162,7 +172,7 @@ export async function POST(request: Request) {
       notes,
       recordedBy: user.userId,
     });
-
+    
     await payment.save();
 
     // Update customer creditBalance only if payment method is 'credit'
@@ -183,7 +193,6 @@ export async function POST(request: Request) {
 
     // If invoices are specified and payment is completed/paid, update their payment status
     if (invoiceNumbers && invoiceNumbers.length > 0 && (paymentStatus === 'completed' || paymentStatus === 'paid')) {
-      const Sale = (await import('@/models/Sale')).default;
       
       for (const invoiceNumber of invoiceNumbers) {
         // Update Sale invoices
@@ -248,8 +257,9 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error('Error creating customer payment:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { success: false, error: 'Failed to create customer payment' },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

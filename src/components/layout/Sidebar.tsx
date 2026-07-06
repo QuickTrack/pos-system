@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname } from 'next/navigation';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -37,12 +37,15 @@ import {
   Calculator,
   MonitorSmartphone,
   AlertTriangle,
+  TrendingUp,
+  TrendingDown,
   Users as UsersIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/lib/store';
 import { useAuth } from '@/lib/auth-context';
 import { hasPermission, isSuperAdmin, Role } from '@/lib/auth';
+import { usePOSAuth } from '@/components/pos/POSAuthModal';
 
 interface MenuItem {
   label: string;
@@ -108,6 +111,7 @@ const menuGroups: MenuGroup[] = [
     icon: ShoppingCart,
     permission: 'manage_sales',
     items: [
+      { label: 'Sales', href: '/sales', icon: BarChart3, permission: 'manage_sales' },
       { label: 'POS Sales', href: '/pos', icon: ShoppingCart, permission: 'manage_sales' },
       { label: 'Cash Sales', href: '/cash-sales', icon: Receipt, permission: 'manage_sales' },
       { label: 'Quotations', href: '/quotations', icon: FileSearch, permission: 'manage_sales' },
@@ -179,6 +183,23 @@ const menuGroups: MenuGroup[] = [
     ],
   },
   {
+    label: 'Payroll',
+    icon: Wallet,
+    permission: 'view_payroll',
+    items: [
+      { label: 'Payroll Dashboard', href: '/payroll', icon: BarChart3, permission: 'view_payroll' },
+      { label: 'Employees', href: '/payroll/employees', icon: Users, permission: 'manage_employees' },
+      { label: 'Salary Structures', href: '/payroll/salary-structures', icon: Settings, permission: 'manage_payroll' },
+      { label: 'Earnings', href: '/payroll/earnings', icon: TrendingUp, permission: 'manage_payroll' },
+      { label: 'Deductions', href: '/payroll/deductions', icon: TrendingDown, permission: 'manage_payroll' },
+      { label: 'Payroll Runs', href: '/payroll/runs', icon: ClipboardList, permission: 'process_payroll' },
+      { label: 'Advances', href: '/payroll/advances', icon: CreditCard, permission: 'manage_advances' },
+      { label: 'Loans', href: '/payroll/loans', icon: DollarSign, permission: 'manage_loans' },
+      { label: 'Payslips', href: '/payroll/payslips', icon: Receipt, permission: 'manage_payslips' },
+      { label: 'Payroll Reports', href: '/payroll/reports', icon: FileText, permission: 'view_reports' },
+    ],
+  },
+  {
     label: 'Administration',
     icon: Settings,
     permission: 'manage_settings',
@@ -193,6 +214,20 @@ const menuGroups: MenuGroup[] = [
 
 function MenuGroupItem({ group, pathname, onClose, toggleFavorite, isFavorite }: { group: MenuGroup; pathname: string; onClose: () => void; toggleFavorite: (item: any) => void; isFavorite: (href: string) => boolean }) {
   const [isOpen, setIsOpen] = useState(true);
+  const { triggerPOSAuth } = usePOSAuth();
+  const router = useRouter();
+  
+  const handleItemClick = (href: string) => {
+    if (href === '/pos') {
+      const canProceed = triggerPOSAuth();
+      if (!canProceed) {
+        return; // Modal will be shown
+      }
+    }
+    onClose();
+    router.push(href);
+  };
+
   const hasActiveItem = group.items.some((item) => 
     pathname === item.href || pathname.startsWith(item.href + '/')
   );
@@ -204,21 +239,22 @@ function MenuGroupItem({ group, pathname, onClose, toggleFavorite, isFavorite }:
     const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
     return (
       <li>
-        <Link
-          href={item.href}
-          className={cn(
-            "sidebar-link flex items-center justify-between",
-            isActive && "active"
-          )}
-          onClick={onClose}
-        >
-          <span className="flex items-center gap-2">
-            <item.icon className="w-4 h-4" />
-            <span className="text-sm">{item.label}</span>
-          </span>
+        <div className="relative">
+          <button
+            onClick={() => handleItemClick(item.href)}
+            className={cn(
+              "sidebar-link flex items-center justify-between w-full text-left",
+              isActive && "active"
+            )}
+          >
+            <span className="flex items-center gap-2">
+              <item.icon className="w-4 h-4" />
+              <span className="text-sm">{item.label}</span>
+            </span>
+          </button>
           <button
             type="button"
-            className="p-1 rounded hover:bg-gray-100"
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-100"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -232,7 +268,7 @@ function MenuGroupItem({ group, pathname, onClose, toggleFavorite, isFavorite }:
           >
             <Star className={`w-3 h-3 ${isFavorite(item.href) ? 'fill-amber-400 text-amber-500' : 'text-gray-400'}`} />
           </button>
-        </Link>
+        </div>
       </li>
     );
   }
@@ -260,25 +296,26 @@ function MenuGroupItem({ group, pathname, onClose, toggleFavorite, isFavorite }:
       </button>
       {shouldExpand && (
         <ul className="ml-4 mt-1 space-y-0.5">
-          {group.items.map((item) => {
+{group.items.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
             return (
               <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className={cn(
-                    "sidebar-link pl-6 flex items-center justify-between",
-                    isActive && "active"
-                  )}
-                  onClick={onClose}
-                >
-                  <span className="flex items-center gap-2">
-                    <item.icon className="w-4 h-4" />
-                    <span className="text-sm">{item.label}</span>
-                  </span>
+                <div className="relative">
+                  <button
+                    onClick={() => handleItemClick(item.href)}
+                    className={cn(
+                      "sidebar-link pl-6 flex items-center justify-between w-full text-left",
+                      isActive && "active"
+                    )}
+                  >
+                    <span className="flex items-center gap-2">
+                      <item.icon className="w-4 h-4" />
+                      <span className="text-sm">{item.label}</span>
+                    </span>
+                  </button>
                   <button
                     type="button"
-                    className="p-1 rounded hover:bg-gray-100"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-100"
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -292,7 +329,7 @@ function MenuGroupItem({ group, pathname, onClose, toggleFavorite, isFavorite }:
                   >
                     <Star className={`w-3 h-3 ${isFavorite(item.href) ? 'fill-amber-400 text-amber-500' : 'text-gray-400'}`} />
                   </button>
-                </Link>
+                </div>
               </li>
             );
           })}
@@ -304,8 +341,9 @@ function MenuGroupItem({ group, pathname, onClose, toggleFavorite, isFavorite }:
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { sidebarOpen, setSidebarOpen, favoriteLinks, toggleFavorite, isFavorite } = useUIStore();
+  const router = useRouter();
   const { user, logout } = useAuth();
+  const { sidebarOpen, setSidebarOpen, favoriteLinks, toggleFavorite, isFavorite } = useUIStore();
   const [isHovering, setIsHovering] = useState(false);
   const [isHoveringTrigger, setIsHoveringTrigger] = useState(false);
   const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -353,21 +391,56 @@ export function Sidebar() {
 
   const userRole = user?.role as Role;
   const isAdmin = isSuperAdmin(userRole);
+  const { triggerPOSAuth } = usePOSAuth();
 
-  const filteredMenuGroups = menuGroups.map((group) => {
-    if (!userRole) return { ...group, items: [] };
-    if (isSuperAdmin(userRole)) {
-      return group;
-    }
-    const filteredItems = group.items.filter((item) => 
-      hasPermission(userRole, item.permission)
+  const filteredMenuGroups = useMemo(() => {
+    return menuGroups.map((group) => {
+      if (!userRole) return { ...group, items: [] };
+      if (isSuperAdmin(userRole)) {
+        return group;
+      }
+      const filteredItems = group.items.filter((item) => 
+        hasPermission(userRole, item.permission)
+      );
+      return { ...group, items: filteredItems };
+    }).filter((group) => group.items.length > 0);
+  }, [userRole]);
+
+  const allowedHrefs = useMemo(() => {
+    return new Set(
+      filteredMenuGroups.flatMap(group => group.items.map(item => item.href))
     );
-    return { ...group, items: filteredItems };
-  }).filter((group) => group.items.length > 0);
+  }, [filteredMenuGroups]);
+
+  const isInvalidFavorite = (fav: any) => !fav || !fav.href || !fav.label;
+  const safeFavorites = (favoriteLinks || [])
+    .filter((fav: any) => !isInvalidFavorite(fav));
+
+  const validFavorites = safeFavorites.filter((fav: any) => allowedHrefs.has(fav.href));
+
+  const handleFavoriteClick = (href: string) => {
+    if (href === '/pos') {
+      const canProceed = triggerPOSAuth();
+      if (!canProceed) {
+        return;
+      }
+    }
+    setSidebarOpen(false);
+    router.push(href);
+  };
 
   const handleLogout = async () => {
-    await logout();
+    const isOnPOS = pathname.startsWith('/pos');
+    await logout(isOnPOS ? '/dashboard' : '/login');
   };
+
+  useEffect(() => {
+    const invalidFavorites = favoriteLinks.filter((fav) => !allowedHrefs.has(fav.href));
+    if (invalidFavorites.length > 0) {
+      const cleaned = favoriteLinks.filter((fav) => allowedHrefs.has(fav.href));
+      useUIStore.setState({ favoriteLinks: cleaned });
+    }
+  }, [favoriteLinks, allowedHrefs]);
 
   const getInitials = (name: string) => {
     return name
@@ -384,10 +457,6 @@ export function Sidebar() {
   const getBaseHref = (href: string) => href.split('?')[0].split('#')[0];
 
   const resolveIcon = (iconName: string) => iconMap[iconName] || Star;
-
-  const isInvalidFavorite = (fav: any) => !fav || !fav.href || !fav.label;
-  const safeFavorites = (favoriteLinks || [])
-    .filter((fav: any) => !isInvalidFavorite(fav));
 
   const handleToggleFavorite = (fav: any) => {
     toggleFavorite(fav);
@@ -448,50 +517,52 @@ export function Sidebar() {
         <nav className="flex-1 overflow-y-auto py-3 px-2" style={{ maxHeight: 'calc(100vh - 180px)' }}>
           <ul className="space-y-1">
             <li className="mb-2">
-              <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Favorite Links
-              </div>
-              {safeFavorites.length === 0 ? (
+             <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+               Favorite Links
+             </div>
+ {validFavorites.length === 0 ? (
                 <p className="px-3 text-xs text-gray-400">Click the star icon next to any menu item to pin it here.</p>
               ) : (
-                <ul className="space-y-0.5">
-                  {safeFavorites.map((fav: any) => {
-                    const isActive = getBaseHref(pathname) === getBaseHref(fav.href);
-                    const IconComp = resolveIcon(fav.iconName || '');
-                    return (
-                      <li key={`${fav.href}-${fav.label}`}>
-                        <Link
-                          href={fav.href}
-                          className={cn(
-                            "sidebar-link flex items-center justify-between",
-                            isActive && "active"
-                          )}
-                        >
-                          <span className="flex items-center gap-2">
-                            <IconComp className="w-4 h-4" />
-                            <span className="text-sm">{fav.label}</span>
-                          </span>
-                          <button
-                            type="button"
-                            className="p-1 rounded hover:bg-gray-100"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              toggleFavorite({
-                                href: fav.href,
-                                label: fav.label,
-                                iconName: fav.iconName,
-                              });
-                            }}
-                            title="Remove from favorites"
-                          >
-                            <Star className="w-3 h-3 fill-amber-400 text-amber-500" />
-                          </button>
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
+                 <ul className="space-y-0.5">
+ {validFavorites.map((fav: any) => {
+                     const isActive = getBaseHref(pathname) === getBaseHref(fav.href);
+                     const IconComp = resolveIcon(fav.iconName || '');
+                     return (
+                       <li key={`${fav.href}-${fav.label}`}>
+                         <div className="relative">
+                           <button
+                             onClick={() => handleFavoriteClick(fav.href)}
+                             className={cn(
+                               "sidebar-link flex items-center justify-between w-full text-left",
+                               isActive && "active"
+                             )}
+                           >
+                             <span className="flex items-center gap-2">
+                               <IconComp className="w-4 h-4" />
+                               <span className="text-sm">{fav.label}</span>
+                             </span>
+                           </button>
+                           <button
+                             type="button"
+                             className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-gray-100"
+                             onClick={(e) => {
+                               e.preventDefault();
+                               e.stopPropagation();
+                               toggleFavorite({
+                                 href: fav.href,
+                                 label: fav.label,
+                                 iconName: fav.iconName,
+                               });
+                             }}
+                             title="Remove from favorites"
+                           >
+                             <Star className="w-3 h-3 fill-amber-400 text-amber-500" />
+                           </button>
+                         </div>
+                       </li>
+                     );
+                   })}
+                 </ul>
               )}
             </li>
 

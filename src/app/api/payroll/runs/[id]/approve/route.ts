@@ -22,7 +22,7 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!hasPermission(user.role as Role, 'process_payroll')) {
+    if (!hasPermission(user.role as Role, 'approve_payroll')) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
@@ -39,69 +39,41 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Payroll run not found' }, { status: 404 });
     }
 
-    if (run.status !== 'review' && run.status !== 'calculated') {
+    if (run.status !== 'calculated' && run.status !== 'review') {
       return NextResponse.json(
-        { success: false, error: `Cannot approve payroll in ${run.status} status` },
+        { success: false, error: `Cannot approve payroll run in status ${run.status}` },
         { status: 400 }
       );
     }
 
-    const body = await request.json();
-    const { action, comments } = body;
-
-    if (!['approved', 'rejected'].includes(action)) {
-      return NextResponse.json(
-        { success: false, error: "Action must be 'approved' or 'rejected'" },
-        { status: 400 }
-      );
-    }
-
-    if (action === 'rejected' && (!comments || !comments.trim())) {
-      return NextResponse.json(
-        { success: false, error: 'Comments are required when rejecting' },
-        { status: 400 }
-      );
-    }
+    const body = await request.json().catch(() => ({}));
+    const comments = body.comments || '';
 
     run.approvals.push({
       approverId: new mongoose.Types.ObjectId(user.userId),
       approverName: user.name,
       role: user.role,
-      action,
-      comments: comments || '',
+      action: 'approved',
+      comments,
       timestamp: new Date(),
     });
-
-    if (action === 'approved') {
-      run.status = 'approved';
-    } else {
-      run.status = 'review';
-    }
+    run.status = 'approved';
+    run.currentStep = 'finalize';
 
     await run.save();
 
     const populated = await PayrollRun.findById(run._id)
       .populate('branch', 'name code')
       .populate('processedBy', 'name')
-      .populate('approvals.approverId', 'name')
       .lean();
 
-    const serialized = {
-      ...(populated as any),
-      _id: serializeObjectId((populated as any)._id),
-      branch: (populated as any).branch,
-      processedBy: (populated as any).processedBy,
-      approvals: ((populated as any).approvals || []).map((a: any) => ({
-        ...a,
-        approverId: a.approverId ? { ...a.approverId, _id: serializeObjectId(a.approverId._id) } : a.approverId,
-      })),
-    };
+    const serialized = { ...populated, _id: serializeObjectId((populated as any)._id) };
 
     return NextResponse.json({ success: true, run: serialized });
   } catch (error) {
-    console.error('Error approving payroll:', error);
+    console.error('Error approving payroll run:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to approve payroll' },
+      { success: false, error: 'Failed to approve payroll run' },
       { status: 500 }
     );
   }

@@ -97,13 +97,18 @@ export async function GET(request: NextRequest) {
       grossSales += sale.total;
     }
 
-    const cashDropQuery: any = { branch: branchParam || user.branch, dropTime: dateFilter };
+    const cashDropQuery: any = { 
+      branch: (branchParam || user.branch || ''), 
+      dropTime: dateFilter 
+    };
     const cashDrops = await CashDrop.find(cashDropQuery).lean();
     const cashDropsTotal = cashDrops.reduce((sum: number, d: any) => sum + d.amount, 0);
 
     const expenseQuery: any = {
-      branch: branchParam || user.branch,
+      branch: branchParam || user.branch || '',
       dateTime: dateFilter,
+      paymentSource: { $in: ['cash_drawer', 'main_till', 'petty_cash'] },
+      status: { $in: ['approved', 'pending'] },
     };
     const expenses = await Expense.find(expenseQuery).lean();
     const expensesTotal = expenses.reduce((sum: number, e: any) => sum + e.amount, 0);

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/mongodb';
 import SalaryStructure from '@/models/SalaryStructure';
-import Branch from '@/models/Branch';
 import { getAuthUser } from '@/lib/auth-server';
 import { hasPermission } from '@/lib/auth';
 import type { Role } from '@/lib/auth';
@@ -11,16 +10,6 @@ function serializeObjectId(value: any): string {
   if (!value) return '';
   if (typeof value.toString === 'function') return value.toString();
   return String(value);
-}
-
-function serializePopulated(value: any) {
-  if (!value) return null;
-  const object = typeof value.toObject === 'function' ? value.toObject() : value;
-  const id = object?._id || value?._id;
-  return {
-    ...object,
-    _id: serializeObjectId(id),
-  };
 }
 
 export async function GET(request: NextRequest) {
@@ -37,9 +26,9 @@ export async function GET(request: NextRequest) {
     await dbConnect();
 
     const { searchParams } = new URL(request.url);
-    const search = searchParams.get('search');
     const category = searchParams.get('category');
-    const branch = searchParams.get('branch');
+    const isDefault = searchParams.get('isDefault');
+    const search = searchParams.get('search');
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), 100);
 
@@ -49,11 +38,10 @@ export async function GET(request: NextRequest) {
       query.branch = new mongoose.Types.ObjectId(user.branch);
     }
 
-    if (branch && (user.role === 'admin' || user.role === 'super_admin')) {
-      query.branch = new mongoose.Types.ObjectId(branch);
-    }
-
     if (category) query.category = category;
+    if (isDefault === 'true') query.isDefault = true;
+    if (isDefault === 'false') query.isDefault = false;
+
     if (search) {
       query.$or = [
         { name: { $regex: search, $options: 'i' } },
@@ -64,24 +52,19 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
 
     const [structures, total] = await Promise.all([
-      SalaryStructure.find(query)
-        .populate('branch', 'name code')
-        .sort({ name: 1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
+      SalaryStructure.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
       SalaryStructure.countDocuments(query),
     ]);
 
     const serialized = structures.map((s: any) => ({
       ...s,
       _id: serializeObjectId(s._id),
-      branch: serializePopulated(s.branch),
+      branch: s.branch ? serializeObjectId(s.branch) : null,
     }));
 
     return NextResponse.json({
       success: true,
-      salaryStructures: serialized,
+      structures: serialized,
       pagination: {
         page,
         limit,
@@ -113,40 +96,25 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const {
-      name,
-      description,
-      category,
-      paymentFrequency,
-      amount,
-      currency,
-      workingHoursPerWeek,
-      workingDaysPerWeek,
-      overtimeMultiplierNormal,
-      overtimeMultiplierWeekend,
-      overtimeMultiplierHoliday,
-      maxOvertimeHoursPerWeek,
-      includes,
-      isDefault,
-      branch,
+      name, description, category, paymentFrequency, amount, rate,
+      overtimeMultiplierNormal, overtimeMultiplierWeekend, overtimeMultiplierHoliday,
+      isDefault, currency,
     } = body;
 
-    if (!name || !category || !paymentFrequency || amount === undefined) {
+    if (!name || !category || !paymentFrequency) {
       return NextResponse.json(
-        { success: false, error: 'Missing required fields: name, category, paymentFrequency, amount' },
+        { success: false, error: 'Missing required fields: name, category, paymentFrequency' },
         { status: 400 }
       );
     }
 
-    let structureBranch: any = null;
-    if (branch && mongoose.Types.ObjectId.isValid(branch)) {
-      const branchDoc = await Branch.findById(branch);
-      if (!branchDoc) {
-        return NextResponse.json({ success: false, error: 'Invalid branch' }, { status: 400 });
-      }
-      structureBranch = new mongoose.Types.ObjectId(branch);
+    let branch: any = null;
+    if (user.branch && mongoose.Types.ObjectId.isValid(user.branch)) {
+      branch = new mongoose.Types.ObjectId(user.branch);
     }
-    if (!structureBranch && user.branch) {
-      structureBranch = new mongoose.Types.ObjectId(user.branch);
+
+    if (isDefault) {
+      await SalaryStructure.updateMany({ isDefault: true }, { isDefault: false });
     }
 
     const structure = await SalaryStructure.create({
@@ -154,25 +122,18 @@ export async function POST(request: NextRequest) {
       description: description || '',
       category,
       paymentFrequency,
-      amount: Number(amount),
+      amount: amount || 0,
+      rate: rate || 0,
       currency: currency || 'KES',
-      workingHoursPerWeek: Number(workingHoursPerWeek) || 40,
-      workingDaysPerWeek: Number(workingDaysPerWeek) || 5,
-      overtimeMultiplierNormal: Number(overtimeMultiplierNormal) || 1.5,
-      overtimeMultiplierWeekend: Number(overtimeMultiplierWeekend) || 1.5,
-      overtimeMultiplierHoliday: Number(overtimeMultiplierHoliday) || 2,
-      maxOvertimeHoursPerWeek: Number(maxOvertimeHoursPerWeek) || 20,
-      includes: includes || [],
-      isDefault: isDefault ?? false,
-      isActive: true,
-      branch: structureBranch,
+      overtimeMultiplierNormal: overtimeMultiplierNormal ?? 1.5,
+      overtimeMultiplierWeekend: overtimeMultiplierWeekend ?? 1.5,
+      overtimeMultiplierHoliday: overtimeMultiplierHoliday ?? 2,
+      isDefault: !!isDefault,
+      branch,
       createdBy: new mongoose.Types.ObjectId(user.userId),
     });
 
-    const populated = await SalaryStructure.findById(structure._id).populate('branch', 'name code').lean();
-    const serialized = serializePopulated(populated);
-
-    return NextResponse.json({ success: true, salaryStructure: serialized }, { status: 201 });
+    return NextResponse.json({ success: true, structure: { ...structure.toObject(), _id: serializeObjectId(structure._id) } }, { status: 201 });
   } catch (error) {
     console.error('Error creating salary structure:', error);
     return NextResponse.json(

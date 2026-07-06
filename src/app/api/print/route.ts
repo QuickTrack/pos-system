@@ -90,10 +90,31 @@ export async function POST(request: NextRequest) {
       template = createDefaultTemplate(documentType, paperSize);
     }
 
-    // Prepare print data - normalize document fields for DocumentHandler
+// Prepare print data - normalize document fields for DocumentHandler
     const printData = { ...document };
     
-
+    // Transform shift summary data into table format
+    if (documentType === 'shiftSummary') {
+      printData.openingItems = [
+        { label: 'Opening Cash Float', value: (document.openingFloatCash || 0).toFixed(2) },
+        { label: 'Opening M-Pesa Balance', value: (document.openingFloatMpesa || 0).toFixed(2) }
+      ];
+      printData.transactionItems = [
+        { label: 'Cash Received (Sales)', value: (document.cashReceived || 0).toFixed(2) },
+        { label: 'M-Pesa Received (Sales)', value: (document.mpesaReceived || 0).toFixed(2) },
+        { label: 'Card Sales', value: (document.cardSales || 0).toFixed(2) },
+        { label: 'Cash Drops', value: (document.cashDrops || 0).toFixed(2) },
+        { label: 'Expenses', value: (document.expenses || 0).toFixed(2) }
+      ];
+      printData.closingItems = [
+        { label: 'Expected Cash', value: (document.expectedCash || 0).toFixed(2) },
+        { label: 'Actual Cash', value: (document.actualCash || 0).toFixed(2) },
+        { label: 'Cash Variance (Actual - Expected)', value: (document.variance || 0).toFixed(2) },
+        { label: 'Expected M-Pesa', value: (document.expectedMpesa || 0).toFixed(2) },
+        { label: 'Actual M-Pesa', value: (document.actualMpesa || 0).toFixed(2) },
+        { label: 'M-Pesa Variance', value: (document.mpesaVariance || 0).toFixed(2) }
+      ];
+    }
     
     // Ensure customer data is at the top level for DocumentHandler
     if (printData.customer && typeof printData.customer === 'object') {
@@ -237,8 +258,212 @@ export async function POST(request: NextRequest) {
 
 // Helper to create default template
 function createDefaultTemplate(documentType: string, paperSize: string): PrintableTemplate {
-  const is58mm = paperSize === '58mm';
-  const width = is58mm ? 58 : 80;
+  const isA4 = paperSize === 'A4' || paperSize === 'A4_LANDSCAPE';
+  const pageWidth = isA4 ? 210 : (paperSize === '58mm' ? 58 : 80);
+  const contentWidth = pageWidth - 30; // Account for 15mm margins on each side
+  
+  // For shift summary on A4, create a proper layout
+  if (documentType === 'shiftSummary') {
+    return {
+      name: 'Shift Summary A4',
+      category: documentType as any,
+      pageSize: paperSize as any,
+      orientation: 'portrait',
+      margins: { top: 15, right: 15, bottom: 15, left: 15 },
+      elements: [
+        {
+          id: 'business_header',
+          type: 'text',
+          content: '{{business.name}}\n{{business.address}}\n{{business.phone}}{{#if business.email}} | {{business.email}}{{/if}}',
+          x: 0,
+          y: 0,
+          width: contentWidth,
+          height: 20,
+          fontSize: 10,
+          fontWeight: 'bold',
+          textAlign: 'center'
+        },
+        {
+          id: 'document_title',
+          type: 'text',
+          content: 'SHIFT SUMMARY REPORT',
+          x: 0,
+          y: 30,
+          width: contentWidth,
+          height: 15,
+          fontSize: 14,
+          fontWeight: 'bold',
+          textAlign: 'center'
+        },
+        {
+          id: 'shift_info',
+          type: 'text',
+          content: 'Shift ID: {{shiftSummary.shiftId}}',
+          x: 0,
+          y: 55,
+          width: contentWidth,
+          height: 12,
+          fontSize: 10,
+          fontWeight: 'bold',
+          textAlign: 'left'
+        },
+        {
+          id: 'shift_datetime',
+          type: 'text',
+          content: 'Date: {{shiftSummary.date}}    Cashier: {{shiftSummary.cashierName}}    Register: {{shiftSummary.registerNumber}}\nStart: {{shiftSummary.startTime}}    End: {{shiftSummary.endTime}}',
+          x: 0,
+          y: 70,
+          width: contentWidth,
+          height: 15,
+          fontSize: 9,
+          textAlign: 'left'
+        },
+        {
+          id: 'divider1',
+          type: 'divider',
+          x: 0,
+          y: 95,
+          width: contentWidth,
+          height: 1,
+          lineStyle: 'solid'
+        },
+        {
+          id: 'opening_header',
+          type: 'text',
+          content: 'OPENING BALANCE',
+          x: 0,
+          y: 105,
+          width: contentWidth,
+          height: 12,
+          fontSize: 11,
+          fontWeight: 'bold',
+          textAlign: 'left'
+        },
+        {
+          id: 'opening_table',
+          type: 'table',
+          source: 'openingItems',
+          x: 0,
+          y: 117,
+          width: contentWidth,
+          height: 30,
+          fontSize: 9,
+          columns: [
+            { key: 'label', title: 'Description', width: contentWidth * 0.7, align: 'left' },
+            { key: 'value', title: 'Amount (KES)', width: contentWidth * 0.3, align: 'right' }
+          ]
+        },
+        {
+          id: 'transactions_header',
+          type: 'text',
+          content: 'TRANSACTION SUMMARY',
+          x: 0,
+          y: 155,
+          width: contentWidth,
+          height: 12,
+          fontSize: 11,
+          fontWeight: 'bold',
+          textAlign: 'left'
+        },
+        {
+          id: 'transactions_table',
+          type: 'table',
+          source: 'transactionItems',
+          x: 0,
+          y: 167,
+          width: contentWidth,
+          height: 50,
+          fontSize: 9,
+          columns: [
+            { key: 'label', title: 'Description', width: contentWidth * 0.7, align: 'left' },
+            { key: 'value', title: 'Amount (KES)', width: contentWidth * 0.3, align: 'right' }
+          ]
+        },
+        {
+          id: 'closing_header',
+          type: 'text',
+          content: 'CLOSING RECONCILIATION',
+          x: 0,
+          y: 225,
+          width: contentWidth,
+          height: 12,
+          fontSize: 11,
+          fontWeight: 'bold',
+          textAlign: 'left'
+        },
+        {
+          id: 'closing_table',
+          type: 'table',
+          source: 'closingItems',
+          x: 0,
+          y: 237,
+          width: contentWidth,
+          height: 55,
+          fontSize: 9,
+          columns: [
+            { key: 'label', title: 'Description', width: contentWidth * 0.7, align: 'left' },
+            { key: 'value', title: 'Amount (KES)', width: contentWidth * 0.3, align: 'right' }
+          ]
+        },
+        {
+          id: 'summary_totals',
+          type: 'text',
+          content: 'TOTAL SALES: KES {{shiftSummary.totalSales}}          TOTAL TRANSACTIONS: {{shiftSummary.totalTransactions}}',
+          x: 0,
+          y: 295,
+          width: contentWidth,
+          height: 12,
+          fontSize: 11,
+          fontWeight: 'bold',
+          textAlign: 'center'
+        },
+        {
+          id: 'notes',
+          type: 'text',
+          content: 'Notes: {{shiftSummary.notes}}',
+          x: 0,
+          y: 315,
+          width: contentWidth,
+          height: 15,
+          fontSize: 9,
+          textAlign: 'left'
+        },
+        {
+          id: 'signature_section',
+          type: 'text',
+          content: 'Cashier Signature: _________________________________    Date: ____ / ____ / ____',
+          x: 0,
+          y: 340,
+          width: contentWidth,
+          height: 15,
+          fontSize: 10,
+          textAlign: 'left'
+        },
+        {
+          id: 'supervisor_signature',
+          type: 'text',
+          content: 'Supervisor Signature: ______________________________    Date: ____ / ____ / ____',
+          x: 0,
+          y: 360,
+          width: contentWidth,
+          height: 15,
+          fontSize: 10,
+          textAlign: 'left'
+        },
+        {
+          id: 'footer',
+          type: 'text',
+          content: '========================================\nThank you for your service!',
+          x: 0,
+          y: 380,
+          width: contentWidth,
+          height: 12,
+          fontSize: 8,
+          textAlign: 'center'
+        }
+      ]
+    };
+  }
   
   return {
     name: 'Default Template',
@@ -253,7 +478,7 @@ function createDefaultTemplate(documentType: string, paperSize: string): Printab
         content: '{{business.name}}',
         x: 0,
         y: 0,
-        width,
+        width: pageWidth,
         height: 15,
         fontSize: 14,
         fontWeight: 'bold',
@@ -265,7 +490,7 @@ function createDefaultTemplate(documentType: string, paperSize: string): Printab
         content: '{{business.address}}\n{{business.phone}}',
         x: 0,
         y: 20,
-        width,
+        width: pageWidth,
         height: 20,
         fontSize: 10,
         textAlign: 'center'
@@ -275,7 +500,7 @@ function createDefaultTemplate(documentType: string, paperSize: string): Printab
         type: 'divider',
         x: 0,
         y: 45,
-        width,
+        width: pageWidth,
         height: 3,
         lineStyle: 'dashed'
       },
@@ -285,13 +510,13 @@ function createDefaultTemplate(documentType: string, paperSize: string): Printab
         source: 'items',
         x: 0,
         y: 55,
-        width,
+        width: pageWidth,
         height: 200,
         columns: [
-          { key: 'name', title: 'Item', width: width * 0.4 },
-          { key: 'quantity', title: 'Qty', width: width * 0.15, align: 'center' },
-          { key: 'price', title: 'Price', width: width * 0.2, align: 'right' },
-          { key: 'total', title: 'Total', width: width * 0.25, align: 'right' }
+          { key: 'name', title: 'Item', width: pageWidth * 0.4 },
+          { key: 'quantity', title: 'Qty', width: pageWidth * 0.15, align: 'center' },
+          { key: 'price', title: 'Price', width: pageWidth * 0.2, align: 'right' },
+          { key: 'total', title: 'Total', width: pageWidth * 0.25, align: 'right' }
         ]
       }
     ]
@@ -370,7 +595,7 @@ export async function GET(request: NextRequest) {
         formats: ['escpos', 'pdf', 'raw'],
         encodings: ['PC437', 'PC850', 'PC860', 'PC863', 'PC865', 'PC858', 'UTF8'],
         paperSizes: ['58mm', '80mm', 'A4', 'A4_LANDSCAPE', 'HALF_PAGE'],
-        documentTypes: ['receipt', 'invoice', 'order', 'quotation', 'delivery', 'purchase', 'payment', 'statement', 'transaction']
+        documentTypes: ['receipt', 'invoice', 'order', 'quotation', 'delivery', 'purchase', 'payment', 'statement', 'transaction', 'shiftSummary']
       },
       templates,
       printers

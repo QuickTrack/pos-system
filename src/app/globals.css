@@ -167,6 +167,18 @@ body {
   @apply bg-gray-100 text-gray-800;
 }
 
+.badge-blue {
+  @apply bg-indigo-100 text-indigo-800;
+}
+
+.badge-purple {
+  @apply bg-purple-100 text-purple-800;
+}
+
+.badge-emerald {
+  @apply bg-emerald-100 text-emerald-800;
+}
+
 /* Modal */
 .modal-overlay {
   @apply fixed inset-0 bg-black/50 flex items-center justify-center z-[9999];

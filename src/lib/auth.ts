@@ -47,10 +47,17 @@ export const ALL_PERMISSIONS = [
   'export_data',
   'import_data',
   'manage_activity_logs',
+  'manage_payroll',
+  'process_payroll',
+  'view_payroll',
+  'manage_employees',
+  'manage_advances',
+  'manage_loans',
+  'manage_payslips',
 ];
 
  export const PERMISSIONS: Record<Role, string[]> = {
-  super_admin: ALL_PERMISSIONS, // Has all permissions
+  super_admin: ALL_PERMISSIONS,
   admin: [
     'manage_users',
     'manage_products',
@@ -69,6 +76,13 @@ export const ALL_PERMISSIONS = [
     'view_customers',
     'export_data',
     'manage_activity_logs',
+    'manage_payroll',
+    'process_payroll',
+    'view_payroll',
+    'manage_employees',
+    'manage_advances',
+    'manage_loans',
+    'manage_payslips',
   ],
   manager: [
     'manage_products',
@@ -84,12 +98,20 @@ export const ALL_PERMISSIONS = [
     'process_refunds',
     'view_customers',
     'export_data',
+    'manage_payroll',
+    'process_payroll',
+    'view_payroll',
+    'manage_employees',
+    'manage_advances',
+    'manage_loans',
+    'manage_payslips',
   ],
   cashier: [
     'manage_sales',
     'manage_reconciliation',
     'view_dashboard',
     'view_customers',
+    'view_payroll',
   ],
   stock_manager: [
     'manage_products',
@@ -97,6 +119,7 @@ export const ALL_PERMISSIONS = [
     'manage_suppliers',
     'manage_purchases',
     'view_dashboard',
+    'view_payroll',
   ],
 };
 

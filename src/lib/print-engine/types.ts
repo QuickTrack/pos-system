@@ -13,7 +13,8 @@ export type DocumentType =
   | 'purchase' 
   | 'payment'
   | 'statement'
-  | 'transaction';
+  | 'transaction'
+  | 'shiftSummary';
 
 // Paper Sizes (in mm)
 export type PaperSize = '58mm' | '80mm' | 'A4' | 'A4_LANDSCAPE' | 'HALF_PAGE' | 'CUSTOM';
@@ -296,6 +297,30 @@ export interface PrintDataContext {
     number: string;
     date: string;
     status: string;
+    notes?: string;
+  };
+  shiftSummary?: {
+    shiftId: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    cashierName: string;
+    registerNumber: string;
+    openingFloat: string;
+    openingFloatCash: string;
+    openingFloatMpesa: string;
+    cashReceived: string;
+    mpesaReceived: string;
+    cashDrops: string;
+    expenses: string;
+    expectedCash: string;
+    expectedMpesa: string;
+    actualCash: string;
+    actualMpesa: string;
+    variance: string;
+    mpesaVariance: string;
+    totalSales: string;
+    totalTransactions: string;
     notes?: string;
   };
   [key: string]: any;

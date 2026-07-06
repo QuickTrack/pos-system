@@ -14,18 +14,21 @@ interface SaleItem {
   quantity: number;
   unitPrice: number;
   total: number;
+  unitName?: string;
+  unitAbbreviation?: string;
 }
 
 interface Sale {
   _id: string;
   invoiceNumber: string;
-  customer?: { name: string };
+  customer?: { name: string; phone?: string };
   customerName?: string;
   cashier: { name: string };
   items: SaleItem[];
   subtotal: number;
   discount: number;
   tax: number;
+  taxRate?: number;
   total: number;
   paymentMethod: string;
   amountPaid: number;
@@ -333,7 +336,8 @@ export default function SalesPage() {
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="text-left px-4 py-2">Product</th>
-                        <th className="text-right px-4 py-2">Qty</th>
+                        <th className="text-center px-4 py-2">Qty</th>
+                        <th className="text-center px-4 py-2">Unit</th>
                         <th className="text-right px-4 py-2">Price</th>
                         <th className="text-right px-4 py-2">Total</th>
                       </tr>
@@ -342,7 +346,8 @@ export default function SalesPage() {
                       {selectedSale.items?.map((item, idx) => (
                         <tr key={idx} className="border-t border-gray-100">
                           <td className="px-4 py-2">{item.productName}</td>
-                          <td className="px-4 py-2 text-right">{item.quantity}</td>
+                          <td className="px-4 py-2 text-center">{item.quantity}</td>
+                          <td className="px-4 py-2 text-center">{item.unitName || item.unitAbbreviation || '-'}</td>
                           <td className="px-4 py-2 text-right">{formatCurrency(item.unitPrice)}</td>
                           <td className="px-4 py-2 text-right">{formatCurrency(item.total)}</td>
                         </tr>
@@ -406,42 +411,52 @@ export default function SalesPage() {
         </div>
       )}
 
-      {/* Print Preview Modal */}
-      {showPrintPreview && selectedSale && (
-        <PrintPreview
-          documentType="receipt"
-          document={{
-            includeInPrice: businessSettings?.includeInPrice || false,
-            kraPin: businessSettings?.kraPin || '',
-            bankName: businessSettings?.bankName || '',
-            bankAccount: businessSettings?.bankAccount || '',
-            bankBranch: businessSettings?.bankBranch || '',
-            paymentTill: businessSettings?.paymentTill || '',
-            sendMoneyPhoneNumber: businessSettings?.sendMoneyPhoneNumber || '',
-            acceptedPaymentMethods: businessSettings?.acceptedPaymentMethods || '',
-            invoiceNumber: (selectedSale as any).receiptNumber || (selectedSale as any)._id,
-            date: (selectedSale as any).createdAt,
-            customer: {
-              name: (selectedSale as any).customer?.name || 'Cash Customer',
-              phone: (selectedSale as any).customer?.phone || ''
-            },
-            items: (selectedSale as any).items?.map((item: any) => ({
-              name: item.productName,
-              unit: item.product?.baseUnit || '-',
-              quantity: item.quantity,
-              price: item.unitPrice,
-              total: item.total
-            })) || [],
-            subtotal: (selectedSale as any).subtotal,
-            tax: (selectedSale as any).tax,
-            taxRate: (selectedSale as any).taxRate || 16,
-            total: (selectedSale as any).total,
-            payment: {
-              amount: (selectedSale as any).amountPaid,
-              method: (selectedSale as any).paymentMethod,
-              change: (selectedSale as any).change
-            }
-          }}
+{/* Print Preview Modal */}
+       {showPrintPreview && selectedSale && (
+         <PrintPreview
+           documentType="receipt"
+           document={{
+             businessName: businessSettings?.businessName || '',
+             businessTagline: businessSettings?.businessTagline || '',
+             businessAddress: businessSettings?.address || '',
+             businessPhone: businessSettings?.phone || '',
+             businessEmail: businessSettings?.email || '',
+             vatNumber: businessSettings?.vatNumber || '',
+             kraPin: businessSettings?.kraPin || '',
+             logo: businessSettings?.receiptLogo || businessSettings?.logo || '',
+             receiptFooter: businessSettings?.receiptFooter || '',
+             includeInPrice: businessSettings?.includeInPrice || false,
+             bankName: businessSettings?.bankName || '',
+             bankAccount: businessSettings?.bankAccount || '',
+             bankBranch: businessSettings?.bankBranch || '',
+             paymentTill: businessSettings?.paymentTill || '',
+             sendMoneyPhoneNumber: businessSettings?.sendMoneyPhoneNumber || '',
+             acceptedPaymentMethods: businessSettings?.acceptedPaymentMethods || '',
+             invoiceNumber: selectedSale.invoiceNumber,
+             orderNumber: selectedSale.invoiceNumber,
+             date: selectedSale.saleDate,
+             customer: {
+               name: selectedSale.customer?.name || selectedSale.customerName || 'Cash Customer',
+               phone: selectedSale.customer?.phone || ''
+             },
+             items: selectedSale.items?.map((item) => ({
+               name: item.productName,
+               unit: (item as any).unitName || (item as any).unitAbbreviation || '-',
+               quantity: item.quantity,
+               price: item.unitPrice,
+               total: item.total
+             })) || [],
+             subtotal: selectedSale.subtotal,
+             tax: selectedSale.tax,
+             taxRate: selectedSale.taxRate || businessSettings?.taxRate || 16,
+             total: selectedSale.total,
+             payment: {
+               amount: selectedSale.amountPaid,
+               method: selectedSale.paymentMethod,
+               change: selectedSale.change
+             },
+             cashier: selectedSale.cashier?.name
+           }}
           onClose={() => setShowPrintPreview(false)}
         />
       )}

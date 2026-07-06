@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, FileText, Printer } from 'lucide-react';
 import { formatDateTime, formatCurrency } from '@/lib/utils';
+import { Modal } from '@/components/ui/Modal';
 
 interface Shift {
   _id: string;
@@ -16,14 +17,32 @@ interface Shift {
   startTime: string;
   endTime?: string;
   variance: number;
+  openingFloatCash?: number;
+  openingFloatMpesa?: number;
+  cashReceived?: number;
+  mpesaReceived?: number;
+  cardSales?: number;
+  cashDrops?: number;
+  expenses?: number;
+  expectedCash?: number;
+  expectedMpesa?: number;
+  actualCash?: number;
+  actualMpesa?: number;
+  mpesaVariance?: number;
+  totalSales?: number;
+  totalTransactions?: number;
+  notes?: string;
 }
 
 export default function ShiftsPage() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
   const [showOpenModal, setShowOpenModal] = useState(false);
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
   const [registers, setRegisters] = useState<any[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [reprinting, setReprinting] = useState(false);
 
   const fetchShifts = async () => {
     try {
@@ -57,6 +76,116 @@ export default function ShiftsPage() {
       });
       if (res.ok) { setShowOpenModal(false); form.reset(); fetchShifts(); }
     } catch (err) { console.error(err); } finally { setSubmitting(false); }
+  };
+
+  const handleViewSummary = async (shift: Shift) => {
+    // Fetch fresh shift data with all sales/transaction info
+    try {
+      const res = await fetch(`/api/shifts/${shift._id}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.shift) {
+          setSelectedShift(json.shift);
+        } else {
+          setSelectedShift(shift);
+        }
+      } else {
+        setSelectedShift(shift);
+      }
+    } catch (err) {
+      console.error('Failed to fetch shift details:', err);
+      setSelectedShift(shift);
+    }
+    setShowSummaryModal(true);
+  };
+
+  const handleReprintSummary = async () => {
+    if (!selectedShift) return;
+    setReprinting(true);
+    try {
+      const shiftSummary = {
+        shiftId: selectedShift.shiftId,
+        date: selectedShift.endTime || selectedShift.startTime,
+        startTime: selectedShift.startTime,
+        endTime: selectedShift.endTime,
+        cashierName: selectedShift.cashierName,
+        registerNumber: selectedShift.registerNumber,
+        openingFloat: selectedShift.openingFloat || 0,
+        openingFloatCash: selectedShift.openingFloatCash || 0,
+        openingFloatMpesa: selectedShift.openingFloatMpesa || 0,
+        cashReceived: selectedShift.cashReceived || 0,
+        mpesaReceived: selectedShift.mpesaReceived || 0,
+        cardSales: selectedShift.cardSales || 0,
+        cashDrops: selectedShift.cashDrops || 0,
+        expenses: selectedShift.expenses || 0,
+        expectedCash: selectedShift.expectedCash || 0,
+        expectedMpesa: selectedShift.expectedMpesa || 0,
+        actualCash: selectedShift.actualCash || 0,
+        actualMpesa: selectedShift.actualMpesa || 0,
+        variance: selectedShift.variance || 0,
+        mpesaVariance: selectedShift.mpesaVariance || 0,
+        totalSales: selectedShift.totalSales || 0,
+        totalTransactions: selectedShift.totalTransactions || 0,
+        notes: selectedShift.notes || ''
+      };
+      
+      const printRes = await fetch('/api/print', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentType: 'shiftSummary',
+          document: shiftSummary,
+          format: 'pdf',
+          paperSize: 'A4',
+          preview: true
+        })
+      });
+      
+      if (printRes.ok) {
+        const printData = await printRes.json();
+        if (printData.preview?.data) {
+          const pdfUrl = 'data:application/pdf;base64,' + printData.preview.data;
+          const printWindow = window.open('', '_blank');
+          if (printWindow) {
+            printWindow.document.write(`
+              <html>
+                <head>
+                  <title>Shift Summary - ${selectedShift.shiftId}</title>
+                  <style>
+                    body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+                    .page { width: 210mm; min-height: 297mm; padding: 15mm; margin: 0 auto; background: white; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+                    @media print { body { padding: 0; } .page { box-shadow: none; width: auto; min-height: auto; } }
+                    iframe { width: 100%; height: 100vh; border: none; }
+                  </style>
+                </head>
+                <body>
+                  <iframe id="pdfFrame" src="${pdfUrl}" type="application/pdf"></iframe>
+                  <script>
+                    window.onload = function() {
+                      var iframe = document.getElementById('pdfFrame');
+                      if (iframe) {
+                        iframe.onload = function() { window.print(); };
+                        setTimeout(function() { window.print(); }, 1000);
+                      }
+                    };
+                  </script>
+                </body>
+              </html>
+            `);
+            printWindow.document.close();
+          } else {
+            const link = document.createElement('a');
+            link.href = pdfUrl;
+            link.download = `shift-summary-${selectedShift.shiftId}.pdf`;
+            link.click();
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Shift summary reprint failed:', err);
+    } finally {
+      setReprinting(false);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -108,13 +237,19 @@ export default function ShiftsPage() {
                     {shift.variance === 0 ? <span className="text-gray-500">-</span> : <span className={shift.variance < 0 ? 'text-red-600' : 'text-green-600'}>{formatCurrency(Math.abs(shift.variance))}</span>}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(shift.status)}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                    {shift.status === 'open' ? (
-                      <Link href={`/reconciliation/shifts/${shift._id}/close`} className="text-emerald-600 hover:text-emerald-900 font-medium">Close Shift</Link>
-                    ) : (
-                      <span className="text-gray-400">-</span>
-                    )}
-                  </td>
+<td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                     {shift.status === 'open' ? (
+                       <Link href={`/reconciliation/shifts/${shift._id}/close`} className="text-emerald-600 hover:text-emerald-900 font-medium">Close Shift</Link>
+                     ) : (
+                       <button 
+                         onClick={() => handleViewSummary(shift)} 
+                         className="flex items-center gap-1 text-blue-600 hover:text-blue-900 font-medium text-sm"
+                         title="View Shift Summary"
+                       >
+                         <FileText className="w-4 h-4" /> View Summary
+                       </button>
+                     )}
+                   </td>
                 </tr>
               ))}
             </tbody>
@@ -159,6 +294,122 @@ export default function ShiftsPage() {
           </div>
         </div>
       )}
+
+      <Modal 
+        isOpen={showSummaryModal} 
+        onClose={() => setShowSummaryModal(false)}
+        title={`Shift Summary - ${selectedShift?.shiftId || ''}`}
+        size="lg"
+        closeOnOverlayClick={true}
+      >
+        {selectedShift && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-500">Cashier</p>
+                <p className="text-sm font-medium text-gray-900">{selectedShift.cashierName}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-500">Register</p>
+                <p className="text-sm font-medium text-gray-900">{selectedShift.registerNumber || 'N/A'}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-500">Start Time</p>
+                <p className="text-sm font-medium text-gray-900">{formatDateTime(selectedShift.startTime)}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-500">End Time</p>
+                <p className="text-sm font-medium text-gray-900">{selectedShift.endTime ? formatDateTime(selectedShift.endTime) : 'N/A'}</p>
+              </div>
+            </div>
+
+            <div className="border-t pt-4">
+              <h4 className="font-medium text-gray-900 mb-2">Opening Balance</h4>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="text-gray-600">Cash Float:</span>
+                <span className="text-right font-medium">{formatCurrency(selectedShift.openingFloatCash || 0)}</span>
+                <span className="text-gray-600">M-Pesa Balance:</span>
+                <span className="text-right font-medium">{formatCurrency(selectedShift.openingFloatMpesa || 0)}</span>
+              </div>
+            </div>
+
+            <div className="border-t pt-4">
+              <h4 className="font-medium text-gray-900 mb-2">Transaction Summary</h4>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="text-gray-600">Cash Received:</span>
+                <span className="text-right font-medium">{formatCurrency(selectedShift.cashReceived || 0)}</span>
+                <span className="text-gray-600">M-Pesa Received:</span>
+                <span className="text-right font-medium">{formatCurrency(selectedShift.mpesaReceived || 0)}</span>
+                <span className="text-gray-600">Card Sales:</span>
+                <span className="text-right font-medium">{formatCurrency(selectedShift.cardSales || 0)}</span>
+                <span className="text-gray-600">Cash Drops:</span>
+                <span className="text-right font-medium">{formatCurrency(selectedShift.cashDrops || 0)}</span>
+                <span className="text-gray-600">Expenses:</span>
+                <span className="text-right font-medium">{formatCurrency(selectedShift.expenses || 0)}</span>
+              </div>
+            </div>
+
+            <div className="border-t pt-4">
+              <h4 className="font-medium text-gray-900 mb-2">Closing Reconciliation</h4>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="text-gray-600">Expected Cash:</span>
+                <span className="text-right font-medium">{formatCurrency(selectedShift.expectedCash || 0)}</span>
+                <span className="text-gray-600">Actual Cash:</span>
+                <span className="text-right font-medium">{formatCurrency(selectedShift.actualCash || 0)}</span>
+                <span className="text-gray-600">Cash Variance:</span>
+                <span className={`text-right font-medium ${(selectedShift.variance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {(selectedShift.variance || 0) >= 0 ? '' : '-'}{formatCurrency(Math.abs(selectedShift.variance || 0))}
+                </span>
+                <span className="text-gray-600">Expected M-Pesa:</span>
+                <span className="text-right font-medium">{formatCurrency(selectedShift.expectedMpesa || 0)}</span>
+                <span className="text-gray-600">Actual M-Pesa:</span>
+                <span className="text-right font-medium">{formatCurrency(selectedShift.actualMpesa || 0)}</span>
+                <span className="text-gray-600">M-Pesa Variance:</span>
+                <span className={`text-right font-medium ${(selectedShift.mpesaVariance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {(selectedShift.mpesaVariance || 0) >= 0 ? '' : '-'}{formatCurrency(Math.abs(selectedShift.mpesaVariance || 0))}
+                </span>
+              </div>
+            </div>
+
+            <div className="border-t pt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 bg-blue-50 rounded-lg">
+                  <p className="text-xs text-blue-600">Total Sales</p>
+                  <p className="text-lg font-bold text-blue-700">{formatCurrency(selectedShift.totalSales || 0)}</p>
+                </div>
+                <div className="p-3 bg-purple-50 rounded-lg">
+                  <p className="text-xs text-purple-600">Total Transactions</p>
+                  <p className="text-lg font-bold text-purple-700">{selectedShift.totalTransactions || 0}</p>
+                </div>
+              </div>
+            </div>
+
+            {selectedShift.notes && (
+              <div className="border-t pt-4">
+                <p className="text-xs text-gray-500">Notes</p>
+                <p className="text-sm text-gray-900 mt-1">{selectedShift.notes}</p>
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-4">
+              <button
+                onClick={handleReprintSummary}
+                disabled={reprinting}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 text-sm font-medium"
+              >
+                <Printer className="w-4 h-4" />
+                {reprinting ? 'Generating...' : 'Print Summary'}
+              </button>
+              <button
+                onClick={() => setShowSummaryModal(false)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

@@ -15,7 +15,7 @@ interface AuthUser {
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
-  logout: () => Promise<void>;
+  logout: (redirectTo?: string) => Promise<void>;
   checkAuth: () => Promise<void>;
 }
 
@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const logout = async () => {
+  const logout = async (redirectTo: string = '/login') => {
     try {
       await fetch('/api/auth/logout', {
         method: 'POST',
@@ -66,17 +66,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     document.cookie = 'auth-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
     
     setUser(null);
-    router.push('/login');
+    router.push(redirectTo);
     router.refresh();
   };
 
-  // Check and redirect to onboarding if needed
+// Check and redirect to onboarding if needed
   useEffect(() => {
     if (!loading && user) {
       const currentPath = window.location.pathname;
       
       // Skip checks for license and onboarding pages
-      if (currentPath === '/license/activate' || currentPath === '/onboarding') {
+      if (currentPath === '/license/activate' || currentPath === '/onboarding' || currentPath === '/pos/login') {
         return;
       }
       
