@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/db/mongodb';
 import Loan from '@/models/Loan';
 import Branch from '@/models/Branch';
+import PayrollProfile from '@/models/PayrollProfile';
 import User from '@/models/User';
 import { getAuthUser } from '@/lib/auth-server';
 import { hasPermission } from '@/lib/auth';
@@ -139,9 +140,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid employee ID' }, { status: 400 });
     }
 
-    const empUser = await User.findById(employee);
-    if (!empUser) {
-      return NextResponse.json({ success: false, error: 'Employee not found' }, { status: 400 });
+    const profile = await PayrollProfile.findById(employee).lean();
+    let empUser: any = null;
+    if (!profile) {
+      empUser = await User.findById(employee);
+      if (!empUser) {
+        return NextResponse.json({ success: false, error: 'Employee not found' }, { status: 400 });
+      }
     }
 
     let loanBranch: any = null;
@@ -163,10 +168,10 @@ export async function POST(request: NextRequest) {
 
     const loan = await Loan.create({
       employee: new mongoose.Types.ObjectId(employee),
-      employeeName: empUser.name,
-      employeeNumber: empUser._id.toString(),
+      employeeName: profile ? profile.employeeName : (empUser as any).name,
+      employeeNumber: profile ? (profile.employeeNumber || profile._id.toString()) : (empUser as any)._id.toString(),
       branch: loanBranch,
-      department: '',
+      department: profile ? (profile.department || '') : '',
       loanType,
       amount: principal,
       interestRate: rate,
