@@ -53,6 +53,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async (redirectTo: string = '/login') => {
+    const preserveToken = sessionStorage.getItem('pos-preserve-token');
+    const hasPosAuth = sessionStorage.getItem('pos-auth-success') === 'true';
+
     try {
       await fetch('/api/auth/logout', {
         method: 'POST',
@@ -61,10 +64,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Ignore logout errors
     }
 
-    document.cookie = 'auth-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
     sessionStorage.removeItem('pos-preserve-token');
     sessionStorage.removeItem('pos-auth-success');
     localStorage.removeItem('pos_cashier_auth');
+
+    if (preserveToken) {
+      try {
+        await fetch('/api/auth/restore-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ preserveToken }),
+        });
+      } catch {
+        // Ignore restore errors
+      }
+    } else {
+      document.cookie = 'auth-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    }
 
     setUser(null);
     router.push(redirectTo);
