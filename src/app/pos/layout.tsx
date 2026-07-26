@@ -1,32 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { useAuth } from '@/lib/auth-context';
 import { LicenseProvider } from '@/lib/license-context';
 
 function AuthCheck({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-  const [hasPosAuth, setHasPosAuth] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return sessionStorage.getItem('pos-auth-success') === 'true';
-    }
-    return false;
-  });
-
-  useEffect(() => {
-    if (!loading && !user && !hasPosAuth) {
-      router.push('/login');
-      return;
-    }
-
-    if (!loading && user && user.role !== 'cashier' && !hasPosAuth) {
-      router.push('/dashboard');
-      return;
-    }
-  }, [user, loading, router, hasPosAuth]);
+  const { loading } = useAuth();
 
   if (loading) {
     return (
@@ -34,10 +13,6 @@ function AuthCheck({ children }: { children: React.ReactNode }) {
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
       </div>
     );
-  }
-
-  if (!user && !hasPosAuth) {
-    return null;
   }
 
   return (
