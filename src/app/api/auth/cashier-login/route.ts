@@ -81,17 +81,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Close existing shift when switching cashiers
-    let shiftClosed = false;
+    // Update existing shift cashier when switching
+    let shiftUpdated = false;
     if (switchCashier && activeShift) {
       try {
         await Shift.updateOne(
           { _id: activeShift._id },
-          { $set: { status: 'closed', endTime: new Date() } }
+          {
+            $set: {
+              cashier: matchedUserId,
+              cashierName: matchedUserName,
+            },
+          }
         );
-        shiftClosed = true;
+        shiftUpdated = true;
       } catch {
-        // Ignore shift close errors
+        // Ignore shift update errors
       }
     }
 
@@ -148,7 +153,7 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json({
       success: true,
       preserveToken,
-      shiftClosed,
+      shiftUpdated,
       user: {
         id: matchedUserId,
         name: matchedUserName,
