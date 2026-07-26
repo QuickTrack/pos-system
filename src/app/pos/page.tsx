@@ -211,7 +211,7 @@ useEffect(() => {
 
   useEffect(() => {
     const checkMyShift = async () => {
-      const { activeShift: currentShift } = useShiftStore.getState();
+      const { activeShift: currentShift, fetchActiveShift: refreshShift } = useShiftStore.getState();
       const isMyShift = currentShift && currentShift.cashier === user?.userId;
 
       if (isMyShift) {
@@ -219,13 +219,18 @@ useEffect(() => {
         return;
       }
 
-      if (previousMyShiftIdRef.current && !isMyShift) {
-        await logout('/dashboard');
+      if (!currentShift) {
+        previousMyShiftIdRef.current = null;
+      }
+
+      if (currentShift && currentShift.cashier !== user?.userId) {
+        await refreshShift();
         return;
       }
 
-      if (!currentShift) {
-        previousMyShiftIdRef.current = null;
+      if (previousMyShiftIdRef.current && !isMyShift) {
+        await logout('/dashboard');
+        return;
       }
     };
 

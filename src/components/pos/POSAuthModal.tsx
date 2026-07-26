@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Store, AlertCircle, Delete, Lock, Clock, User } from 'lucide-react';
-import { useUIStore } from '@/lib/store';
+import { useUIStore, useShiftStore } from '@/lib/store';
 import { useAuth } from '@/lib/auth-context';
 
 const POS_AUTH_KEY = 'pos_cashier_auth';
@@ -140,6 +140,9 @@ export function POSAuthModal() {
 
         setShowPOSAuthModal(false);
         setSwitchCashier(false);
+        if (switchCashier) {
+          useShiftStore.getState().clearShift();
+        }
         if (data.preserveToken) {
           sessionStorage.setItem('pos-preserve-token', data.preserveToken);
         }
