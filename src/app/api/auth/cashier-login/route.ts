@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+export const runtime = 'nodejs';
+
 import dbConnect from '@/lib/db/mongodb';
 import User from '@/models/User';
+import Shift from '@/models/Shift';
 import Session from '@/models/Session';
 import ActivityLog from '@/models/ActivityLog';
 import { generateToken, JWTPayload } from '@/lib/auth';
@@ -64,7 +67,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check for active shift conflict
     const matchedUserId = matchedUser._id;
+    const activeShift = await Shift.findOne({ status: 'open' }).sort({ startTime: -1 }).lean();
+    if (activeShift) {
+      const activeCashierId = activeShift.cashier?._id?.toString() || activeShift.cashier?.toString();
+      const requestingCashierId = matchedUserId.toString();
+      if (activeCashierId !== requestingCashierId) {
+        return NextResponse.json(
+          { success: false, error: `An active shift is already in progress for register ${activeShift.registerNumber} by ${activeShift.cashierName}. Only the assigned cashier or a super admin can log in.` },
+          { status: 403 }
+        );
+      }
+    }
+
+    const matchedUserName = matchedUser.name;
     const matchedUserName = matchedUser.name;
     const matchedUserEmail = matchedUser.email;
     const matchedUserRole = matchedUser.role;

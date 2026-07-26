@@ -127,7 +127,7 @@ export function POSAuthModal() {
           // Ignore fetch errors for active shift check
         }
 
-        const isAssignedCashier = data.user && activeShiftWarning.cashier === data.user.id;
+        const isAssignedCashier = data.user && String(activeShiftWarning.cashier) === String(data.user.id);
 
         if (activeShiftWarning && user?.role !== 'super_admin' && !isAssignedCashier) {
           setError(`An active shift is already in progress for register ${activeShiftWarning.registerNumber} by ${activeShiftWarning.cashierName}. Only the assigned cashier or a super admin can log in.`);
