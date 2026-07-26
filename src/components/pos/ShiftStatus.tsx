@@ -74,7 +74,7 @@ export function ShiftStatusIndicator() {
     }
   }, [showCloseModal, activeShift, fetchActiveShift]);
 
-const handleOpenShift = async () => {
+ const handleOpenShift = async () => {
      if (!selectedRegister) return;
 
      setSubmitting(true);
@@ -89,7 +89,7 @@ const handleOpenShift = async () => {
        setActiveShiftConflict(conflict.activeShift);
        setShowConflictModal(true);
      } else {
-       setError('Failed to open shift. Please try again.');
+       alert('Failed to open shift. Please try again.');
      }
      setSubmitting(false);
    };
