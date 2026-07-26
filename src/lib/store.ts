@@ -371,7 +371,7 @@ interface ShiftState {
   closingFloatMpesa: string;
   fetchActiveShift: () => Promise<void>;
   fetchRegisters: () => Promise<void>;
-  openShift: (registerId: string, openingFloatCash: number, openingFloatMpesa: number) => Promise<boolean>;
+  openShift: (registerId: string, openingFloatCash: number, openingFloatMpesa: number) => Promise<boolean | { conflict?: boolean; activeShift?: any; requiresExchange?: any; error?: string }>;
   closeShift: (actualCash: number, actualMpesa: number, notes?: string) => Promise<{ success: boolean; autoLogout?: boolean }>;
   clearShift: () => void;
   setShowOpenModal: (open: boolean) => void;
@@ -423,27 +423,27 @@ export const useShiftStore = create<ShiftState>()(
         }
       },
 
-openShift: async (registerId, openingFloatCash, openingFloatMpesa) => {
-         try {
-           const res = await fetch('/api/shifts', {
-             method: 'POST',
-             headers: { 'Content-Type': 'application/json' },
-             body: JSON.stringify({ registerId, openingFloatCash, openingFloatMpesa }),
-           });
-           const json = await res.json();
-           if (json.success) {
-             set({ activeShift: json.shift });
-             return true;
-           }
-           if (res.status === 409 && json.activeShift) {
-             return { conflict: true, activeShift: json.activeShift, requiresExchange: json.requiresExchange };
-           }
-           return false;
-         } catch (err) {
-           console.error('Failed to open shift:', err);
-           return false;
-         }
-       },
+      openShift: async (registerId, openingFloatCash, openingFloatMpesa) => {
+          try {
+            const res = await fetch('/api/shifts', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ registerId, openingFloatCash, openingFloatMpesa }),
+            });
+            const json = await res.json();
+            if (json.success) {
+              set({ activeShift: json.shift });
+              return true;
+            }
+            if (res.status === 409 && json.activeShift) {
+              return { conflict: true, activeShift: json.activeShift, requiresExchange: json.requiresExchange };
+            }
+            return { error: json.error || json.details || 'Failed to open shift' };
+          } catch (err) {
+            console.error('Failed to open shift:', err);
+            return { error: 'Network error while opening shift' };
+          }
+        },
 
       closeShift: async (actualCash, actualMpesa, notes = '') => {
         const { activeShift } = get();

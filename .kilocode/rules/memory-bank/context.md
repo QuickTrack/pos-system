@@ -120,6 +120,11 @@ Implemented a comprehensive multi-terminal client-server architecture for the Qu
   - Updated Close Shift page UI to display both Expected Cash (blue card) and Expected M-Pesa Balance (purple card) with opening balances and received amounts
   - `bun typecheck` passed; `bun lint` passed with existing warnings only.
 
+- [x] Shift Opening Error Handling Fix
+  - Fixed `setError` ReferenceError in `src/components/pos/ShiftStatus.tsx` that crashed the component when opening a shift failed for any reason other than a conflict (403, 400, 500, etc.)
+  - Replaced undefined `setError` call with `alert('Failed to open shift. Please try again.')`
+  - `bun lint` passed for the changed file
+
 - [ ] Reconciliation Layout Sidebar Fix
   - Bug: Expected Cash in Close Shift modal showed stale value (initial opening float) instead of recalculating from sales during the shift.
   - Root cause: `fetchActiveShift()` was only called on component mount; `activeShift.expectedCash` in Zustand store was never refreshed when opening the Close Shift modal.
@@ -1229,6 +1234,7 @@ const result = await printEngine.print({
 | 2026-07-06 | Created earnings and deductions frontend pages for Payroll Management Module with full CRUD, tabbed filtering, stats cards, DataTable, and modals |
 | 2026-07-06 | Implemented Payroll Management Module API: Kenyan tax calculator + 18 payroll route files (runs, calculate, approve, finalize, payslips, profile, salary-structures, earnings, deductions, advances, loans, payslips, journals, reports) |
 | 2026-06-15 | Added Customer Report and Inventory Report support to `/reports` with API aggregations, summary cards, tables, and export data |
+| 2026-07-26 | Fixed undefined `setError` ReferenceError in `ShiftStatus.tsx` `handleOpenShift` that prevented users from opening shifts when the API returned a non-conflict error (e.g. 403 Forbidden, 400 Bad Request). Replaced with `alert()`. |
 
 ## Notes
 

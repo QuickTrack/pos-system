@@ -74,25 +74,27 @@ export function ShiftStatusIndicator() {
     }
   }, [showCloseModal, activeShift, fetchActiveShift]);
 
- const handleOpenShift = async () => {
-     if (!selectedRegister) return;
+  const handleOpenShift = async () => {
+      if (!selectedRegister) return;
 
-     setSubmitting(true);
-     const result = await openShift(selectedRegister, parseFloat(openingFloatCash) || 0, parseFloat(openingFloatMpesa) || 0);
-     if (result === true) {
-       setShowOpenModal(false);
-       setSelectedRegister('');
-       setOpeningFloatCash('');
-       setOpeningFloatMpesa('');
-     } else if (result && typeof result === 'object' && (result as any).conflict) {
-       const conflict = result as any;
-       setActiveShiftConflict(conflict.activeShift);
-       setShowConflictModal(true);
-     } else {
-       alert('Failed to open shift. Please try again.');
-     }
-     setSubmitting(false);
-   };
+      setSubmitting(true);
+      const result = await openShift(selectedRegister, parseFloat(openingFloatCash) || 0, parseFloat(openingFloatMpesa) || 0);
+      if (result === true) {
+        setShowOpenModal(false);
+        setSelectedRegister('');
+        setOpeningFloatCash('');
+        setOpeningFloatMpesa('');
+      } else if (result && typeof result === 'object' && (result as any).conflict) {
+        const conflict = result as any;
+        setActiveShiftConflict(conflict.activeShift);
+        setShowConflictModal(true);
+      } else if (result && typeof result === 'object' && (result as any).error) {
+        alert((result as any).error);
+      } else {
+        alert('Failed to open shift. Please try again.');
+      }
+      setSubmitting(false);
+    };
 
   const handleCloseShift = async () => {
     if (!activeShift || !closingCash || !closingMpesa) return;
