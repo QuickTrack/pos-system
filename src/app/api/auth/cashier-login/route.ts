@@ -69,6 +69,11 @@ export async function POST(request: NextRequest) {
 
     // Check for active shift conflict
     const matchedUserId = matchedUser._id;
+    const matchedUserName = matchedUser.name;
+    const matchedUserEmail = matchedUser.email;
+    const matchedUserRole = matchedUser.role;
+    const matchedUserBranch = matchedUser.branch;
+
     const activeShift = await Shift.findOne({ status: 'open' }).sort({ startTime: -1 }).lean();
     if (activeShift && !switchCashier) {
       const activeCashierId = activeShift.cashier?._id?.toString() || activeShift.cashier?.toString();
@@ -99,11 +104,6 @@ export async function POST(request: NextRequest) {
         // Ignore shift update errors
       }
     }
-
-    const matchedUserName = matchedUser.name;
-    const matchedUserEmail = matchedUser.email;
-    const matchedUserRole = matchedUser.role;
-    const matchedUserBranch = matchedUser.branch;
 
     const payload: JWTPayload = {
       userId: matchedUserId.toString(),
