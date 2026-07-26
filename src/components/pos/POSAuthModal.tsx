@@ -9,13 +9,34 @@ import { useUIStore } from '@/lib/store';
 import { useAuth } from '@/lib/auth-context';
 
 const POS_AUTH_KEY = 'pos_cashier_auth';
-const POS_AUTH_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const POS_AUTH_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
+
+function isCashierAuthed(): boolean {
+  if (typeof window === 'undefined') return false;
+  const stored = localStorage.getItem(POS_AUTH_KEY);
+  if (!stored) return false;
+  try {
+    const data = JSON.parse(stored);
+    if (data.userId && data.timestamp && (Date.now() - data.timestamp) < POS_AUTH_EXPIRY_MS) {
+      return true;
+    }
+    localStorage.removeItem(POS_AUTH_KEY);
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function rememberCashierAuth(userId: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(POS_AUTH_KEY, JSON.stringify({ userId, timestamp: Date.now() }));
+}
 
 export function POSAuthModal() {
   const router = useRouter();
   const { user } = useAuth();
   const { showPOSAuthModal, setShowPOSAuthModal } = useUIStore();
-  
+
   const [pin, setPin] = useState(['', '', '', '']);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -29,27 +50,6 @@ export function POSAuthModal() {
       inputRefs.current[0]?.focus();
     }
   }, [showPOSAuthModal]);
-
-  const isCashierAuthed = () => {
-    if (typeof window === 'undefined') return false;
-    const stored = localStorage.getItem(POS_AUTH_KEY);
-    if (!stored) return false;
-    try {
-      const data = JSON.parse(stored);
-      if (data.userId && data.timestamp && (Date.now() - data.timestamp) < POS_AUTH_EXPIRY_MS) {
-        return true;
-      }
-      localStorage.removeItem(POS_AUTH_KEY);
-      return false;
-    } catch {
-      return false;
-    }
-  };
-
-  const rememberCashierAuth = (userId: string) => {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem(POS_AUTH_KEY, JSON.stringify({ userId, timestamp: Date.now() }));
-  };
 
   const handlePinChange = (index: number, value: string) => {
     if (value.length > 1) return;
@@ -65,7 +65,7 @@ export function POSAuthModal() {
     }
 
     if (index === 3 && value) {
-      handleSubmit();
+      handleSubmit(newPin.join(''));
     }
   };
 
@@ -90,9 +90,9 @@ export function POSAuthModal() {
     }
   };
 
-  const handleSubmit = async () => {
-    const fullPin = pin.join('');
-    
+  const handleSubmit = async (pinOverride?: string) => {
+    const fullPin = pinOverride || pin.join('');
+
     if (fullPin.length < 4) {
       setError('Please enter complete PIN');
       setShake(true);
@@ -147,10 +147,10 @@ export function POSAuthModal() {
   };
 
   return (
-    <Modal 
-      isOpen={showPOSAuthModal} 
-      onClose={handleClose} 
-      title="Cashier Authentication" 
+    <Modal
+      isOpen={showPOSAuthModal}
+      onClose={handleClose}
+      title="Cashier Authentication"
       size="sm"
     >
       <div className="space-y-4">
@@ -230,7 +230,7 @@ export function POSAuthModal() {
           </button>
           <button
             type="button"
-            onClick={handleSubmit}
+            onClick={() => handleSubmit()}
             disabled={loading || pin.join('').length < 4}
             className="h-12 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
           >
@@ -260,20 +260,19 @@ export function POSAuthModal() {
   );
 }
 
-// Hook to trigger POS authentication modal
 export function usePOSAuth() {
   const { setShowPOSAuthModal, showPOSAuthModal } = useUIStore();
   const { user } = useAuth();
 
   const triggerPOSAuth = () => {
     if (user?.role === 'cashier') {
-      return true; // Already a cashier, proceed directly
+      return true;
     }
     if (isCashierAuthed()) {
-      return true; // Auto-login: cashier has valid remembered auth
+      return true;
     }
     setShowPOSAuthModal(true);
-    return false; // Show modal
+    return false;
   };
 
   return { triggerPOSAuth, showPOSAuthModal };
