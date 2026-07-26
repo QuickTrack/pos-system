@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 
 import dbConnect from '@/lib/db/mongodb';
+import mongoose from 'mongoose';
 import User from '@/models/User';
 import Shift from '@/models/Shift';
+import Register from '@/models/Register';
 import Session from '@/models/Session';
 import ActivityLog from '@/models/ActivityLog';
 import { generateToken, JWTPayload } from '@/lib/auth';
@@ -86,22 +88,119 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Update existing shift cashier when switching
-    let shiftUpdated = false;
+    // Close existing shift when switching cashiers so the register becomes available for a new shift
+    let shiftClosed = false;
     if (switchCashier && activeShift) {
       try {
+        const shiftStart = new Date(activeShift.startTime);
+        const now = new Date();
+        const shiftBranchId = activeShift.branch?._id
+          ? activeShift.branch._id.toString()
+          : activeShift.branch?.toString();
+
+        const Sale = (await import('@/models/Sale')).default;
+        const CashDrop = (await import('@/models/CashDrop')).default;
+        const Expense = (await import('@/models/Expense')).default;
+
+        const salesQuery: any = {
+          saleDate: { $gte: shiftStart, $lte: now },
+          status: { $in: ['completed', 'pending', 'refunded'] },
+        };
+        if (shiftBranchId) {
+          salesQuery.branch = new mongoose.Types.ObjectId(shiftBranchId);
+        }
+
+        const sales = await Sale.find(salesQuery).lean();
+
+        let cashSales = 0;
+        let mpesaSales = 0;
+        let cardSales = 0;
+
+        for (const sale of sales) {
+          if (sale.isRefund || sale.status === 'voided') continue;
+          if (sale.paymentMethod === 'cash') cashSales += sale.total;
+          else if (sale.paymentMethod === 'mpesa') mpesaSales += sale.total;
+          else if (sale.paymentMethod === 'card') cardSales += sale.total;
+          else if (sale.paymentMethod === 'mixed') {
+            cashSales += sale.paymentDetails?.filter((p: any) => p.method === 'cash').reduce((sum: number, p: any) => sum + p.amount, 0) || 0;
+            mpesaSales += sale.paymentDetails?.filter((p: any) => p.method === 'mpesa').reduce((sum: number, p: any) => sum + p.amount, 0) || 0;
+            cardSales += sale.paymentDetails?.filter((p: any) => p.method === 'card').reduce((sum: number, p: any) => sum + p.amount, 0) || 0;
+          }
+        }
+
+        const cashDropsTotal = await CashDrop.aggregate([
+          { $match: { shift: (activeShift as any)._id, reason: { $in: ['safe_deposit', 'bank_deposit', 'security', 'float_transfer'] } } },
+          { $group: { _id: null, total: { $sum: '$amount' } } },
+        ]).then(r => r[0]?.total || 0);
+
+        const expensesQuery: any = {
+          paymentSource: { $in: ['cash_drawer', 'main_till', 'petty_cash'] },
+          status: { $in: ['approved', 'pending'] },
+          $or: [
+            { shift: (activeShift as any)._id },
+            { shift: null, dateTime: { $gte: shiftStart, $lte: now } },
+          ],
+        };
+        if (shiftBranchId) {
+          expensesQuery.branch = new mongoose.Types.ObjectId(shiftBranchId);
+        }
+
+        const expensesTotal = await Expense.aggregate([
+          { $match: expensesQuery },
+          { $group: { _id: null, total: { $sum: '$amount' } } },
+        ]).then(r => r[0]?.total || 0);
+
+        const expectedCash = (activeShift as any).openingFloatCash + cashSales - cashDropsTotal - expensesTotal;
+        const expectedMpesa = (activeShift as any).openingFloatMpesa + mpesaSales;
+        const actualCash = expectedCash;
+        const variance = 0;
+
         await Shift.updateOne(
-          { _id: activeShift._id },
+          { _id: (activeShift as any)._id },
           {
             $set: {
-              cashier: matchedUserId,
-              cashierName: matchedUserName,
+              closingFloat: actualCash,
+              closingFloatCash: actualCash,
+              closingFloatMpesa: mpesaSales,
+              cashReceived: cashSales,
+              mpesaReceived: mpesaSales,
+              cardSales: cardSales,
+              cashDrops: cashDropsTotal,
+              expenses: expensesTotal,
+              expectedCash: expectedCash,
+              actualCash: actualCash,
+              variance: variance,
+              totalSales: cashSales + mpesaSales + cardSales,
+              totalTransactions: sales.filter((s: any) => !s.isRefund && s.status !== 'voided').length,
+              status: 'closed',
+              endTime: now,
+              closingCashCount: actualCash,
+              closingNotes: 'Cashier switch - shift closed automatically',
             },
           }
         );
-        shiftUpdated = true;
-      } catch {
-        // Ignore shift update errors
+
+        const register = await Register.findById((activeShift as any).register);
+        if (register) {
+          register.isOpen = false;
+          register.currentShift = undefined as any;
+          register.balance = actualCash;
+          register.lastZRead = now;
+          await register.save();
+        }
+
+        await ActivityLog.create({
+          user: matchedUserId,
+          userName: matchedUserName,
+          action: 'cashier_switch_close_shift',
+          module: 'system',
+          description: `Cashier ${matchedUserName} switched from ${activeShift.cashierName}; closed shift ${activeShift.shiftId} on register ${activeShift.registerNumber}`,
+          branch: (activeShift as any).branch,
+        });
+
+        shiftClosed = true;
+      } catch (err) {
+        console.error('Failed to close shift on cashier switch:', err);
       }
     }
 
@@ -153,7 +252,7 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json({
       success: true,
       preserveToken,
-      shiftUpdated,
+      shiftClosed,
       user: {
         id: matchedUserId,
         name: matchedUserName,
