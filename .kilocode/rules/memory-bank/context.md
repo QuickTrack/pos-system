@@ -125,7 +125,13 @@ Implemented a comprehensive multi-terminal client-server architecture for the Qu
   - Replaced undefined `setError` call with `alert('Failed to open shift. Please try again.')`
   - `bun lint` passed for the changed file
 
-- [ ] Reconciliation Layout Sidebar Fix
+- [x] Cashier Switch Preserves Active Shift
+  - Changed `POST /api/auth/cashier-login` to transfer the active shift to the new cashier instead of closing it when `switchCashier` is true
+  - Shift `cashier` and `cashierName` are updated in-place
+  - Register remains open with the same currentShift
+  - Activity log records `cashier_switch_transfer` instead of `cashier_switch_close_shift`
+  - Fixes "No Active Shift appears after cashier switch" issue
+  - `bun lint` passed; typecheck has pre-existing unrelated errors
   - Bug: Expected Cash in Close Shift modal showed stale value (initial opening float) instead of recalculating from sales during the shift.
   - Root cause: `fetchActiveShift()` was only called on component mount; `activeShift.expectedCash` in Zustand store was never refreshed when opening the Close Shift modal.
   - Fix: Added a `useEffect` in `ShiftStatus.tsx` that re-fetches active shift data from `/api/shifts/active` whenever `showCloseModal` becomes `true`. The API recalculates `expectedCash` from sales, mpesa, card, cash drops, and expenses.
@@ -1235,6 +1241,7 @@ const result = await printEngine.print({
 | 2026-07-06 | Implemented Payroll Management Module API: Kenyan tax calculator + 18 payroll route files (runs, calculate, approve, finalize, payslips, profile, salary-structures, earnings, deductions, advances, loans, payslips, journals, reports) |
 | 2026-06-15 | Added Customer Report and Inventory Report support to `/reports` with API aggregations, summary cards, tables, and export data |
 | 2026-07-26 | Fixed undefined `setError` ReferenceError in `ShiftStatus.tsx` `handleOpenShift` that prevented users from opening shifts when the API returned a non-conflict error (e.g. 403 Forbidden, 400 Bad Request). Replaced with `alert()`. |
+| 2026-07-26 | Fixed cashier switch closing active shift - changed `POST /api/auth/cashier-login` to transfer the active shift to the new cashier instead of closing it when `switchCashier=true`. Active shift now persists across cashier switches. |
 
 ## Notes
 
