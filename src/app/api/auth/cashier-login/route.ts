@@ -82,7 +82,6 @@ export async function POST(request: NextRequest) {
     }
 
     const matchedUserName = matchedUser.name;
-    const matchedUserName = matchedUser.name;
     const matchedUserEmail = matchedUser.email;
     const matchedUserRole = matchedUser.role;
     const matchedUserBranch = matchedUser.branch;
