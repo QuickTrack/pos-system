@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+export const runtime = 'nodejs';
+
 import dbConnect from '@/lib/db/mongodb';
 import { Shift } from '@/models';
 import { getAuthUser } from '@/lib/auth-server';

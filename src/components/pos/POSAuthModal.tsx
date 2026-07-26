@@ -113,6 +113,29 @@ export function POSAuthModal() {
       const data = await response.json();
 
       if (response.ok) {
+        // Check for active shift on the current register
+        let activeShiftWarning = null;
+        try {
+          const activeResponse = await fetch('/api/shifts/active');
+          if (activeResponse.ok) {
+            const activeData = await activeResponse.json();
+            if (activeData.success && activeData.shift) {
+              activeShiftWarning = activeData.shift;
+            }
+          }
+        } catch {
+          // Ignore fetch errors for active shift check
+        }
+
+        if (activeShiftWarning && user?.role !== 'super_admin') {
+          setError(`An active shift is already in progress for register ${activeShiftWarning.registerNumber} by ${activeShiftWarning.cashierName}. Only the assigned cashier or a super admin can log in.`);
+          setShake(true);
+          setTimeout(() => setShake(false), 500);
+          setPin(['', '', '', '']);
+          inputRefs.current[0]?.focus();
+          return;
+        }
+
         setShowPOSAuthModal(false);
         if (data.preserveToken) {
           sessionStorage.setItem('pos-preserve-token', data.preserveToken);

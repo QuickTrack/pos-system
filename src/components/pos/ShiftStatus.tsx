@@ -44,6 +44,8 @@ export function ShiftStatusIndicator() {
   const [closingNotes, setClosingNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [activeShiftConflict, setActiveShiftConflict] = useState<any>(null);
+  const [showConflictModal, setShowConflictModal] = useState(false);
 
   useEffect(() => {
     fetchActiveShift();
@@ -72,19 +74,25 @@ export function ShiftStatusIndicator() {
     }
   }, [showCloseModal, activeShift, fetchActiveShift]);
 
-  const handleOpenShift = async () => {
-    if (!selectedRegister) return;
+const handleOpenShift = async () => {
+     if (!selectedRegister) return;
 
-    setSubmitting(true);
-    const success = await openShift(selectedRegister, parseFloat(openingFloatCash) || 0, parseFloat(openingFloatMpesa) || 0);
-    if (success) {
-      setShowOpenModal(false);
-      setSelectedRegister('');
-      setOpeningFloatCash('');
-      setOpeningFloatMpesa('');
-    }
-    setSubmitting(false);
-  };
+     setSubmitting(true);
+     const result = await openShift(selectedRegister, parseFloat(openingFloatCash) || 0, parseFloat(openingFloatMpesa) || 0);
+     if (result === true) {
+       setShowOpenModal(false);
+       setSelectedRegister('');
+       setOpeningFloatCash('');
+       setOpeningFloatMpesa('');
+     } else if (result && typeof result === 'object' && (result as any).conflict) {
+       const conflict = result as any;
+       setActiveShiftConflict(conflict.activeShift);
+       setShowConflictModal(true);
+     } else {
+       setError('Failed to open shift. Please try again.');
+     }
+     setSubmitting(false);
+   };
 
   const handleCloseShift = async () => {
     if (!activeShift || !closingCash || !closingMpesa) return;
@@ -468,12 +476,74 @@ onChange={async (e) => {
         </div>
       </div>
 
+{showConflictModal && activeShiftConflict && (
+        <Modal
+          isOpen={showConflictModal}
+          onClose={() => { setShowConflictModal(false); setActiveShiftConflict(null); }}
+          title="Active Shift in Progress"
+          size="sm"
+        >
+          <div className="space-y-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+              <p className="text-sm font-medium text-amber-800">Cannot open a new shift</p>
+              <p className="text-sm text-amber-700 mt-1">
+                Shift <strong>{activeShiftConflict.shiftId}</strong> is currently active on register{' '}
+                <strong>{activeShiftConflict.registerNumber}</strong> with cashier{' '}
+                <strong>{activeShiftConflict.cashierName}</strong>.
+              </p>
+              <p className="text-sm text-amber-600 mt-2">
+                The current cashier must either <strong>End Shift</strong> or perform a{' '}
+                <strong>Cashier Exchange</strong> before another shift can be opened.
+              </p>
+            </div>
+            {user?.role === 'super_admin' && (
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    setShowConflictModal(false);
+                    setActiveShiftConflict(null);
+                    if (activeShiftConflict?._id) {
+                      try {
+                        const res = await fetch(`/api/shifts/${activeShiftConflict._id}/force-close`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ notes: 'Super admin override' }),
+                        });
+                        if (res.ok) {
+                          const data = await res.json();
+                          if (data.success) {
+                            fetchActiveShift();
+                          }
+                        }
+                      } catch {
+                        // Ignore force-close errors
+                      }
+                    }
+                  }}
+                  className="flex-1 bg-orange-600 hover:bg-orange-700 text-white"
+                >
+                  Force End Shift (Super Admin)
+                </Button>
+              </div>
+            )}
+            <Button
+              variant="ghost"
+              onClick={() => { setShowConflictModal(false); setActiveShiftConflict(null); }}
+              className="w-full"
+            >
+              Cancel
+            </Button>
+          </div>
+        </Modal>
+      )}
+
       <Modal
-        isOpen={showLogoutConfirm}
-        onClose={() => setShowLogoutConfirm(false)}
-        title="Confirm Action"
-        size="sm"
-      >
+         isOpen={showLogoutConfirm}
+         onClose={() => setShowLogoutConfirm(false)}
+         title="Confirm Action"
+         size="sm"
+       >
         <div className="space-y-4">
           <p className="text-sm text-gray-700">
             Would you like to end the current shift, or just log out without closing it?

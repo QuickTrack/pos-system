@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+export const runtime = 'nodejs';
+
 import dbConnect from '@/lib/db/mongodb';
 import { Shift, Register, Sale, CashDrop, Expense, ActivityLog } from '@/models';
 import { getAuthUser } from '@/lib/auth-server';
@@ -131,6 +133,34 @@ export async function POST(request: NextRequest) {
 
     if (register.isOpen) {
       return NextResponse.json({ error: 'This register already has an open shift' }, { status: 400 });
+    }
+
+    const existingShift = await Shift.findOne({
+      register: registerId,
+      status: 'open',
+    });
+
+    if (existingShift) {
+      if (user.role === 'super_admin') {
+        await ActivityLog.create({
+          user: user.userId as any,
+          userName: user.name,
+          action: 'open_shift_override',
+          module: 'system',
+          description: `Super admin ${user.name} overrode active shift ${existingShift.shiftId} (cashier: ${existingShift.cashierName}) on register ${register.registerNumber}`,
+          branch: register.branch,
+        });
+      } else {
+        return NextResponse.json({
+          error: 'An active shift is already in progress',
+          activeShift: {
+            shiftId: existingShift.shiftId,
+            cashierName: existingShift.cashierName,
+            startTime: existingShift.startTime,
+          },
+          requiresExchange: true,
+        }, { status: 409 });
+      }
     }
 
     const shiftId = await generateShiftId();
