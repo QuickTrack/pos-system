@@ -61,22 +61,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Ignore logout errors
     }
 
-    const preserveToken = sessionStorage.getItem('pos-preserve-token');
-    if (preserveToken) {
-      try {
-        await fetch('/api/auth/restore-session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ preserveToken }),
-        });
-      } catch {
-        // Ignore restore errors
-      }
-      sessionStorage.removeItem('pos-preserve-token');
-      sessionStorage.removeItem('pos-auth-success');
-    } else {
-      document.cookie = 'auth-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-    }
+    document.cookie = 'auth-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    sessionStorage.removeItem('pos-preserve-token');
+    sessionStorage.removeItem('pos-auth-success');
+    localStorage.removeItem('pos_cashier_auth');
 
     setUser(null);
     router.push(redirectTo);
