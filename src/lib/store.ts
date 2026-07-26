@@ -142,6 +142,7 @@ interface UIState {
   favoriteLinks: FavoriteItem[];
   showPOSAuthModal: boolean;
   pendingPOSRedirect: boolean;
+  switchCashier: boolean;
   setSidebarOpen: (open: boolean) => void;
   toggleSidebar: () => void;
   setDarkMode: (mode: boolean) => void;
@@ -151,6 +152,7 @@ interface UIState {
   isFavorite: (href: string) => boolean;
   setShowPOSAuthModal: (show: boolean) => void;
   setPendingPOSRedirect: (pending: boolean) => void;
+  setSwitchCashier: (switching: boolean) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -162,6 +164,7 @@ export const useUIStore = create<UIState>()(
       favoriteLinks: [],
       showPOSAuthModal: false,
       pendingPOSRedirect: false,
+      switchCashier: false,
 
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
@@ -179,6 +182,7 @@ export const useUIStore = create<UIState>()(
       isFavorite: (href) => get().favoriteLinks.some(f => f.href === href),
       setShowPOSAuthModal: (show) => set({ showPOSAuthModal: show }),
       setPendingPOSRedirect: (pending) => set({ pendingPOSRedirect: pending }),
+      setSwitchCashier: (switching) => set({ switchCashier: switching }),
     }),
     {
       name: 'pos-ui',
@@ -419,24 +423,27 @@ export const useShiftStore = create<ShiftState>()(
         }
       },
 
-      openShift: async (registerId, openingFloatCash, openingFloatMpesa) => {
-        try {
-          const res = await fetch('/api/shifts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ registerId, openingFloatCash, openingFloatMpesa }),
-          });
-          const json = await res.json();
-          if (json.success) {
-            set({ activeShift: json.shift });
-            return true;
-          }
-          return false;
-        } catch (err) {
-          console.error('Failed to open shift:', err);
-          return false;
-        }
-      },
+openShift: async (registerId, openingFloatCash, openingFloatMpesa) => {
+         try {
+           const res = await fetch('/api/shifts', {
+             method: 'POST',
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({ registerId, openingFloatCash, openingFloatMpesa }),
+           });
+           const json = await res.json();
+           if (json.success) {
+             set({ activeShift: json.shift });
+             return true;
+           }
+           if (res.status === 409 && json.activeShift) {
+             return { conflict: true, activeShift: json.activeShift, requiresExchange: json.requiresExchange };
+           }
+           return false;
+         } catch (err) {
+           console.error('Failed to open shift:', err);
+           return false;
+         }
+       },
 
       closeShift: async (actualCash, actualMpesa, notes = '') => {
         const { activeShift } = get();

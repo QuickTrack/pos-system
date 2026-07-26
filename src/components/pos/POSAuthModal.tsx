@@ -35,7 +35,7 @@ function rememberCashierAuth(userId: string): void {
 export function POSAuthModal() {
   const router = useRouter();
   const { user } = useAuth();
-  const { showPOSAuthModal, setShowPOSAuthModal } = useUIStore();
+  const { showPOSAuthModal, setShowPOSAuthModal, switchCashier, setSwitchCashier } = useUIStore();
 
   const [pin, setPin] = useState(['', '', '', '']);
   const [error, setError] = useState('');
@@ -107,7 +107,7 @@ export function POSAuthModal() {
       const response = await fetch('/api/auth/cashier-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin: fullPin }),
+        body: JSON.stringify({ pin: fullPin, switchCashier }),
       });
 
       const data = await response.json();
@@ -139,6 +139,7 @@ export function POSAuthModal() {
         }
 
         setShowPOSAuthModal(false);
+        setSwitchCashier(false);
         if (data.preserveToken) {
           sessionStorage.setItem('pos-preserve-token', data.preserveToken);
         }

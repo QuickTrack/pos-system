@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
   try {
     await dbConnect();
 
-    const { pin } = await request.json();
+    const { pin, switchCashier } = await request.json();
 
     if (!pin) {
       return NextResponse.json(
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     // Check for active shift conflict
     const matchedUserId = matchedUser._id;
     const activeShift = await Shift.findOne({ status: 'open' }).sort({ startTime: -1 }).lean();
-    if (activeShift) {
+    if (activeShift && !switchCashier) {
       const activeCashierId = activeShift.cashier?._id?.toString() || activeShift.cashier?.toString();
       const requestingCashierId = matchedUserId.toString();
       if (activeCashierId !== requestingCashierId) {
@@ -78,6 +78,20 @@ export async function POST(request: NextRequest) {
           { success: false, error: `An active shift is already in progress for register ${activeShift.registerNumber} by ${activeShift.cashierName}. Only the assigned cashier or a super admin can log in.` },
           { status: 403 }
         );
+      }
+    }
+
+    // Close existing shift when switching cashiers
+    let shiftClosed = false;
+    if (switchCashier && activeShift) {
+      try {
+        await Shift.updateOne(
+          { _id: activeShift._id },
+          { $set: { status: 'closed', endTime: new Date() } }
+        );
+        shiftClosed = true;
+      } catch {
+        // Ignore shift close errors
       }
     }
 
@@ -134,6 +148,7 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json({
       success: true,
       preserveToken,
+      shiftClosed,
       user: {
         id: matchedUserId,
         name: matchedUserName,
