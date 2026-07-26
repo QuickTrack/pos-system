@@ -20,7 +20,6 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
 
-    // Basic validation
     if (!email || !password) {
       setError('Please enter both email and password');
       setShake(true);
@@ -29,7 +28,6 @@ export default function LoginPage() {
       return;
     }
 
-    // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       setError('Please enter a valid email address');
@@ -49,7 +47,6 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        // Handle specific error cases
         if (data.error?.includes('Invalid credentials') || data.error?.includes('incorrect')) {
           setError('Invalid email or password. Please try again.');
         } else if (data.error?.includes('not found') || data.error?.includes('does not exist')) {
@@ -62,18 +59,12 @@ export default function LoginPage() {
           setError(data.error || 'Login failed. Please try again.');
         }
         
-        // Trigger shake animation
         setShake(true);
         setTimeout(() => setShake(false), 500);
         return;
       }
 
       router.push('/dashboard');
-      
-      // Wait a moment for cookie to be set
-      setTimeout(() => {
-        router.refresh();
-      }, 100);
     } catch (err) {
       setError('Unable to connect to server. Please check your internet connection.');
       setShake(true);
@@ -161,11 +152,8 @@ export default function LoginPage() {
           </button>
         </p>
         <p className="text-center text-sm text-gray-500 mt-2">
-          <a href="/pos/login" className="text-emerald-600 hover:underline">Cashier Quick Login</a>
-        </p>
-        <p className="text-center text-sm text-gray-500 mt-2">
-          Cloud POS System for Kenyan Businesses
-        </p>
+           Cloud POS System for Kenyan Businesses
+         </p>
       </div>
     </div>
   );
