@@ -2,17 +2,32 @@
 
 ## Current State
 
-**Template Status**: ✅ Payroll Management Module (Frontend + Backend + API)
+**Template Status**: ✅ Multi-Terminal Client-Server POS Architecture
 
-Implemented a fully integrated Payroll Management Module designed for Kenyan businesses:
-- 12 MongoDB models covering employees, salary structures, earnings, deductions, advances, loans, payroll runs, items, payslips, journals, reports, and approvals
-- 18+ API routes with Kenyan tax calculator (PAYE, NSSF, SHIF, Housing Levy)
-- 10 frontend pages with charts, data tables, CRUD modals, and approval workflows
-- Payroll sidebar navigation with 10 menu items
-- Role-based permissions for payroll operations
-- Settings model updated with payroll configuration fields
+Implemented a comprehensive multi-terminal client-server architecture for the QuickTrack POS system:
+- Express.js standalone server with Socket.io for real-time communication
+- MongoDB models for Terminal, Device, SyncLog, and OfflineQueue
+- Client-side server configuration, socket service, and offline mode utilities
+- New pages: Setup Wizard, Terminal Management, Server Dashboard, Server Settings
+- Terminal management API endpoints in Next.js
+- Real-time sync events emitted from sales and product APIs
+- IndexedDB-based offline queue for action persistence
+- Sidebar navigation updated with Terminal Management group
 
 ## Recently Completed
+
+- [x] Multi-Terminal Client-Server POS Architecture
+  - **Server Components**: Express.js server in `server/` with Socket.io, MongoDB connection, auth routes, terminal/device/sync/offline-queue/discovery API routes
+  - **New Models**: Terminal (status, device registration, metadata), Device (fingerprint, branch, status), SyncLog (event tracking, branch sync), OfflineQueue (pending/processing/completed/failed states)
+  - **Frontend Utilities**: `server-config.ts` (get/save/generate IDs), `socket-service.ts` (Socket.io singleton + useSocket hook), `offline-db.ts` (IndexedDB wrapper), `multi-terminal-sync.ts` (emit helpers), `useServerConnection.ts` (online status, pending count, sync queue)
+  - **Pages**: `/setup` (setup wizard with server IP/port/branch/terminal name), `/terminals` (terminal management UI), `/server-dashboard` (stats, system status, connected terminals), `/server-settings` (connection config, sync status)
+  - **API Routes**: `/api/terminals` GET/POST, `/api/terminals/[id]` GET/PATCH/DELETE, `/api/terminals/[id]/connect` POST, `/api/terminals/[id]/disconnect` POST, `/api/discovery/servers` GET
+  - **Real-Time Events**: Sales API emits `sale:completed` events, Products API emits `stock:updated` events via socket-bridge
+  - **Offline Mode**: IndexedDB stores pending actions when offline, sync queue processes them on reconnect, notifications for online/offline status
+  - **Socket Service**: Client connects to configured server URL, registers terminal, listens for stock/sale/notification events
+  - **Discovery**: Server exposes `/api/discovery/servers` endpoint, setup page offers LAN discovery button
+  - **Terminal Management Sidebar**: Added Terminal Management group with Terminals and Server Dashboard links
+  - `bun typecheck` passed; `bun lint` passed with pre-existing warnings only
 
 - [x] Complete Payroll Management Module
   - **Models** (12): PayrollProfile, SalaryStructure, Earning, Deduction, Advance, Loan, PayrollRun, PayrollItem, Payslip, PayrollJournal, PayrollReport, PayrollApproval
@@ -111,6 +126,14 @@ Implemented a fully integrated Payroll Management Module designed for Kenyan bus
   - Fix: Added a `useEffect` in `ShiftStatus.tsx` that re-fetches active shift data from `/api/shifts/active` whenever `showCloseModal` becomes `true`. The API recalculates `expectedCash` from sales, mpesa, card, cash drops, and expenses.
   - File changed: `src/components/pos/ShiftStatus.tsx`
   - `bun typecheck` passed; `bun lint` passed with no new warnings.
+
+- [x] Remove /pos/login route
+  - Deleted `/src/app/pos/login/page.tsx` and `/src/app/pos/login/layout.tsx`
+  - Removed the separate PIN-based cashier quick login page; cashiers now use the email login at `/login` then authenticate via the PIN modal in the POS interface
+  - Removed the "Cashier Quick Login" link from `/src/app/login/page.tsx`
+  - Removed `/pos/login` from the auth-context.tsx path exclusion list
+  - Fixed `AuthCheck` in `src/app/pos/layout.tsx` that was returning `null` for unauthenticated users, causing the login page to appear blank; now redirects unauthenticated users to `/login`
+  - `bun typecheck` passed; `bun lint` passed with pre-existing warnings only
 
 - [x] End-of-Day Reconciliation & Z-Read Module
   - Created MongoDB models: Shift, CashDrop, ZRead, Variance, Register
@@ -1128,6 +1151,10 @@ const result = await printEngine.print({
 
 | Date | Changes |
 |------|---------|
+| 2026-07-23 | Implemented Multi-Terminal Client-Server POS Architecture: Express.js server in `server/` with Socket.io, MongoDB models (Terminal, Device, SyncLog, OfflineQueue), frontend utilities (server-config, socket-service, offline-db, useServerConnection), pages (/setup, /terminals, /server-dashboard, /server-settings), terminal management API endpoints, real-time sync events from sales/products APIs, IndexedDB offline queue, LAN discovery, and sidebar navigation updates. `bun typecheck` passed; lint passed with pre-existing warnings only |
+| 2026-07-23 | Auto-approve and auto-receive stock transfers on creation in `/api/stock-transfers` POST - deducts source stock, adds destination stock, creates StockAudit logs, sets status to `received`. `bun typecheck` passed; lint passed |
+| 2026-07-23 | Added stock transfer print form component `src/components/stock-transfers/StockTransferForm.tsx` with A4 invoice-style layout, business settings header, location details, items table, and print support. After creation, stock transfers automatically open the generated form |
+| 2026-07-23 | Replaced hardcoded `QuickTrack InfoSystems ERP` in stock transfer form template with dynamic business information from `/api/settings` (`businessName`, `businessTagline`, `businessAddress`, `businessPhone`, `businessEmail`) |
 | 2026-03-29 | Implemented license key regeneration system with individual and bulk regeneration support, audit logging, and regeneration history tracking |
 | Initial | Template created with base setup |
 | 2026-03-14 | Implemented comprehensive receipt printing engine |
