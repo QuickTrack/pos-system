@@ -8,6 +8,9 @@ import { Store, AlertCircle, Delete, Lock, Clock, User } from 'lucide-react';
 import { useUIStore } from '@/lib/store';
 import { useAuth } from '@/lib/auth-context';
 
+const POS_AUTH_KEY = 'pos_cashier_auth';
+const POS_AUTH_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
 export function POSAuthModal() {
   const router = useRouter();
   const { user } = useAuth();
@@ -26,6 +29,27 @@ export function POSAuthModal() {
       inputRefs.current[0]?.focus();
     }
   }, [showPOSAuthModal]);
+
+  const isCashierAuthed = () => {
+    if (typeof window === 'undefined') return false;
+    const stored = localStorage.getItem(POS_AUTH_KEY);
+    if (!stored) return false;
+    try {
+      const data = JSON.parse(stored);
+      if (data.userId && data.timestamp && (Date.now() - data.timestamp) < POS_AUTH_EXPIRY_MS) {
+        return true;
+      }
+      localStorage.removeItem(POS_AUTH_KEY);
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
+  const rememberCashierAuth = (userId: string) => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(POS_AUTH_KEY, JSON.stringify({ userId, timestamp: Date.now() }));
+  };
 
   const handlePinChange = (index: number, value: string) => {
     if (value.length > 1) return;
@@ -94,6 +118,9 @@ export function POSAuthModal() {
           sessionStorage.setItem('pos-preserve-token', data.preserveToken);
         }
         sessionStorage.setItem('pos-auth-success', 'true');
+        if (data.user?.id) {
+          rememberCashierAuth(data.user.id);
+        }
         window.location.href = '/pos';
         return;
       }
@@ -241,6 +268,9 @@ export function usePOSAuth() {
   const triggerPOSAuth = () => {
     if (user?.role === 'cashier') {
       return true; // Already a cashier, proceed directly
+    }
+    if (isCashierAuthed()) {
+      return true; // Auto-login: cashier has valid remembered auth
     }
     setShowPOSAuthModal(true);
     return false; // Show modal
