@@ -29,13 +29,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   const checkAuth = useCallback(async () => {
-    const hasAuthCookie = typeof document !== 'undefined' && document.cookie.includes('auth-token=');
-    if (!hasAuthCookie) {
-      setUser(null);
-      setLoading(false);
-      return;
-    }
-
     try {
       const response = await fetch('/api/auth/me', {
         method: 'GET',
@@ -87,7 +80,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setUser(null);
     router.push(redirectTo);
-    router.refresh();
   }, [router]);
 
   useEffect(() => {
