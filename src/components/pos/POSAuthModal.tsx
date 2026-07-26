@@ -268,9 +268,6 @@ export function usePOSAuth() {
     if (user?.role === 'cashier') {
       return true;
     }
-    if (isCashierAuthed()) {
-      return true;
-    }
     setShowPOSAuthModal(true);
     return false;
   };
