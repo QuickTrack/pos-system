@@ -46,6 +46,8 @@ import { useUIStore } from '@/lib/store';
 import { useAuth } from '@/lib/auth-context';
 import { hasPermission, isSuperAdmin, Role } from '@/lib/auth';
 import { usePOSAuth } from '@/components/pos/POSAuthModal';
+import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
 
 interface MenuItem {
   label: string;
@@ -200,6 +202,15 @@ const menuGroups: MenuGroup[] = [
     ],
   },
   {
+    label: 'Terminal Management',
+    icon: MonitorSmartphone,
+    permission: 'manage_settings',
+    items: [
+      { label: 'Terminals', href: '/terminals', icon: MonitorSmartphone, permission: 'manage_settings' },
+      { label: 'Server Dashboard', href: '/server-dashboard', icon: BarChart3, permission: 'view_dashboard' },
+    ],
+  },
+  {
     label: 'Administration',
     icon: Settings,
     permission: 'manage_settings',
@@ -346,6 +357,7 @@ export function Sidebar() {
   const { sidebarOpen, setSidebarOpen, favoriteLinks, toggleFavorite, isFavorite } = useUIStore();
   const [isHovering, setIsHovering] = useState(false);
   const [isHoveringTrigger, setIsHoveringTrigger] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const clearHideTimeout = useCallback(() => {
@@ -441,6 +453,8 @@ export function Sidebar() {
       useUIStore.setState({ favoriteLinks: cleaned });
     }
   }, [favoriteLinks, allowedHrefs]);
+
+  const isCashierOnPOS = user?.role === 'cashier' && pathname.startsWith('/pos');
 
   const getInitials = (name: string) => {
     return name
@@ -598,16 +612,50 @@ export function Sidebar() {
                 )}
               </div>
             </div>
+
             <button 
-              onClick={handleLogout}
-              className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
-              title="Logout"
+              onClick={() => !isCashierOnPOS && setShowLogoutConfirm(true)}
+              className={cn(
+                "p-2 rounded-lg hover:bg-gray-100 text-gray-500",
+                isCashierOnPOS && "opacity-40 cursor-not-allowed pointer-events-none"
+              )}
+              title={isCashierOnPOS ? "Logout disabled while cashier is logged in on POS" : "Logout"}
+              disabled={isCashierOnPOS}
             >
               <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
       </aside>
+
+      <Modal
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        title="Confirm Logout"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-700">Are you sure you want to log out?</p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowLogoutConfirm(false)}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                setShowLogoutConfirm(false);
+                await handleLogout();
+              }}
+              className="flex-1 bg-red-600 hover:bg-red-700"
+            >
+              Logout
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </>
   );
 }
