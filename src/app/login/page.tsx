@@ -64,7 +64,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.push('/dashboard');
+      window.location.href = '/dashboard';
     } catch (err) {
       setError('Unable to connect to server. Please check your internet connection.');
       setShake(true);
@@ -76,7 +76,7 @@ export default function LoginPage() {
 
   const handleSkipOnboarding = () => {
     localStorage.setItem('onboarding-complete', 'true');
-    router.push('/dashboard');
+    window.location.href = '/dashboard';
   };
 
   return (
